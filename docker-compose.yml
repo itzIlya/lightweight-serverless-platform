@@ -1,0 +1,101 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-serverless}
+      POSTGRES_USER: ${POSTGRES_USER:-serverless}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-serverless}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  registry:
+    image: registry:2
+    ports:
+      - "5000:5000"
+    volumes:
+      - registry-data:/var/lib/registry
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: gunicorn serverless_platform.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 300 --reload
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      JOB_QUEUE_NAME: function-jobs
+      SCHEDULER_QUEUE_NAME: scheduler-pending-jobs
+      WORKER_QUEUE_PREFIX: worker
+      WORKER_STALE_AFTER_SECONDS: 30
+      LOCAL_REGISTRY: localhost:5000
+      WORKER_SHARED_SECRET: ${WORKER_SHARED_SECRET:-change-me}
+    volumes:
+      - ./backend:/app
+      - backend-media:/app/media
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+      - registry
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    command: python worker/worker.py
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      JOB_QUEUE_NAME: function-jobs
+      SCHEDULER_QUEUE_NAME: scheduler-pending-jobs
+      WORKER_QUEUE_PREFIX: worker
+      WORKER_NAME: worker-1
+      WORKER_HEARTBEAT_SECONDS: 10
+      LOCAL_REGISTRY: localhost:5000
+      BACKEND_BASE_URL: http://backend:8000
+      WORKER_SHARED_SECRET: ${WORKER_SHARED_SECRET:-change-me}
+    volumes:
+      - ./worker:/app/worker
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - postgres
+      - redis
+      - backend
+      - registry
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    command: python scheduler/scheduler.py
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      SCHEDULER_QUEUE_NAME: scheduler-pending-jobs
+      BACKEND_BASE_URL: http://backend:8000
+      WORKER_SHARED_SECRET: ${WORKER_SHARED_SECRET:-change-me}
+      WORKER_STALE_AFTER_SECONDS: 30
+      SCHEDULER_RECOVERY_INTERVAL_SECONDS: 5
+    volumes:
+      - ./scheduler:/app/scheduler
+    depends_on:
+      - redis
+      - backend
+
+volumes:
+  postgres-data:
+  registry-data:
+  backend-media:

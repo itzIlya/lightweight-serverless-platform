@@ -1,0 +1,30 @@
+@"
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Django / local runtime
+*.sqlite3
+media/
+staticfiles/
+.env
+.env.*
+
+# Local generated test files
+work/
+tmp/
+.serverless/
+
+# Docker / OS / editor
+.docker/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+"@ | Set-Content -Encoding UTF8 .gitignore
