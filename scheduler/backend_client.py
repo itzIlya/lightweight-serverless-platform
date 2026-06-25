@@ -32,13 +32,21 @@ class BackendClient:
             },
         )
 
-    def requeue_job(self, job_id: str, *, worker_name: str, reason: str) -> dict:
+    def requeue_job(
+        self,
+        job_id: str,
+        *,
+        worker_name: str,
+        reason: str,
+        recovery: bool = False,
+    ) -> dict:
         url = f"{self.base_url}/api/internal/scheduler/jobs/{job_id}/requeue/"
         return self._post_json(
             url,
             {
                 "worker_name": worker_name,
                 "reason": reason,
+                "recovery": recovery,
             },
         )
 

@@ -16,6 +16,7 @@ class JobStatus(models.TextChoices):
     SUCCEEDED = "succeeded", "Succeeded"
     FAILED = "failed", "Failed"
     CANCELLED = "cancelled", "Cancelled"
+    DEAD_LETTERED = "dead_lettered", "Dead-lettered"
 
 
 class Job(models.Model):
@@ -45,6 +46,11 @@ class Job(models.Model):
     available_at = models.DateTimeField(default=timezone.now)
     locked_until = models.DateTimeField(null=True, blank=True)
     dispatch_attempts = models.PositiveIntegerField(default=0)
+    recovery_count = models.PositiveIntegerField(default=0)
+    max_recovery_attempts = models.PositiveIntegerField(default=3)
+    last_recovered_at = models.DateTimeField(null=True, blank=True)
+    dead_lettered_at = models.DateTimeField(null=True, blank=True)
+    dead_letter_reason = models.TextField(blank=True)
     last_error = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -58,4 +64,3 @@ class Job(models.Model):
 
     def __str__(self) -> str:
         return f"{self.type}:{self.job_id}"
-

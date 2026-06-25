@@ -112,6 +112,11 @@ class FunctionVersion(models.Model):
     invocation_input_mime_types = models.JSONField(default=list, blank=True)
     invocation_input_max_files = models.PositiveSmallIntegerField(default=1)
     invocation_input_max_size_mb = models.PositiveSmallIntegerField(default=10)
+    invocation_input_max_total_size_mb = models.PositiveSmallIntegerField(default=10)
+    declared_output_files = models.JSONField(default=list, blank=True)
+    invocation_output_max_files = models.PositiveSmallIntegerField(default=5)
+    invocation_output_max_file_size_mb = models.PositiveSmallIntegerField(default=10)
+    invocation_output_max_total_size_mb = models.PositiveSmallIntegerField(default=10)
     image_ref = models.CharField(max_length=255, blank=True)
     build_status = models.CharField(
         max_length=20,

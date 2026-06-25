@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import PurePosixPath
 
 from django.utils.text import slugify
 from rest_framework import serializers
@@ -40,6 +41,11 @@ class FunctionVersionSerializer(serializers.ModelSerializer):
             "invocation_input_mime_types",
             "invocation_input_max_files",
             "invocation_input_max_size_mb",
+            "invocation_input_max_total_size_mb",
+            "declared_output_files",
+            "invocation_output_max_files",
+            "invocation_output_max_file_size_mb",
+            "invocation_output_max_total_size_mb",
             "image_ref",
             "build_status",
             "build_request_id",
@@ -96,6 +102,7 @@ class BuildAttemptSerializer(serializers.ModelSerializer):
 class FunctionVersionCreateSerializer(serializers.ModelSerializer):
     config = FlexibleJSONField(required=False, default=dict)
     invocation_input_mime_types = FlexibleJSONField(required=False, default=list)
+    declared_output_files = FlexibleJSONField(required=False, default=list)
 
     class Meta:
         model = FunctionVersion
@@ -109,6 +116,11 @@ class FunctionVersionCreateSerializer(serializers.ModelSerializer):
             "invocation_input_mime_types",
             "invocation_input_max_files",
             "invocation_input_max_size_mb",
+            "invocation_input_max_total_size_mb",
+            "declared_output_files",
+            "invocation_output_max_files",
+            "invocation_output_max_file_size_mb",
+            "invocation_output_max_total_size_mb",
         ]
         read_only_fields = ["id"]
 
@@ -126,10 +138,52 @@ class FunctionVersionCreateSerializer(serializers.ModelSerializer):
             normalized.append(item.strip().lower())
         return normalized
 
+    def validate_declared_output_files(self, value):
+        if value in (None, ""):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Must be a JSON array of filenames.")
+
+        normalized = []
+        seen = set()
+        for item in value:
+            if not isinstance(item, str) or not item.strip():
+                raise serializers.ValidationError(
+                    "Each output file must be a non-empty string."
+                )
+            name = item.strip().replace("\\", "/")
+            path = PurePosixPath(name)
+            if (
+                path.is_absolute()
+                or path.name != name
+                or name in {".", ".."}
+                or any(part == ".." for part in path.parts)
+            ):
+                raise serializers.ValidationError(
+                    "Output files must be simple filenames, not paths."
+                )
+            if name == "result.json":
+                raise serializers.ValidationError(
+                    "result.json is reserved for the function return value."
+                )
+            lowered = name.lower()
+            if lowered in seen:
+                raise serializers.ValidationError(
+                    f"Duplicate output file declaration: {name}"
+                )
+            seen.add(lowered)
+            normalized.append(name)
+        return normalized
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
         max_files = attrs.get("invocation_input_max_files", 1)
         max_size = attrs.get("invocation_input_max_size_mb", 10)
+        max_total_size = attrs.get("invocation_input_max_total_size_mb", 10)
+        max_output_files = attrs.get("invocation_output_max_files", 5)
+        max_output_file_size = attrs.get("invocation_output_max_file_size_mb", 10)
+        max_output_total_size = attrs.get("invocation_output_max_total_size_mb", 10)
+        declared_outputs = attrs.get("declared_output_files", [])
         if max_files < 0:
             raise serializers.ValidationError(
                 {"invocation_input_max_files": "Must be zero or greater."}
@@ -137,6 +191,46 @@ class FunctionVersionCreateSerializer(serializers.ModelSerializer):
         if max_size <= 0:
             raise serializers.ValidationError(
                 {"invocation_input_max_size_mb": "Must be greater than zero."}
+            )
+        if max_total_size <= 0:
+            raise serializers.ValidationError(
+                {"invocation_input_max_total_size_mb": "Must be greater than zero."}
+            )
+        if max_size > max_total_size:
+            raise serializers.ValidationError(
+                {
+                    "invocation_input_max_size_mb": (
+                        "Must be less than or equal to the total input size limit."
+                    )
+                }
+            )
+        if max_output_files < 0:
+            raise serializers.ValidationError(
+                {"invocation_output_max_files": "Must be zero or greater."}
+            )
+        if max_output_file_size <= 0:
+            raise serializers.ValidationError(
+                {"invocation_output_max_file_size_mb": "Must be greater than zero."}
+            )
+        if max_output_total_size <= 0:
+            raise serializers.ValidationError(
+                {"invocation_output_max_total_size_mb": "Must be greater than zero."}
+            )
+        if len(declared_outputs) > max_output_files:
+            raise serializers.ValidationError(
+                {
+                    "declared_output_files": (
+                        f"Declare at most {max_output_files} output file(s)."
+                    )
+                }
+            )
+        if max_output_file_size > max_output_total_size:
+            raise serializers.ValidationError(
+                {
+                    "invocation_output_max_file_size_mb": (
+                        "Must be less than or equal to the total output size limit."
+                    )
+                }
             )
         return attrs
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 from dataclasses import dataclass
 import json
+import mimetypes
 import os
 from pathlib import Path
 from pathlib import PurePosixPath
@@ -12,7 +13,15 @@ import time
 from typing import Any
 
 
+SANDBOX_EXPORT_PATH = "/sandbox/export"
+SANDBOX_EXPORT_OUTPUT_PATH = "/sandbox/export/output"
+
+
 class ExecutionError(RuntimeError):
+    pass
+
+
+class OutputValidationError(ExecutionError):
     pass
 
 
@@ -49,6 +58,7 @@ class DockerExecutor:
         config = job.get("config") or {}
         timeout_seconds = int(config.get("timeout_seconds", 60))
         memory_mb = int(config.get("memory_mb", 256))
+        output_tmpfs_size_bytes = self._output_tmpfs_size_bytes(job)
         event = job.get("event") or {}
         runtime_root = Path(os.getenv("FUNCTION_RUNTIME_ROOT", "/runtime-sandboxes"))
         runtime_root.mkdir(parents=True, exist_ok=True)
@@ -61,10 +71,10 @@ class DockerExecutor:
             root_path = Path(root)
             input_dir = root_path / "input"
             input_files_dir = input_dir / "files"
-            output_dir = root_path / "output"
+            export_dir = root_path / "export"
             input_dir.mkdir()
             input_files_dir.mkdir()
-            output_dir.mkdir()
+            export_dir.mkdir()
 
             (input_dir / "event.json").write_text(
                 json.dumps(event),
@@ -76,7 +86,12 @@ class DockerExecutor:
             )
             container = self.docker_client.containers.create(
                 image_ref,
+                command=[
+                    "-c",
+                    self._runner_export_command(),
+                ],
                 detach=True,
+                entrypoint=["sh"],
                 environment={
                     "FUNCTION_EVENT_PATH": "/sandbox/input/event.json",
                     "FUNCTION_EVENT_JSON": json.dumps(event),
@@ -88,6 +103,9 @@ class DockerExecutor:
                 },
                 mem_limit=f"{memory_mb}m",
                 network_disabled=True,
+                tmpfs={
+                    "/sandbox/output": f"size={output_tmpfs_size_bytes}",
+                },
                 volumes={sandbox_volume.name: {"bind": "/sandbox", "mode": "rw"}},
             )
 
@@ -99,13 +117,50 @@ class DockerExecutor:
                 stderr = self._read_logs(container, stdout=False, stderr=True)
                 self._copy_directory_from_container(
                     container,
-                    "/sandbox/output",
-                    output_dir,
+                    SANDBOX_EXPORT_PATH,
+                    export_dir,
                 )
-                result = self._read_result(output_dir, stdout)
-                status = "succeeded" if exit_code == 0 else "failed"
+                effective_export_dir = self._effective_export_dir(export_dir)
+                copy_exit_code = self._read_export_status(
+                    effective_export_dir,
+                    "output_copy_exit_code",
+                )
+                effective_output_dir = self._effective_output_dir(effective_export_dir)
+                result = self._read_result(effective_output_dir, stdout)
                 duration_ms = int((time.monotonic() - started) * 1000)
-                error_message = "" if exit_code == 0 else "Container exited with a non-zero status."
+                if copy_exit_code not in (None, 0):
+                    return ExecutionResult(
+                        status="failed",
+                        result=result,
+                        stdout=stdout,
+                        stderr=stderr,
+                        exit_code=exit_code,
+                        duration_ms=duration_ms,
+                        error_message=self._read_export_error(effective_export_dir),
+                    )
+                try:
+                    output_files = self._validate_declared_output_files(
+                        job,
+                        effective_output_dir,
+                    )
+                except OutputValidationError as exc:
+                    return ExecutionResult(
+                        status="failed",
+                        result=result,
+                        stdout=stdout,
+                        stderr=stderr,
+                        exit_code=exit_code,
+                        duration_ms=duration_ms,
+                        error_message=str(exc),
+                    )
+
+                self._upload_output_files(job, output_files)
+                status = "succeeded" if exit_code == 0 else "failed"
+                error_message = (
+                    ""
+                    if exit_code == 0
+                    else "Container exited with a non-zero status."
+                )
 
                 return ExecutionResult(
                     status=status,
@@ -119,6 +174,19 @@ class DockerExecutor:
             finally:
                 self._remove_container(container)
                 self._remove_volume(sandbox_volume)
+
+    def _runner_export_command(self) -> str:
+        return (
+            "python /runner.py; "
+            "code=$?; "
+            f"mkdir -p {SANDBOX_EXPORT_OUTPUT_PATH}; "
+            f"cp -a /sandbox/output/. {SANDBOX_EXPORT_OUTPUT_PATH}/ "
+            f"2>{SANDBOX_EXPORT_PATH}/output_copy_error.txt; "
+            "copy_code=$?; "
+            f"printf '%s' \"$code\" > {SANDBOX_EXPORT_PATH}/runner_exit_code; "
+            f"printf '%s' \"$copy_code\" > {SANDBOX_EXPORT_PATH}/output_copy_exit_code; "
+            'exit "$code"'
+        )
 
     def _wait_for_exit(self, container, timeout_seconds: int) -> int | None:
         deadline = time.monotonic() + timeout_seconds
@@ -163,6 +231,36 @@ class DockerExecutor:
                     return {"raw_result": payload}
         return {}
 
+    def _effective_output_dir(self, output_dir: Path) -> Path:
+        nested = output_dir / "output"
+        if nested.is_dir():
+            return nested
+        return output_dir
+
+    def _effective_export_dir(self, export_dir: Path) -> Path:
+        nested = export_dir / "export"
+        if nested.is_dir():
+            return nested
+        return export_dir
+
+    def _read_export_status(self, export_dir: Path, filename: str) -> int | None:
+        path = export_dir / filename
+        if not path.exists():
+            return None
+        try:
+            return int(path.read_text(encoding="utf-8").strip())
+        except ValueError:
+            return None
+
+    def _read_export_error(self, export_dir: Path) -> str:
+        path = export_dir / "output_copy_error.txt"
+        if not path.exists():
+            return "Could not export output files from the tmpfs sandbox."
+        detail = path.read_text(encoding="utf-8", errors="replace").strip()
+        if not detail:
+            return "Could not export output files from the tmpfs sandbox."
+        return f"Could not export output files from the tmpfs sandbox: {detail}"
+
     def _prepare_input_files(self, job: dict, input_files_dir: Path) -> list[dict[str, Any]]:
         if self.backend_client is None:
             return []
@@ -191,6 +289,95 @@ class DockerExecutor:
                 }
             )
         return prepared
+
+    def _upload_output_files(self, job: dict, output_files: list[dict[str, Any]]) -> None:
+        if self.backend_client is None:
+            return
+
+        request_id = job["request_id"]
+        for position, item in enumerate(output_files):
+            content_type = (
+                mimetypes.guess_type(item["path"].name)[0]
+                or "application/octet-stream"
+            )
+            self.backend_client.upload_invocation_output(
+                request_id,
+                original_path=item["original_path"],
+                file_path=item["path"],
+                position=position,
+                content_type=content_type,
+            )
+
+    def _validate_declared_output_files(
+        self,
+        job: dict,
+        output_dir: Path,
+    ) -> list[dict[str, Any]]:
+        output_files = self._collect_declared_output_files(job, output_dir)
+        max_files = self._positive_int(
+            job.get("invocation_output_max_files"),
+            default=len(job.get("declared_output_files") or []),
+        )
+        max_file_size = self._megabytes_to_bytes(
+            job.get("invocation_output_max_file_size_mb"),
+            default_mb=10,
+        )
+        max_total_size = self._megabytes_to_bytes(
+            job.get("invocation_output_max_total_size_mb"),
+            default_mb=25,
+        )
+
+        if output_files and max_files <= 0:
+            raise OutputValidationError("Function version does not allow output files.")
+        if len(output_files) > max_files:
+            raise OutputValidationError(
+                f"Invocation produced {len(output_files)} declared output file(s), "
+                f"but the limit is {max_files}."
+            )
+
+        total_size = 0
+        for item in output_files:
+            size = item["path"].stat().st_size
+            item["size_bytes"] = size
+            total_size += size
+            if size > max_file_size:
+                raise OutputValidationError(
+                    f"Output file {item['original_path']} is {size} byte(s), "
+                    f"but the per-file limit is {max_file_size} byte(s)."
+                )
+
+        if total_size > max_total_size:
+            raise OutputValidationError(
+                f"Invocation produced {total_size} byte(s) of declared output, "
+                f"but the total limit is {max_total_size} byte(s)."
+            )
+        return output_files
+
+    def _collect_declared_output_files(
+        self,
+        job: dict,
+        output_dir: Path,
+    ) -> list[dict[str, Any]]:
+        declared = job.get("declared_output_files") or []
+        if not isinstance(declared, list):
+            raise OutputValidationError("Declared output files must be a list.")
+
+        collected: list[dict[str, Any]] = []
+        for raw_name in declared:
+            name = self._safe_output_name(raw_name)
+            if name is None or name == "result.json":
+                raise OutputValidationError(
+                    f"Declared output file name is unsafe or reserved: {raw_name!r}"
+                )
+            path = output_dir / name
+            if not path.exists():
+                continue
+            if not path.is_file():
+                raise OutputValidationError(
+                    f"Declared output path is not a file: {name}"
+                )
+            collected.append({"original_path": name, "path": path})
+        return collected
 
     def _copy_directory_into_container(
         self,
@@ -233,6 +420,37 @@ class DockerExecutor:
     def _safe_filename(self, value: str) -> str:
         safe = PurePosixPath(str(value).replace("\\", "/")).name
         return safe.replace(":", "_") or "input"
+
+    def _safe_output_name(self, value: str) -> str | None:
+        name = str(value or "").strip().replace("\\", "/")
+        path = PurePosixPath(name)
+        if (
+            not name
+            or path.is_absolute()
+            or path.name != name
+            or name in {".", ".."}
+            or any(part == ".." for part in path.parts)
+        ):
+            return None
+        return name
+
+    def _positive_int(self, value, *, default: int) -> int:
+        if value in ("", None):
+            return default
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _megabytes_to_bytes(self, value, *, default_mb: int) -> int:
+        return self._positive_int(value, default=default_mb) * 1024 * 1024
+
+    def _output_tmpfs_size_bytes(self, job: dict) -> int:
+        size = self._megabytes_to_bytes(
+            job.get("invocation_output_max_total_size_mb"),
+            default_mb=10,
+        )
+        return max(size, 1024 * 1024)
 
     def _remove_container(self, container) -> None:
         try:

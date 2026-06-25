@@ -10,12 +10,16 @@ class JobAdmin(admin.ModelAdmin):
         "type",
         "status",
         "queue_name",
+        "recovery_count",
+        "max_recovery_attempts",
         "build_attempt",
         "invocation",
+        "available_at",
+        "dead_lettered_at",
         "created_at",
         "updated_at",
     )
-    list_filter = ("type", "status", "queue_name")
+    list_filter = ("type", "status", "queue_name", "dead_lettered_at")
     search_fields = (
         "job_id",
         "build_attempt__request_id",
@@ -32,8 +36,12 @@ class JobAdmin(admin.ModelAdmin):
         "available_at",
         "locked_until",
         "dispatch_attempts",
+        "recovery_count",
+        "max_recovery_attempts",
+        "last_recovered_at",
+        "dead_lettered_at",
+        "dead_letter_reason",
         "last_error",
         "created_at",
         "updated_at",
     )
-

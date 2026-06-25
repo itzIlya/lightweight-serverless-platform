@@ -134,14 +134,16 @@ class FunctionViewSet(viewsets.ModelViewSet):
                     function_version=version,
                     event=serializer.validated_data.get("event", {}),
                 )
+                read_token = invocation.issue_read_token()
                 if uploaded_files:
                     store_invocation_files(invocation, uploaded_files)
                 enqueue_invocation(invocation)
         except Exception as exc:
             raise QueueUnavailable(str(exc)) from exc
 
-        output = InvocationSerializer(invocation)
-        return Response(output.data, status=status.HTTP_202_ACCEPTED)
+        output = dict(InvocationSerializer(invocation).data)
+        output["read_token"] = read_token
+        return Response(output, status=status.HTTP_202_ACCEPTED)
 
     def _authorize_invocation(self, request, function):
         if function.invoke_access == InvokeAccess.PUBLIC:

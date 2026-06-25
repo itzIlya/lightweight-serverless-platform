@@ -8,7 +8,12 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from .models import Job, JobStatus
-from .services import available_workers, worker_processing_queue_name, worker_queue_name
+from .services import (
+    available_workers,
+    recovery_backoff_seconds,
+    worker_processing_queue_name,
+    worker_queue_name,
+)
 from apps.workers.models import WorkerNode, WorkerStatus
 
 
@@ -85,12 +90,22 @@ def dispatch_scheduler_job(request, job_id):
         return unauthorized
 
     job = get_object_or_404(Job, job_id=job_id)
+    now = timezone.now()
     if job.status != JobStatus.QUEUED:
         return Response(
             {
                 "dispatched": False,
                 "status": job.status,
                 "detail": "Job is no longer queued.",
+            }
+        )
+    if job.available_at > now:
+        return Response(
+            {
+                "dispatched": False,
+                "status": job.status,
+                "available_at": job.available_at,
+                "detail": "Job is not available for dispatch yet.",
             }
         )
 
@@ -110,6 +125,15 @@ def dispatch_scheduler_job(request, job_id):
                     "dispatched": False,
                     "status": job.status,
                     "detail": "Job is no longer queued.",
+                }
+            )
+        if job.available_at > now:
+            return Response(
+                {
+                    "dispatched": False,
+                    "status": job.status,
+                    "available_at": job.available_at,
+                    "detail": "Job is not available for dispatch yet.",
                 }
             )
 
@@ -162,6 +186,7 @@ def claim_worker_job(request, job_id):
             JobStatus.SUCCEEDED,
             JobStatus.FAILED,
             JobStatus.CANCELLED,
+            JobStatus.DEAD_LETTERED,
         }:
             return Response(
                 {
@@ -209,6 +234,7 @@ def requeue_scheduler_job(request, job_id):
 
     worker_name = request.data.get("worker_name", "")
     reason = request.data.get("reason", "")
+    recovery = request.data.get("recovery") in {True, "true", "1", 1}
     if not worker_name:
         return Response(
             {"detail": "worker_name is required."},
@@ -221,6 +247,7 @@ def requeue_scheduler_job(request, job_id):
             JobStatus.SUCCEEDED,
             JobStatus.FAILED,
             JobStatus.CANCELLED,
+            JobStatus.DEAD_LETTERED,
         }:
             return Response(
                 {
@@ -241,15 +268,59 @@ def requeue_scheduler_job(request, job_id):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        now = timezone.now()
+        for key in ("assigned_worker", "worker_queue_name"):
+            job.payload.pop(key, None)
+
+        if recovery:
+            recovery_count = job.recovery_count + 1
+            job.recovery_count = recovery_count
+            job.last_recovered_at = now
+            if recovery_count > job.max_recovery_attempts:
+                job.status = JobStatus.DEAD_LETTERED
+                job.dead_lettered_at = now
+                job.dead_letter_reason = (
+                    reason
+                    or f"Exceeded {job.max_recovery_attempts} recovery attempt(s)."
+                )
+                job.last_error = job.dead_letter_reason
+                job.save(
+                    update_fields=[
+                        "status",
+                        "recovery_count",
+                        "last_recovered_at",
+                        "dead_lettered_at",
+                        "dead_letter_reason",
+                        "last_error",
+                        "payload",
+                        "updated_at",
+                    ]
+                )
+                return Response(
+                    {
+                        "requeued": False,
+                        "dead_lettered": True,
+                        "status": job.status,
+                        "job": _job_payload(job),
+                    }
+                )
+
+            delay_seconds = recovery_backoff_seconds(job.type, recovery_count)
+            job.available_at = now + timedelta(seconds=delay_seconds)
+        else:
+            delay_seconds = 0
+            job.available_at = now
+
         job.status = JobStatus.QUEUED
         job.queue_name = settings.SCHEDULER_QUEUE_NAME
         job.last_error = reason
-        for key in ("assigned_worker", "worker_queue_name"):
-            job.payload.pop(key, None)
         job.save(
             update_fields=[
                 "status",
                 "queue_name",
+                "available_at",
+                "recovery_count",
+                "last_recovered_at",
                 "last_error",
                 "payload",
                 "updated_at",
@@ -259,6 +330,9 @@ def requeue_scheduler_job(request, job_id):
     return Response(
         {
             "requeued": True,
+            "dead_lettered": False,
+            "recovery_count": job.recovery_count,
+            "recovery_delay_seconds": delay_seconds,
             "job": _job_payload(job),
         }
     )
@@ -273,7 +347,13 @@ def _job_payload(job):
         "queue_name": job.queue_name,
         "payload": job.payload,
         "dispatch_attempts": job.dispatch_attempts,
+        "recovery_count": job.recovery_count,
+        "max_recovery_attempts": job.max_recovery_attempts,
         "available_at": job.available_at,
+        "last_recovered_at": job.last_recovered_at,
+        "dead_lettered_at": job.dead_lettered_at,
+        "dead_letter_reason": job.dead_letter_reason,
+        "last_error": job.last_error,
         "updated_at": job.updated_at,
     }
 

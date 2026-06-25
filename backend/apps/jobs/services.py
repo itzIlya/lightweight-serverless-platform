@@ -9,6 +9,37 @@ from apps.workers.models import WorkerStatus
 from .models import Job, JobStatus, JobType
 
 
+def max_recovery_attempts_for_type(job_type: str) -> int:
+    if job_type == JobType.INVOCATION:
+        return int(settings.JOB_RECOVERY_MAX_ATTEMPTS_INVOCATION)
+    return int(settings.JOB_RECOVERY_MAX_ATTEMPTS_BUILD)
+
+
+def recovery_backoff_seconds(job_type: str, recovery_count: int) -> int:
+    values = _recovery_backoff_values(job_type)
+    if not values:
+        return 0
+    index = max(int(recovery_count), 1) - 1
+    if index >= len(values):
+        return values[-1]
+    return values[index]
+
+
+def _recovery_backoff_values(job_type: str) -> list[int]:
+    raw = (
+        settings.JOB_RECOVERY_BACKOFF_SECONDS_INVOCATION
+        if job_type == JobType.INVOCATION
+        else settings.JOB_RECOVERY_BACKOFF_SECONDS_BUILD
+    )
+    values: list[int] = []
+    for item in str(raw).split(","):
+        item = item.strip()
+        if not item:
+            continue
+        values.append(max(int(item), 0))
+    return values
+
+
 def create_build_job_record(build_attempt, payload: dict) -> Job:
     job = Job.objects.create(
         type=JobType.BUILD,
@@ -17,6 +48,7 @@ def create_build_job_record(build_attempt, payload: dict) -> Job:
         payload=payload,
         build_attempt=build_attempt,
         available_at=build_attempt.queued_at,
+        max_recovery_attempts=max_recovery_attempts_for_type(JobType.BUILD),
     )
     payload["job_id"] = str(job.job_id)
     job.payload = payload
@@ -32,6 +64,7 @@ def create_invocation_job_record(invocation, payload: dict) -> Job:
         payload=payload,
         invocation=invocation,
         available_at=invocation.queued_at,
+        max_recovery_attempts=max_recovery_attempts_for_type(JobType.INVOCATION),
     )
     payload["job_id"] = str(job.job_id)
     job.payload = payload
@@ -40,13 +73,17 @@ def create_invocation_job_record(invocation, payload: dict) -> Job:
 
 
 def mark_build_jobs_from_status(build_attempt, build_status: str) -> int:
-    return Job.objects.filter(build_attempt=build_attempt).update(
+    return Job.objects.filter(build_attempt=build_attempt).exclude(
+        status=JobStatus.DEAD_LETTERED,
+    ).update(
         status=build_status_to_job_status(build_status)
     )
 
 
 def mark_invocation_jobs_from_status(invocation, invocation_status: str) -> int:
-    return Job.objects.filter(invocation=invocation).update(
+    return Job.objects.filter(invocation=invocation).exclude(
+        status=JobStatus.DEAD_LETTERED,
+    ).update(
         status=invocation_status_to_job_status(invocation_status)
     )
 

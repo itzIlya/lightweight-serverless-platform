@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import shutil
 from urllib import error, request
+import uuid
 
 
 class BackendReportError(RuntimeError):
@@ -19,6 +20,27 @@ class BackendClient:
     def report_invocation(self, request_id: str, payload: dict) -> dict:
         url = f"{self.base_url}/api/internal/invocations/{request_id}/report/"
         return self._json_request(url, payload)
+
+    def upload_invocation_output(
+        self,
+        request_id: str,
+        *,
+        original_path: str,
+        file_path: Path,
+        position: int,
+        content_type: str = "application/octet-stream",
+    ) -> dict:
+        url = f"{self.base_url}/api/internal/invocations/{request_id}/outputs/"
+        return self._post_multipart_file(
+            url,
+            fields={
+                "original_path": original_path,
+                "position": str(position),
+            },
+            file_field="file",
+            file_path=file_path,
+            content_type=content_type,
+        )
 
     def list_invocation_inputs(self, request_id: str) -> dict:
         url = f"{self.base_url}/api/internal/invocations/{request_id}/inputs/"
@@ -189,3 +211,60 @@ class BackendClient:
             ) from exc
         except error.URLError as exc:
             raise BackendReportError(f"backend request failed: {exc}") from exc
+
+    def _post_multipart_file(
+        self,
+        url: str,
+        *,
+        fields: dict[str, str],
+        file_field: str,
+        file_path: Path,
+        content_type: str,
+    ) -> dict:
+        boundary = f"----serverless-worker-{uuid.uuid4().hex}"
+        body = bytearray()
+
+        def add_line(value: bytes = b"") -> None:
+            body.extend(value)
+            body.extend(b"\r\n")
+
+        for name, value in fields.items():
+            add_line(f"--{boundary}".encode())
+            add_line(f'Content-Disposition: form-data; name="{name}"'.encode())
+            add_line()
+            add_line(str(value).encode("utf-8"))
+
+        add_line(f"--{boundary}".encode())
+        add_line(
+            (
+                f'Content-Disposition: form-data; name="{file_field}"; '
+                f'filename="{file_path.name}"'
+            ).encode()
+        )
+        add_line(f"Content-Type: {content_type}".encode())
+        add_line()
+        body.extend(file_path.read_bytes())
+        body.extend(b"\r\n")
+        add_line(f"--{boundary}--".encode())
+
+        http_request = request.Request(
+            url,
+            data=bytes(body),
+            method="POST",
+            headers={
+                "Content-Type": f"multipart/form-data; boundary={boundary}",
+                "X-Internal-Token": self.token,
+            },
+        )
+
+        try:
+            with request.urlopen(http_request, timeout=self.timeout_seconds) as response:
+                response_body = response.read().decode("utf-8")
+                return json.loads(response_body) if response_body else {}
+        except error.HTTPError as exc:
+            response_body = exc.read().decode("utf-8", errors="replace")
+            raise BackendReportError(
+                f"backend upload failed with HTTP {exc.code}: {response_body}"
+            ) from exc
+        except error.URLError as exc:
+            raise BackendReportError(f"backend upload failed: {exc}") from exc

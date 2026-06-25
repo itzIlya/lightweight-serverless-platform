@@ -1,6 +1,7 @@
 import json
 import sys
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -113,6 +114,32 @@ class SchedulerTests(unittest.TestCase):
         redis_client.rpush.assert_called_once_with("scheduler-pending-jobs", "job-1")
         backend.dispatch_job.assert_not_called()
 
+    def test_process_job_requeues_when_job_is_not_available_yet(self):
+        backend = Mock()
+        redis_client = Mock()
+        backend.get_job.return_value = {
+            "job_id": "job-1",
+            "type": "invocation",
+            "status": "queued",
+            "available_at": (
+                datetime.now(timezone.utc) + timedelta(seconds=5)
+            ).isoformat(),
+            "payload": {"job_id": "job-1"},
+        }
+
+        dispatched = process_job_id(
+            job_id="job-1",
+            backend=backend,
+            redis_client=redis_client,
+            pending_queue="scheduler-pending-jobs",
+            requeue_delay_seconds=0,
+        )
+
+        self.assertFalse(dispatched)
+        redis_client.rpush.assert_called_once_with("scheduler-pending-jobs", "job-1")
+        backend.list_workers.assert_not_called()
+        backend.dispatch_job.assert_not_called()
+
     def test_process_job_requeues_database_state_when_worker_push_fails(self):
         backend = Mock()
         redis_client = Mock()
@@ -185,6 +212,7 @@ class SchedulerTests(unittest.TestCase):
             "job-1",
             worker_name="worker-a",
             reason="Worker worker-a missed heartbeat.",
+            recovery=True,
         )
         redis_client.lrem.assert_called_once_with(
             "worker:worker-a:processing",
@@ -192,6 +220,50 @@ class SchedulerTests(unittest.TestCase):
             delivery_message,
         )
         redis_client.rpush.assert_called_once_with("scheduler-pending-jobs", "job-1")
+
+    def test_recover_stale_workers_removes_dead_lettered_processing_job(self):
+        backend = Mock()
+        redis_client = Mock()
+        backend.expire_stale_workers.return_value = {
+            "expired": [
+                {
+                    "name": "worker-a",
+                    "processing_queue_name": "worker:worker-a:processing",
+                }
+            ]
+        }
+        delivery_message = make_delivery_message("job-1", 1)
+        redis_client.lrange.return_value = [delivery_message]
+        backend.get_job.return_value = {
+            "job_id": "job-1",
+            "status": "running",
+        }
+        backend.requeue_job.return_value = {
+            "requeued": False,
+            "dead_lettered": True,
+            "status": "dead_lettered",
+        }
+
+        recovered = recover_stale_workers(
+            backend=backend,
+            redis_client=redis_client,
+            pending_queue="scheduler-pending-jobs",
+            stale_after_seconds=30,
+        )
+
+        self.assertEqual(recovered, 0)
+        backend.requeue_job.assert_called_once_with(
+            "job-1",
+            worker_name="worker-a",
+            reason="Worker worker-a missed heartbeat.",
+            recovery=True,
+        )
+        redis_client.lrem.assert_called_once_with(
+            "worker:worker-a:processing",
+            1,
+            delivery_message,
+        )
+        redis_client.rpush.assert_not_called()
 
     def test_recover_stale_workers_cleans_terminal_processing_jobs(self):
         backend = Mock()

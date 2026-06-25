@@ -9,7 +9,8 @@ This smoke test shows the current average user experience of the platform:
 5. Poll until the version is built.
 6. Invoke the function.
 7. Poll until the invocation succeeds.
-8. Read the JSON result, stdout/stderr metadata, timing, and status.
+8. List and download a declared output file.
+9. Read the JSON result, stdout/stderr metadata, timing, and status.
 
 The current platform is asynchronous for build and invocation work. The create,
 build, and invoke API calls return quickly; the user then polls resource APIs for
@@ -39,29 +40,39 @@ Verified locally on 2026-06-24:
 
 ```text
 1. Register user and receive JWT
-   user=smoke_1629b26c role=user
+   user=smoke_4457ca4a role=user
 2. Create function
-   function_id=4 slug=smoke-echo-1629b26c
+   function_id=12 slug=smoke-echo-4457ca4a
 3. Upload function version
-   version_id=11 build_status=pending
+   version_id=19 build_status=pending
 4. Queue build
    build: queued
    build: building
    build: built
-   image_ref=localhost:5000/functions/smoke-echo-1629b26c:v11-v1
+   image_ref=localhost:5000/functions/smoke-echo-4457ca4a:v19-v1
 5. Invoke function
-   invocation_id=14 request_id=2852bf80-f3c6-459c-9c6d-a28dc521ec4e
+   invocation_id=22 request_id=c75876f8-c35d-43c9-8906-4342213ba267
    invocation: queued
+   invocation: running
    invocation: succeeded
+6. List and download invocation output file
+   output_id=4 report.txt='Processed Ilya with total=6'
 SMOKE TEST PASSED
 ```
 
 The test creates a temporary zip bundle containing:
 
 ```python
+import os
+
+
 def main(event, context):
     name = event.get("name", "friend")
     numbers = event.get("numbers", [])
+    output_dir = os.environ.get("FUNCTION_OUTPUT_DIR")
+    if output_dir:
+        with open(os.path.join(output_dir, "report.txt"), "w", encoding="utf-8") as output:
+            output.write(f"Processed {name} with total={sum(numbers)}")
     return {
         "message": f"Hello, {name}!",
         "echo": event,
@@ -84,6 +95,12 @@ The expected result is:
 }
 ```
 
+The expected output file is:
+
+```text
+report.txt -> Processed Ilya with total=6
+```
+
 ## Reproduce Manually in PowerShell
 
 Set a base URL:
@@ -100,9 +117,16 @@ $testDir = Join-Path $PWD "work\manual-smoke-$suffix"
 New-Item -ItemType Directory -Force $testDir | Out-Null
 
 @'
+import os
+
+
 def main(event, context):
     name = event.get("name", "friend")
     numbers = event.get("numbers", [])
+    output_dir = os.environ.get("FUNCTION_OUTPUT_DIR")
+    if output_dir:
+        with open(os.path.join(output_dir, "report.txt"), "w", encoding="utf-8") as output:
+            output.write(f"Processed {name} with total={sum(numbers)}")
     return {
         "message": f"Hello, {name}!",
         "echo": event,
@@ -156,6 +180,10 @@ $versionJson = curl.exe -sS -X POST "$base/api/functions/$($function.id)/version
   -F "runtime=python3.13" `
   -F "handler=handler.main" `
   -F "config={""memory_mb"":128,""timeout_seconds"":10}" `
+  -F "declared_output_files=[""report.txt""]" `
+  -F "invocation_output_max_files=1" `
+  -F "invocation_output_max_file_size_mb=1" `
+  -F "invocation_output_max_total_size_mb=1" `
   -F "source_bundle=@$testDir\function.zip"
 
 $version = $versionJson | ConvertFrom-Json
@@ -195,6 +223,8 @@ $invokeBody = @{
 $invocation = Invoke-RestMethod -Method Post -Uri "$base/api/functions/$($function.id)/invoke/" `
   -Headers @{ Authorization = "Bearer $token" } `
   -ContentType "application/json" -Body $invokeBody
+
+$readToken = $invocation.read_token
 ```
 
 Poll until the invocation is complete:
@@ -210,6 +240,23 @@ do {
 $invocation.result | ConvertTo-Json -Depth 6
 ```
 
+List and download the declared output file:
+
+```powershell
+$outputs = Invoke-RestMethod -Method Get -Uri "$base/api/invocations/$($invocation.id)/outputs/" `
+  -Headers @{ "X-Invocation-Read-Token" = $readToken }
+
+$outputs
+
+$outputPath = Join-Path $testDir "downloaded-report.txt"
+Invoke-WebRequest -Method Get `
+  -Uri "$base/api/invocations/$($invocation.id)/outputs/$($outputs[0].id)/download/" `
+  -Headers @{ "X-Invocation-Read-Token" = $readToken } `
+  -OutFile $outputPath
+
+Get-Content $outputPath
+```
+
 ## Reproduce in Postman
 
 Create an environment with these variables:
@@ -219,6 +266,8 @@ Create an environment with these variables:
 - `function_id`: empty initially
 - `version_id`: empty initially
 - `invocation_id`: empty initially
+- `invocation_read_token`: empty initially
+- `output_id`: empty initially
 
 ### 1. Register
 
@@ -286,6 +335,10 @@ Body: `form-data`
 | `runtime` | Text | `python3.13` |
 | `handler` | Text | `handler.main` |
 | `config` | Text | `{"memory_mb":128,"timeout_seconds":10}` |
+| `declared_output_files` | Text | `["report.txt"]` |
+| `invocation_output_max_files` | Text | `1` |
+| `invocation_output_max_file_size_mb` | Text | `1` |
+| `invocation_output_max_total_size_mb` | Text | `1` |
 | `source_bundle` | File | select `function.zip` |
 
 Tests tab:
@@ -352,6 +405,7 @@ Tests tab:
 ```javascript
 const body = pm.response.json();
 pm.environment.set("invocation_id", body.id);
+pm.environment.set("invocation_read_token", body.read_token);
 ```
 
 ### 7. Poll Invocation
@@ -370,6 +424,39 @@ Repeat until:
 {
   "status": "succeeded"
 }
+```
+
+### 8. List Outputs
+
+`GET {{base_url}}/api/invocations/{{invocation_id}}/outputs/`
+
+Headers:
+
+```text
+X-Invocation-Read-Token: {{invocation_read_token}}
+```
+
+Tests tab:
+
+```javascript
+const body = pm.response.json();
+pm.environment.set("output_id", body[0].id);
+```
+
+### 9. Download Output
+
+`GET {{base_url}}/api/invocations/{{invocation_id}}/outputs/{{output_id}}/download/`
+
+Headers:
+
+```text
+X-Invocation-Read-Token: {{invocation_read_token}}
+```
+
+Expected body:
+
+```text
+Processed Ilya with total=6
 ```
 
 The `result` field should include:
@@ -397,10 +484,12 @@ Current strengths:
 - Workers claim jobs before execution.
 - Invocations are asynchronous.
 - Users can poll status and read JSON results.
+- Function versions can declare output filenames.
+- Workers upload matching files from `/sandbox/output`.
+- Invocation callers can read their own result and output files with an
+  invocation read token.
 
 Current gaps:
 
-- Output files written to `/sandbox/output` are not persisted yet, except for
-  `result.json`.
 - There is no synchronous `wait=true` invocation mode yet.
 - There is no UI yet.

@@ -1,17 +1,26 @@
 from rest_framework import serializers
 
-from .models import Invocation, InvocationInputFile, InvocationStatus
+from .models import (
+    Invocation,
+    InvocationInputFile,
+    InvocationOutputFile,
+    InvocationStatus,
+)
 
 
 class InvocationSerializer(serializers.ModelSerializer):
     input_files = serializers.SerializerMethodField()
+    output_files = serializers.SerializerMethodField()
 
     class Meta:
         model = Invocation
-        fields = "__all__"
+        exclude = ["read_token_hash", "read_token_prefix"]
 
     def get_input_files(self, obj):
         return InvocationInputFileSerializer(obj.input_files.all(), many=True).data
+
+    def get_output_files(self, obj):
+        return InvocationOutputFileSerializer(obj.output_files.all(), many=True).data
 
 
 class InvocationInputFileSerializer(serializers.ModelSerializer):
@@ -24,6 +33,20 @@ class InvocationInputFileSerializer(serializers.ModelSerializer):
             "original_name",
             "content_type",
             "size_bytes",
+            "created_at",
+        ]
+
+
+class InvocationOutputFileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InvocationOutputFile
+        fields = [
+            "id",
+            "original_path",
+            "safe_name",
+            "content_type",
+            "size_bytes",
+            "position",
             "created_at",
         ]
 

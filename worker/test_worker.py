@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from backend_client import BackendReportError
 from builder import BuildCancelled, BuildError, BuildResult
-from executor import DockerExecutor
+from executor import DockerExecutor, ExecutionResult
 from worker import (
     acknowledge_processing_job,
     claim_job_for_execution,
@@ -352,3 +352,345 @@ class BuildWorkerTests(unittest.TestCase):
                 (extracted / "input" / "files" / "000-document.pdf").read_bytes(),
                 b"pdf",
             )
+
+    def test_copy_directory_from_container_uses_docker_archive(self):
+        executor = DockerExecutor(docker_client=Mock())
+        container = Mock()
+
+        with tempfile.TemporaryDirectory() as root:
+            root_path = Path(root)
+            destination_dir = root_path / "destination"
+            export_dir = root_path / "export"
+            export_dir.mkdir()
+            (export_dir / "report.txt").write_text("report", encoding="utf-8")
+            container.get_archive.return_value = (
+                [executor._build_tar_archive(export_dir)],
+                {},
+            )
+
+            executor._copy_directory_from_container(
+                container,
+                "/sandbox/export",
+                destination_dir,
+            )
+
+            container.get_archive.assert_called_once_with("/sandbox/export")
+            container.exec_run.assert_not_called()
+            self.assertEqual(
+                (destination_dir / "export" / "report.txt").read_text(encoding="utf-8"),
+                "report",
+            )
+
+    def test_collect_declared_output_files_ignores_extra_files(self):
+        executor = DockerExecutor(docker_client=Mock())
+
+        with tempfile.TemporaryDirectory() as root:
+            output_dir = Path(root) / "output"
+            nested_dir = output_dir / "nested"
+            nested_dir.mkdir(parents=True)
+            (output_dir / "report.txt").write_text("report", encoding="utf-8")
+            (output_dir / "result.json").write_text("{}", encoding="utf-8")
+            (output_dir / "extra.txt").write_text("extra", encoding="utf-8")
+            (nested_dir / "nested-report.txt").write_text("nested", encoding="utf-8")
+
+            collected = executor._collect_declared_output_files(
+                {
+                    "declared_output_files": [
+                        "report.txt",
+                    ]
+                },
+                output_dir,
+            )
+
+            self.assertEqual(len(collected), 1)
+            self.assertEqual(collected[0]["original_path"], "report.txt")
+            self.assertEqual(collected[0]["path"], output_dir / "report.txt")
+
+    def test_upload_output_files_sends_declared_files_to_backend(self):
+        backend = Mock()
+        executor = DockerExecutor(docker_client=Mock(), backend_client=backend)
+
+        with tempfile.TemporaryDirectory() as root:
+            output_dir = Path(root) / "output"
+            output_dir.mkdir()
+            report = output_dir / "report.txt"
+            report.write_text("report", encoding="utf-8")
+
+            executor._upload_output_files(
+                {
+                    "request_id": "request-1",
+                    "declared_output_files": ["report.txt"],
+                },
+                [{"original_path": "report.txt", "path": report}],
+            )
+
+            backend.upload_invocation_output.assert_called_once_with(
+                "request-1",
+                original_path="report.txt",
+                file_path=report,
+                position=0,
+                content_type="text/plain",
+            )
+
+    def test_worker_output_validation_rejects_non_list_declaration(self):
+        executor = DockerExecutor(docker_client=Mock())
+
+        with tempfile.TemporaryDirectory() as root:
+            output_dir = Path(root) / "output"
+            output_dir.mkdir()
+
+            with self.assertRaisesRegex(Exception, "must be a list"):
+                executor._validate_declared_output_files(
+                    {"declared_output_files": "report.txt"},
+                    output_dir,
+                )
+
+    def test_worker_output_validation_rejects_unsafe_declared_name(self):
+        executor = DockerExecutor(docker_client=Mock())
+
+        with tempfile.TemporaryDirectory() as root:
+            output_dir = Path(root) / "output"
+            output_dir.mkdir()
+
+            with self.assertRaisesRegex(Exception, "unsafe or reserved"):
+                executor._validate_declared_output_files(
+                    {"declared_output_files": ["../secret.txt"]},
+                    output_dir,
+                )
+
+    def test_worker_output_validation_rejects_result_json_declaration(self):
+        executor = DockerExecutor(docker_client=Mock())
+
+        with tempfile.TemporaryDirectory() as root:
+            output_dir = Path(root) / "output"
+            output_dir.mkdir()
+
+            with self.assertRaisesRegex(Exception, "unsafe or reserved"):
+                executor._validate_declared_output_files(
+                    {"declared_output_files": ["result.json"]},
+                    output_dir,
+                )
+
+    def test_worker_output_validation_rejects_directory_output(self):
+        executor = DockerExecutor(docker_client=Mock())
+
+        with tempfile.TemporaryDirectory() as root:
+            output_dir = Path(root) / "output"
+            (output_dir / "report.txt").mkdir(parents=True)
+
+            with self.assertRaisesRegex(Exception, "not a file"):
+                executor._validate_declared_output_files(
+                    {"declared_output_files": ["report.txt"]},
+                    output_dir,
+                )
+
+    def test_worker_output_validation_enforces_file_count_limit(self):
+        executor = DockerExecutor(docker_client=Mock())
+
+        with tempfile.TemporaryDirectory() as root:
+            output_dir = Path(root) / "output"
+            output_dir.mkdir()
+            (output_dir / "one.txt").write_text("1", encoding="utf-8")
+            (output_dir / "two.txt").write_text("2", encoding="utf-8")
+
+            with self.assertRaisesRegex(Exception, "limit is 1"):
+                executor._validate_declared_output_files(
+                    {
+                        "declared_output_files": ["one.txt", "two.txt"],
+                        "invocation_output_max_files": 1,
+                    },
+                    output_dir,
+                )
+
+    def test_worker_output_validation_enforces_per_file_size_limit(self):
+        executor = DockerExecutor(docker_client=Mock())
+
+        with tempfile.TemporaryDirectory() as root:
+            output_dir = Path(root) / "output"
+            output_dir.mkdir()
+            (output_dir / "report.txt").write_bytes(b"123")
+
+            with self.assertRaisesRegex(Exception, "per-file limit is 0"):
+                executor._validate_declared_output_files(
+                    {
+                        "declared_output_files": ["report.txt"],
+                        "invocation_output_max_file_size_mb": 0,
+                    },
+                    output_dir,
+                )
+
+    def test_worker_output_validation_enforces_total_size_limit(self):
+        executor = DockerExecutor(docker_client=Mock())
+
+        with tempfile.TemporaryDirectory() as root:
+            output_dir = Path(root) / "output"
+            output_dir.mkdir()
+            (output_dir / "one.txt").write_bytes(b"1")
+            (output_dir / "two.txt").write_bytes(b"2")
+
+            with self.assertRaisesRegex(Exception, "total limit is 0"):
+                executor._validate_declared_output_files(
+                    {
+                        "declared_output_files": ["one.txt", "two.txt"],
+                        "invocation_output_max_files": 2,
+                        "invocation_output_max_total_size_mb": 0,
+                    },
+                    output_dir,
+                )
+
+    def test_worker_output_validation_missing_declared_output_is_allowed(self):
+        executor = DockerExecutor(docker_client=Mock())
+
+        with tempfile.TemporaryDirectory() as root:
+            output_dir = Path(root) / "output"
+            output_dir.mkdir()
+
+            files = executor._validate_declared_output_files(
+                {"declared_output_files": ["report.txt"]},
+                output_dir,
+            )
+
+            self.assertEqual(files, [])
+
+    def test_effective_output_dir_uses_docker_archive_nested_output_dir(self):
+        executor = DockerExecutor(docker_client=Mock())
+
+        with tempfile.TemporaryDirectory() as root:
+            output_dir = Path(root) / "output"
+            nested_output_dir = output_dir / "output"
+            nested_output_dir.mkdir(parents=True)
+
+            self.assertEqual(
+                executor._effective_output_dir(output_dir),
+                nested_output_dir,
+            )
+
+    def test_worker_output_validation_skips_upload_when_invalid(self):
+        executor = DockerExecutor(docker_client=Mock())
+        executor._copy_directory_into_container = Mock()
+        executor._copy_directory_from_container = Mock()
+        executor._remove_container = Mock()
+        executor._remove_volume = Mock()
+        container = Mock()
+        container.attrs = {"State": {"Running": False, "ExitCode": 0}}
+        container.logs.return_value = b""
+        volume = Mock()
+        volume.name = "volume-1"
+        executor.docker_client.volumes.create.return_value = volume
+        executor.docker_client.containers.create.return_value = container
+        executor.backend_client = Mock()
+        executor.backend_client.list_invocation_inputs.return_value = []
+
+        def copy_outputs(container, source_path, destination_dir):
+            output_dir = destination_dir / "export" / "output"
+            output_dir.mkdir(parents=True)
+            (output_dir / "report.txt").write_bytes(b"too large")
+
+        executor._copy_directory_from_container.side_effect = copy_outputs
+
+        result = executor.run(
+            {
+                "request_id": "request-1",
+                "image_ref": "localhost:5000/functions/example:v1",
+                "declared_output_files": ["report.txt"],
+                "invocation_output_max_file_size_mb": 0,
+            }
+        )
+
+        self.assertIsInstance(result, ExecutionResult)
+        self.assertEqual(result.status, "failed")
+        self.assertIn("per-file limit", result.error_message)
+        executor.backend_client.upload_invocation_output.assert_not_called()
+
+    def test_executor_fails_invocation_when_output_export_fails(self):
+        executor = DockerExecutor(docker_client=Mock())
+        executor._copy_directory_into_container = Mock()
+        executor._copy_directory_from_container = Mock()
+        executor._remove_container = Mock()
+        executor._remove_volume = Mock()
+        container = Mock()
+        container.attrs = {"State": {"Running": False, "ExitCode": 0}}
+        container.logs.return_value = b""
+        volume = Mock()
+        volume.name = "volume-1"
+        executor.docker_client.volumes.create.return_value = volume
+        executor.docker_client.containers.create.return_value = container
+        executor.backend_client = Mock()
+        executor.backend_client.list_invocation_inputs.return_value = []
+
+        def copy_export(container, source_path, destination_dir):
+            export_dir = destination_dir / "export"
+            export_dir.mkdir(parents=True)
+            (export_dir / "output_copy_exit_code").write_text("1", encoding="utf-8")
+            (export_dir / "output_copy_error.txt").write_text(
+                "copy failed",
+                encoding="utf-8",
+            )
+
+        executor._copy_directory_from_container.side_effect = copy_export
+
+        result = executor.run(
+            {
+                "request_id": "request-1",
+                "image_ref": "localhost:5000/functions/example:v1",
+                "declared_output_files": ["report.txt"],
+            }
+        )
+
+        self.assertEqual(result.status, "failed")
+        self.assertIn("copy failed", result.error_message)
+        executor.backend_client.upload_invocation_output.assert_not_called()
+
+    def test_executor_mounts_output_as_size_limited_tmpfs(self):
+        executor = DockerExecutor(docker_client=Mock(), backend_client=Mock())
+        executor.backend_client.list_invocation_inputs.return_value = []
+        executor._copy_directory_into_container = Mock()
+        executor._copy_directory_from_container = Mock()
+        executor._remove_container = Mock()
+        executor._remove_volume = Mock()
+        container = Mock()
+        container.attrs = {"State": {"Running": False, "ExitCode": 0}}
+        container.logs.return_value = b""
+        volume = Mock()
+        volume.name = "volume-1"
+        executor.docker_client.volumes.create.return_value = volume
+        executor.docker_client.containers.create.return_value = container
+
+        executor.run(
+            {
+                "request_id": "request-1",
+                "image_ref": "localhost:5000/functions/example:v1",
+                "declared_output_files": [],
+                "invocation_output_max_total_size_mb": 10,
+            }
+        )
+
+        create_kwargs = executor.docker_client.containers.create.call_args.kwargs
+        self.assertEqual(
+            create_kwargs["tmpfs"],
+            {"/sandbox/output": "size=10485760"},
+        )
+        self.assertEqual(create_kwargs["entrypoint"], ["sh"])
+        self.assertEqual(create_kwargs["command"][0], "-c")
+        self.assertIn("python /runner.py", create_kwargs["command"][1])
+        self.assertIn("/sandbox/export/output", create_kwargs["command"][1])
+        self.assertIn("cp -a /sandbox/output/.", create_kwargs["command"][1])
+        self.assertNotIn("sleep", create_kwargs["command"][1])
+
+    def test_output_tmpfs_size_has_one_megabyte_floor(self):
+        executor = DockerExecutor(docker_client=Mock())
+
+        self.assertEqual(
+            executor._output_tmpfs_size_bytes(
+                {"invocation_output_max_total_size_mb": 0}
+            ),
+            1024 * 1024,
+        )
+
+    def test_wait_for_exit_returns_container_exit_code(self):
+        executor = DockerExecutor(docker_client=Mock())
+        container = Mock()
+        container.attrs = {"State": {"Running": False, "ExitCode": 7}}
+
+        self.assertEqual(executor._wait_for_exit(container, 1), 7)
+        container.kill.assert_not_called()

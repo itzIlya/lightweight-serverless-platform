@@ -44,6 +44,10 @@ class DurableJobRecordTests(APITestCase):
             source_bundle=function_bundle(),
             image_ref="localhost:5000/functions/jobs:v1-v1",
             build_status=BuildStatus.BUILT,
+            declared_output_files=["report.txt", "summary.json"],
+            invocation_output_max_files=2,
+            invocation_output_max_file_size_mb=3,
+            invocation_output_max_total_size_mb=10,
         )
 
     @patch("redis.Redis.from_url")
@@ -79,6 +83,13 @@ class DurableJobRecordTests(APITestCase):
         self.assertEqual(job.type, JobType.INVOCATION)
         self.assertEqual(job.status, JobStatus.QUEUED)
         self.assertEqual(job.payload["job_id"], str(job.job_id))
+        self.assertEqual(
+            job.payload["declared_output_files"],
+            ["report.txt", "summary.json"],
+        )
+        self.assertEqual(job.payload["invocation_output_max_files"], 2)
+        self.assertEqual(job.payload["invocation_output_max_file_size_mb"], 3)
+        self.assertEqual(job.payload["invocation_output_max_total_size_mb"], 10)
         self.assertEqual(payload["job_id"], str(job.job_id))
         redis_client.rpush.assert_called_once_with(
             "scheduler-pending-jobs",
@@ -236,6 +247,37 @@ class DurableJobRecordTests(APITestCase):
         self.assertEqual(job.payload["dispatch_attempt"], 1)
 
     @patch("redis.Redis.from_url")
+    def test_scheduler_does_not_dispatch_job_before_available_at(self, redis_from_url):
+        redis_from_url.return_value = Mock()
+        WorkerNode.objects.create(
+            name="worker-a",
+            hostname="worker-a.local",
+        )
+        attempt = create_build_attempt(self.version)
+        enqueue_build_attempt(attempt)
+        job = Job.objects.get(build_attempt=attempt)
+        job.available_at = timezone.now() + timedelta(seconds=30)
+        job.save(update_fields=["available_at", "updated_at"])
+
+        dispatch_response = self.client.post(
+            reverse("dispatch-scheduler-job", args=[job.job_id]),
+            data={
+                "worker_name": "worker-a",
+                "queue_name": "worker:worker-a:jobs",
+            },
+            format="json",
+            HTTP_X_INTERNAL_TOKEN="change-me",
+        )
+
+        self.assertEqual(dispatch_response.status_code, 200)
+        self.assertFalse(dispatch_response.data["dispatched"])
+        self.assertEqual(dispatch_response.data["status"], JobStatus.QUEUED)
+        self.assertIn("not available", dispatch_response.data["detail"])
+        job.refresh_from_db()
+        self.assertEqual(job.status, JobStatus.QUEUED)
+        self.assertEqual(job.dispatch_attempts, 0)
+
+    @patch("redis.Redis.from_url")
     def test_worker_can_claim_dispatched_job(self, redis_from_url):
         redis_from_url.return_value = Mock()
         WorkerNode.objects.create(
@@ -338,6 +380,7 @@ class DurableJobRecordTests(APITestCase):
             data={
                 "worker_name": "worker-a",
                 "reason": "Worker missed heartbeat.",
+                "recovery": True,
             },
             format="json",
             HTTP_X_INTERNAL_TOKEN="change-me",
@@ -392,6 +435,7 @@ class DurableJobRecordTests(APITestCase):
             data={
                 "worker_name": "worker-a",
                 "reason": "Worker missed heartbeat.",
+                "recovery": True,
             },
             format="json",
             HTTP_X_INTERNAL_TOKEN="change-me",
@@ -408,6 +452,164 @@ class DurableJobRecordTests(APITestCase):
         job.refresh_from_db()
         self.assertEqual(job.status, JobStatus.QUEUED)
         self.assertEqual(job.queue_name, "scheduler-pending-jobs")
+        self.assertEqual(job.recovery_count, 1)
+        self.assertNotIn("assigned_worker", job.payload)
+
+    @patch("redis.Redis.from_url")
+    def test_invocation_recovery_uses_fast_backoff(self, redis_from_url):
+        redis_from_url.return_value = Mock()
+        WorkerNode.objects.create(
+            name="worker-a",
+            hostname="worker-a.local",
+        )
+        invocation = Invocation.objects.create(
+            function_version=self.version,
+            event={},
+        )
+        enqueue_invocation(invocation)
+        job = Job.objects.get(invocation=invocation)
+        self.client.post(
+            reverse("dispatch-scheduler-job", args=[job.job_id]),
+            data={
+                "worker_name": "worker-a",
+                "queue_name": "worker:worker-a:jobs",
+            },
+            format="json",
+            HTTP_X_INTERNAL_TOKEN="change-me",
+        )
+
+        first = self.client.post(
+            reverse("requeue-scheduler-job", args=[job.job_id]),
+            data={
+                "worker_name": "worker-a",
+                "reason": "Worker missed heartbeat.",
+                "recovery": True,
+            },
+            format="json",
+            HTTP_X_INTERNAL_TOKEN="change-me",
+        )
+        job.refresh_from_db()
+        first_available_at = job.available_at
+        job.status = JobStatus.DISPATCHED
+        job.queue_name = "worker:worker-a:jobs"
+        job.payload["assigned_worker"] = "worker-a"
+        job.save(update_fields=["status", "queue_name", "payload", "updated_at"])
+        second_started_at = timezone.now()
+        second = self.client.post(
+            reverse("requeue-scheduler-job", args=[job.job_id]),
+            data={
+                "worker_name": "worker-a",
+                "reason": "Worker missed heartbeat again.",
+                "recovery": True,
+            },
+            format="json",
+            HTTP_X_INTERNAL_TOKEN="change-me",
+        )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.data["recovery_delay_seconds"], 0)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.data["recovery_delay_seconds"], 2)
+        job.refresh_from_db()
+        self.assertEqual(job.recovery_count, 2)
+        self.assertLessEqual(first_available_at, timezone.now())
+        self.assertGreaterEqual(
+            job.available_at,
+            second_started_at + timedelta(seconds=1),
+        )
+        self.assertLessEqual(
+            job.available_at,
+            second_started_at + timedelta(seconds=3),
+        )
+
+    @patch("redis.Redis.from_url")
+    def test_build_recovery_uses_slower_backoff(self, redis_from_url):
+        redis_from_url.return_value = Mock()
+        WorkerNode.objects.create(
+            name="worker-a",
+            hostname="worker-a.local",
+        )
+        attempt = create_build_attempt(self.version)
+        enqueue_build_attempt(attempt)
+        job = Job.objects.get(build_attempt=attempt)
+        self.client.post(
+            reverse("dispatch-scheduler-job", args=[job.job_id]),
+            data={
+                "worker_name": "worker-a",
+                "queue_name": "worker:worker-a:jobs",
+            },
+            format="json",
+            HTTP_X_INTERNAL_TOKEN="change-me",
+        )
+
+        started_at = timezone.now()
+        requeue_response = self.client.post(
+            reverse("requeue-scheduler-job", args=[job.job_id]),
+            data={
+                "worker_name": "worker-a",
+                "reason": "Worker missed heartbeat.",
+                "recovery": True,
+            },
+            format="json",
+            HTTP_X_INTERNAL_TOKEN="change-me",
+        )
+
+        self.assertEqual(requeue_response.status_code, 200)
+        self.assertTrue(requeue_response.data["requeued"])
+        self.assertEqual(requeue_response.data["recovery_delay_seconds"], 10)
+        job.refresh_from_db()
+        self.assertEqual(job.recovery_count, 1)
+        self.assertGreaterEqual(job.available_at, started_at + timedelta(seconds=9))
+        self.assertLessEqual(job.available_at, started_at + timedelta(seconds=11))
+
+    @patch("redis.Redis.from_url")
+    def test_recovered_too_many_times_moves_to_dead_letter(self, redis_from_url):
+        redis_from_url.return_value = Mock()
+        WorkerNode.objects.create(
+            name="worker-a",
+            hostname="worker-a.local",
+        )
+        invocation = Invocation.objects.create(
+            function_version=self.version,
+            event={},
+        )
+        enqueue_invocation(invocation)
+        job = Job.objects.get(invocation=invocation)
+        job.status = JobStatus.RUNNING
+        job.queue_name = "worker:worker-a:jobs"
+        job.recovery_count = 3
+        job.max_recovery_attempts = 3
+        job.payload["assigned_worker"] = "worker-a"
+        job.save(
+            update_fields=[
+                "status",
+                "queue_name",
+                "recovery_count",
+                "max_recovery_attempts",
+                "payload",
+                "updated_at",
+            ]
+        )
+
+        response = self.client.post(
+            reverse("requeue-scheduler-job", args=[job.job_id]),
+            data={
+                "worker_name": "worker-a",
+                "reason": "Worker missed heartbeat too many times.",
+                "recovery": True,
+            },
+            format="json",
+            HTTP_X_INTERNAL_TOKEN="change-me",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["requeued"])
+        self.assertTrue(response.data["dead_lettered"])
+        job.refresh_from_db()
+        self.assertEqual(job.status, JobStatus.DEAD_LETTERED)
+        self.assertEqual(job.recovery_count, 4)
+        self.assertIsNotNone(job.dead_lettered_at)
+        self.assertIn("too many", job.dead_letter_reason)
         self.assertNotIn("assigned_worker", job.payload)
 
     @patch("redis.Redis.from_url")
@@ -436,6 +638,7 @@ class DurableJobRecordTests(APITestCase):
             data={
                 "worker_name": "worker-a",
                 "reason": "Worker missed heartbeat.",
+                "recovery": True,
             },
             format="json",
             HTTP_X_INTERNAL_TOKEN="change-me",

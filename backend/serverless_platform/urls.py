@@ -15,7 +15,11 @@ from apps.functions.views import (
     release_build_lease_view,
     report_build,
 )
-from apps.invocations.views import InvocationViewSet, report_invocation
+from apps.invocations.views import (
+    InvocationViewSet,
+    report_invocation,
+    upload_invocation_output,
+)
 from apps.jobs.views import (
     claim_worker_job,
     dispatch_scheduler_job,
@@ -117,6 +121,11 @@ urlpatterns = [
         "api/internal/invocations/<uuid:request_id>/report/",
         report_invocation,
         name="report-invocation",
+    ),
+    path(
+        "api/internal/invocations/<uuid:request_id>/outputs/",
+        upload_invocation_output,
+        name="upload-invocation-output",
     ),
     path("api/auth/", include("apps.accounts.urls")),
     path("api/", include(router.urls)),

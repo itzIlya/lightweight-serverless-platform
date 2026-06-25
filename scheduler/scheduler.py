@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import time
+from datetime import datetime, timezone
 
 from backend_client import BackendClient, BackendError
 
@@ -9,7 +10,7 @@ from backend_client import BackendClient, BackendError
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("scheduler")
 
-TERMINAL_JOB_STATUSES = {"succeeded", "failed", "cancelled"}
+TERMINAL_JOB_STATUSES = {"succeeded", "failed", "cancelled", "dead_lettered"}
 
 
 def choose_worker(workers: list[dict], job: dict) -> dict | None:
@@ -41,6 +42,21 @@ def parse_delivery_message(message: str) -> dict:
     return {"job_id": message, "dispatch_attempt": None}
 
 
+def seconds_until_available(job: dict) -> float:
+    available_at = job.get("available_at")
+    if not available_at:
+        return 0
+    if isinstance(available_at, str):
+        value = available_at.replace("Z", "+00:00")
+        try:
+            available_at = datetime.fromisoformat(value)
+        except ValueError:
+            return 0
+    if available_at.tzinfo is None:
+        available_at = available_at.replace(tzinfo=timezone.utc)
+    return max((available_at - datetime.now(timezone.utc)).total_seconds(), 0)
+
+
 def process_job_id(
     *,
     job_id: str,
@@ -56,6 +72,17 @@ def process_job_id(
             job_id,
             job.get("status"),
         )
+        return False
+
+    wait_seconds = seconds_until_available(job)
+    if wait_seconds > 0:
+        logger.info(
+            "job is not available yet; requeueing job_id=%s wait_seconds=%.3f",
+            job_id,
+            wait_seconds,
+        )
+        time.sleep(min(wait_seconds, requeue_delay_seconds))
+        redis_client.rpush(pending_queue, job_id)
         return False
 
     workers = backend.list_workers()
@@ -138,7 +165,16 @@ def recover_stale_workers(
                 job_id,
                 worker_name=worker_name,
                 reason=f"Worker {worker_name} missed heartbeat.",
+                recovery=True,
             )
+            if requeue.get("dead_lettered"):
+                redis_client.lrem(processing_queue, 1, delivery_message)
+                logger.warning(
+                    "dead-lettered recovered job job_id=%s worker=%s",
+                    job_id,
+                    worker_name,
+                )
+                continue
             if not requeue.get("requeued"):
                 continue
 

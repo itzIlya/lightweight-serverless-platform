@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Invocation, InvocationInputFile
+from .models import Invocation, InvocationInputFile, InvocationOutputFile
 
 
 @admin.register(Invocation)
@@ -21,3 +21,16 @@ class InvocationInputFileAdmin(admin.ModelAdmin):
         "created_at",
     )
     search_fields = ("invocation__request_id", "original_name", "content_type")
+
+
+@admin.register(InvocationOutputFile)
+class InvocationOutputFileAdmin(admin.ModelAdmin):
+    list_display = (
+        "invocation",
+        "position",
+        "original_path",
+        "content_type",
+        "size_bytes",
+        "created_at",
+    )
+    search_fields = ("invocation__request_id", "original_path", "content_type")

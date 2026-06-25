@@ -21,9 +21,16 @@ class SmokeError(RuntimeError):
 
 def make_function_bundle(path: Path) -> None:
     handler = """
+import os
+
+
 def main(event, context):
     name = event.get("name", "friend")
     numbers = event.get("numbers", [])
+    output_dir = os.environ.get("FUNCTION_OUTPUT_DIR")
+    if output_dir:
+        with open(os.path.join(output_dir, "report.txt"), "w", encoding="utf-8") as output:
+            output.write(f"Processed {name} with total={sum(numbers)}")
     return {
         "message": f"Hello, {name}!",
         "echo": event,
@@ -43,6 +50,7 @@ def json_request(
     payload: dict | None = None,
     *,
     token: str | None = None,
+    extra_headers: dict[str, str] | None = None,
     expected: set[int] | None = None,
 ) -> dict:
     expected = expected or {200, 201, 202}
@@ -53,9 +61,38 @@ def json_request(
         headers["Content-Type"] = "application/json"
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    if extra_headers:
+        headers.update(extra_headers)
 
     req = request.Request(url, data=data, method=method, headers=headers)
     return open_json(req, expected)
+
+
+def download_bytes(
+    url: str,
+    *,
+    token: str | None = None,
+    extra_headers: dict[str, str] | None = None,
+    expected: set[int] | None = None,
+) -> bytes:
+    expected = expected or {200}
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    if extra_headers:
+        headers.update(extra_headers)
+    req = request.Request(url, method="GET", headers=headers)
+    try:
+        with request.urlopen(req, timeout=30) as response:
+            raw = response.read()
+            if response.status not in expected:
+                raise SmokeError(f"{url} returned {response.status}: {raw!r}")
+            return raw
+    except error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        raise SmokeError(f"{url} returned HTTP {exc.code}: {raw}") from exc
+    except error.URLError as exc:
+        raise SmokeError(f"{url} failed: {exc}") from exc
 
 
 def multipart_request(
@@ -196,6 +233,10 @@ def run(base_url: str) -> dict:
                 "runtime": "python3.13",
                 "handler": "handler.main",
                 "config": json.dumps({"memory_mb": 128, "timeout_seconds": 10}),
+                "declared_output_files": json.dumps(["report.txt"]),
+                "invocation_output_max_files": "1",
+                "invocation_output_max_file_size_mb": "1",
+                "invocation_output_max_total_size_mb": "1",
             },
             files={"source_bundle": bundle_path},
             token=token,
@@ -243,6 +284,7 @@ def run(base_url: str) -> dict:
         expected={202},
     )
     invocation_id = invocation["id"]
+    read_token = invocation["read_token"]
     print(f"   invocation_id={invocation_id} request_id={invocation['request_id']}")
 
     invocation = poll_until(
@@ -270,7 +312,23 @@ def run(base_url: str) -> dict:
                 f"Unexpected result[{key!r}]: {invocation['result'].get(key)!r}"
             )
 
-    print("6. Final invocation result")
+    print("6. List and download invocation output file")
+    outputs = json_request(
+        "GET",
+        f"{base_url}/api/invocations/{invocation_id}/outputs/",
+        extra_headers={"X-Invocation-Read-Token": read_token},
+    )
+    if len(outputs) != 1 or outputs[0]["original_path"] != "report.txt":
+        raise SmokeError(f"Unexpected output list: {json.dumps(outputs, indent=2)}")
+    report_body = download_bytes(
+        f"{base_url}/api/invocations/{invocation_id}/outputs/{outputs[0]['id']}/download/",
+        extra_headers={"X-Invocation-Read-Token": read_token},
+    ).decode("utf-8")
+    if report_body != "Processed Ilya with total=6":
+        raise SmokeError(f"Unexpected report.txt body: {report_body!r}")
+    print(f"   output_id={outputs[0]['id']} report.txt={report_body!r}")
+
+    print("7. Final invocation result")
     print(json.dumps(invocation["result"], indent=2))
     return {
         "user": auth["user"],
