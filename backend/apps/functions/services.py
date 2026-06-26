@@ -361,5 +361,5 @@ def enqueue_build_attempt(attempt: BuildAttempt) -> dict:
     payload = build_function_job(attempt)
     job = create_build_job_record(attempt, payload)
     client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
-    client.rpush(settings.SCHEDULER_QUEUE_NAME, str(job.job_id))
+    client.rpush(settings.SCHEDULER_BUILD_QUEUE_NAME, str(job.job_id))
     return payload

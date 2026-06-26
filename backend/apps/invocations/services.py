@@ -46,7 +46,7 @@ def enqueue_invocation(invocation: Invocation) -> dict:
     payload = build_invocation_job(invocation)
     job = create_invocation_job_record(invocation, payload)
     client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
-    client.rpush(settings.SCHEDULER_QUEUE_NAME, str(job.job_id))
+    client.rpush(settings.SCHEDULER_INVOCATION_QUEUE_NAME, str(job.job_id))
     return payload
 
 

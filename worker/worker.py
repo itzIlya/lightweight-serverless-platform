@@ -19,6 +19,32 @@ logger = logging.getLogger("worker")
 TERMINAL_JOB_STATUSES = {"succeeded", "failed", "cancelled"}
 
 
+class WorkerActivity:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._active_jobs = 0
+        self._active_builds = 0
+
+    def start(self, job_type: str) -> None:
+        with self._lock:
+            self._active_jobs += 1
+            if job_type == "function.build":
+                self._active_builds += 1
+
+    def finish(self, job_type: str) -> None:
+        with self._lock:
+            self._active_jobs = max(self._active_jobs - 1, 0)
+            if job_type == "function.build":
+                self._active_builds = max(self._active_builds - 1, 0)
+
+    def snapshot(self) -> dict:
+        with self._lock:
+            return {
+                "active_jobs": self._active_jobs,
+                "active_builds": self._active_builds,
+            }
+
+
 def utc_now() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -53,16 +79,18 @@ def heartbeat_loop(
     *,
     worker_name: str,
     interval_seconds: float,
+    activity: WorkerActivity | None = None,
     stop_event: threading.Event | None = None,
 ) -> None:
     stop_event = stop_event or threading.Event()
     while not stop_event.wait(interval_seconds):
         try:
+            state = activity.snapshot() if activity is not None else {}
             backend.heartbeat_worker(
                 {
                     "name": worker_name,
-                    "active_jobs": 0,
-                    "active_builds": 0,
+                    "active_jobs": state.get("active_jobs", 0),
+                    "active_builds": state.get("active_builds", 0),
                 }
             )
         except BackendReportError:
@@ -70,6 +98,9 @@ def heartbeat_loop(
 
 
 def worker_processing_queue_name(worker_queue_name: str) -> str:
+    parts = worker_queue_name.split(":")
+    if len(parts) >= 3 and parts[-1] in {"invocations", "builds", "jobs"}:
+        return ":".join(parts[:-1] + ["processing"])
     if worker_queue_name.endswith(":jobs"):
         return f"{worker_queue_name[:-5]}:processing"
     return f"{worker_queue_name}:processing"
@@ -84,6 +115,48 @@ def move_job_to_processing(client, queue_name: str, processing_queue_name: str):
         "RIGHT",
         5,
     )
+
+
+def move_job_to_processing_nowait(client, queue_name: str, processing_queue_name: str):
+    return client.execute_command(
+        "LMOVE",
+        queue_name,
+        processing_queue_name,
+        "LEFT",
+        "RIGHT",
+    )
+
+
+def move_next_job_to_processing(
+    client,
+    invocation_queue_name: str,
+    build_queue_name: str,
+    processing_queue_name: str,
+):
+    delivery = move_job_to_processing_nowait(
+        client,
+        invocation_queue_name,
+        processing_queue_name,
+    )
+    if delivery is not None:
+        return delivery, invocation_queue_name
+
+    delivery = move_job_to_processing_nowait(
+        client,
+        build_queue_name,
+        processing_queue_name,
+    )
+    if delivery is not None:
+        return delivery, build_queue_name
+
+    delivery = move_job_to_processing(
+        client,
+        invocation_queue_name,
+        processing_queue_name,
+    )
+    if delivery is not None:
+        return delivery, invocation_queue_name
+    return None, None
 
 
 def acknowledge_processing_job(client, processing_queue_name: str, job_id: str) -> None:
@@ -377,13 +450,21 @@ def main() -> None:
     worker_token = os.getenv("WORKER_SHARED_SECRET", "change-me")
     worker_name = os.getenv("WORKER_NAME", socket.gethostname())
     worker_queue_prefix = os.getenv("WORKER_QUEUE_PREFIX", "worker")
-    queue_name = os.getenv(
+    invocation_queue_name = os.getenv(
+        "WORKER_INVOCATION_QUEUE_NAME",
+        f"{worker_queue_prefix}:{worker_name}:invocations",
+    )
+    build_queue_name = os.getenv(
+        "WORKER_BUILD_QUEUE_NAME",
+        f"{worker_queue_prefix}:{worker_name}:builds",
+    )
+    legacy_queue_name = os.getenv(
         "WORKER_QUEUE_NAME",
         f"{worker_queue_prefix}:{worker_name}:jobs",
     )
     processing_queue_name = os.getenv(
         "WORKER_PROCESSING_QUEUE_NAME",
-        worker_processing_queue_name(queue_name),
+        worker_processing_queue_name(invocation_queue_name),
     )
     max_concurrency = int(os.getenv("WORKER_MAX_CONCURRENCY", "1"))
     max_build_concurrency = int(os.getenv("WORKER_MAX_BUILD_CONCURRENCY", "1"))
@@ -393,16 +474,20 @@ def main() -> None:
     backend = BackendClient(backend_base_url, worker_token)
     executor = DockerExecutor(backend_client=backend)
     builder = DockerBuilder()
+    activity = WorkerActivity()
 
     try:
         backend.register_worker(
             {
                 "name": worker_name,
                 "hostname": socket.gethostname(),
-                "max_concurrency": max_concurrency,
-                "max_build_concurrency": max_build_concurrency,
-            }
-        )
+            "max_concurrency": max_concurrency,
+            "max_build_concurrency": max_build_concurrency,
+            "metadata": {
+                "legacy_queue_name": legacy_queue_name,
+            },
+        }
+    )
     except BackendReportError:
         logger.exception("failed to register worker name=%s", worker_name)
 
@@ -412,21 +497,24 @@ def main() -> None:
             "backend": backend,
             "worker_name": worker_name,
             "interval_seconds": heartbeat_interval_seconds,
+            "activity": activity,
         },
         daemon=True,
     ).start()
 
     logger.info(
-        "worker started; worker=%s queue=%s processing_queue=%s",
+        "worker started; worker=%s invocation_queue=%s build_queue=%s processing_queue=%s",
         worker_name,
-        queue_name,
+        invocation_queue_name,
+        build_queue_name,
         processing_queue_name,
     )
 
     while True:
-        delivery_message = move_job_to_processing(
+        delivery_message, source_queue_name = move_next_job_to_processing(
             client,
-            queue_name,
+            invocation_queue_name,
+            build_queue_name,
             processing_queue_name,
         )
         if delivery_message is None:
@@ -454,38 +542,42 @@ def main() -> None:
             continue
 
         job_type = job.get("type")
-        if job_type == "function.invoke":
-            logger.info(
-                "received invocation job request_id=%s function=%s version=%s",
-                job.get("request_id"),
-                job.get("function_slug"),
-                job.get("version"),
-            )
-            process_invocation_job(job, backend, executor)
-        elif job_type == "function.build":
-            logger.info(
-                "received build job build_request_id=%s function=%s version=%s",
-                job.get("build_request_id"),
-                job.get("function_slug"),
-                job.get("version"),
-            )
-            process_build_job(
-                job,
-                backend,
-                builder,
-                worker_name=worker_name,
-                hostname=socket.gethostname(),
-                max_build_concurrency=max_build_concurrency,
-                requeue=lambda: client.rpush(queue_name, delivery_message),
-            )
-        else:
-            logger.error("discarding unknown job type: %s", job_type)
-            acknowledge_processing_job(
-                client,
-                processing_queue_name,
-                delivery_message,
-            )
-            continue
+        activity.start(job_type)
+        try:
+            if job_type == "function.invoke":
+                logger.info(
+                    "received invocation job request_id=%s function=%s version=%s",
+                    job.get("request_id"),
+                    job.get("function_slug"),
+                    job.get("version"),
+                )
+                process_invocation_job(job, backend, executor)
+            elif job_type == "function.build":
+                logger.info(
+                    "received build job build_request_id=%s function=%s version=%s",
+                    job.get("build_request_id"),
+                    job.get("function_slug"),
+                    job.get("version"),
+                )
+                process_build_job(
+                    job,
+                    backend,
+                    builder,
+                    worker_name=worker_name,
+                    hostname=socket.gethostname(),
+                    max_build_concurrency=max_build_concurrency,
+                    requeue=lambda: client.rpush(source_queue_name, delivery_message),
+                )
+            else:
+                logger.error("discarding unknown job type: %s", job_type)
+                acknowledge_processing_job(
+                    client,
+                    processing_queue_name,
+                    delivery_message,
+                )
+                continue
+        finally:
+            activity.finish(job_type)
 
         acknowledge_processing_job(client, processing_queue_name, delivery_message)
         logger.info("job complete type=%s", job_type)

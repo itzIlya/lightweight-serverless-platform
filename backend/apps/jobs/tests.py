@@ -64,7 +64,7 @@ class DurableJobRecordTests(APITestCase):
         self.assertEqual(job.payload["job_id"], str(job.job_id))
         self.assertEqual(payload["job_id"], str(job.job_id))
         redis_client.rpush.assert_called_once_with(
-            "scheduler-pending-jobs",
+            "scheduler-pending-builds",
             str(job.job_id),
         )
 
@@ -92,7 +92,7 @@ class DurableJobRecordTests(APITestCase):
         self.assertEqual(job.payload["invocation_output_max_total_size_mb"], 10)
         self.assertEqual(payload["job_id"], str(job.job_id))
         redis_client.rpush.assert_called_once_with(
-            "scheduler-pending-jobs",
+            "scheduler-pending-invocations",
             str(job.job_id),
         )
 
@@ -237,7 +237,14 @@ class DurableJobRecordTests(APITestCase):
         self.assertEqual(get_response.status_code, 200)
         self.assertEqual(get_response.data["status"], JobStatus.QUEUED)
         self.assertEqual(workers_response.status_code, 200)
-        self.assertEqual(workers_response.data[0]["queue_name"], "worker:worker-a:jobs")
+        self.assertEqual(
+            workers_response.data[0]["invocation_queue_name"],
+            "worker:worker-a:invocations",
+        )
+        self.assertEqual(
+            workers_response.data[0]["build_queue_name"],
+            "worker:worker-a:builds",
+        )
         self.assertEqual(dispatch_response.status_code, 200)
         self.assertTrue(dispatch_response.data["dispatched"])
         job.refresh_from_db()
@@ -451,7 +458,7 @@ class DurableJobRecordTests(APITestCase):
         self.assertTrue(requeue_response.data["requeued"])
         job.refresh_from_db()
         self.assertEqual(job.status, JobStatus.QUEUED)
-        self.assertEqual(job.queue_name, "scheduler-pending-jobs")
+        self.assertEqual(job.queue_name, "scheduler-pending-builds")
         self.assertEqual(job.recovery_count, 1)
         self.assertNotIn("assigned_worker", job.payload)
 

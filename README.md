@@ -115,12 +115,14 @@ used as the function owner automatically.
 ## Worker contract
 
 Each worker registers itself with the backend when it starts and then listens on
-its own Redis queue:
+two input Redis queues:
 
-`worker:<worker-name>:jobs`
+- `worker:<worker-name>:invocations`
+- `worker:<worker-name>:builds`
 
-The scheduler places jobs onto that queue. The worker expects each Redis message
-to contain only delivery metadata:
+The scheduler places invocation and build jobs onto the matching queue. The
+worker checks the invocation queue first, then the build queue. Each Redis
+message contains only delivery metadata:
 
 ```json
 {
@@ -129,11 +131,7 @@ to contain only delivery metadata:
 }
 ```
 
-The worker atomically moves the job ID from:
-
-`worker:<worker-name>:jobs`
-
-to:
+The worker atomically moves the job ID from one of those input queues to:
 
 `worker:<worker-name>:processing`
 
@@ -145,6 +143,15 @@ the claim, it returns the current job payload. That payload includes:
 - `version`
 - `handler`
 - `image_ref`
+
+To run multiple local workers in the prototype:
+
+```powershell
+docker compose up -d --scale worker=2
+```
+
+Each worker uses its container hostname as its worker name unless `WORKER_NAME`
+is explicitly set.
 - `config`
 - `event`
 
@@ -190,9 +197,13 @@ is `pending -> queued -> building -> built`, or `failed` when the worker cannot
 complete the build. If the user cancels a queued or running build, the state
 becomes `cancelled`.
 
-Both builds and invocations start in the `scheduler-pending-jobs` Redis list.
-That list contains durable job IDs only. The scheduler loads the matching
-Postgres `Job`, picks a worker, and pushes a delivery message to the
+Builds and invocations use separate scheduler Redis lists:
+
+- `scheduler-pending-invocations`
+- `scheduler-pending-builds`
+
+Those lists contain durable job IDs only. The scheduler loads the matching
+Postgres `Job`, picks a worker, and pushes a delivery message to the matching
 worker-specific queue. The worker claims that delivery with the backend and then
 receives the stored payload. The payload `type` field lets the worker dispatch
 each job to the correct executor.
@@ -206,15 +217,18 @@ worker status reports. Worker reports update the matching durable job status to
 ### Scheduler flow
 
 1. The API writes a `Job` row with status `queued`.
-2. The API pushes the job ID to `scheduler-pending-jobs`.
+2. The API pushes the job ID to `scheduler-pending-invocations` or
+   `scheduler-pending-builds`.
 3. The scheduler reads the job ID and asks the backend for the job payload.
 4. The scheduler asks the backend for online workers.
-5. The scheduler chooses the first online worker by name.
+5. The scheduler tries invocation jobs first, uses short recent-function
+   affinity when safe, and otherwise uses queue-aware round-robin placement.
 6. The scheduler asks the backend to mark the job `dispatched` to that worker
    and assign a `dispatch_attempt`.
 7. The scheduler pushes `{job_id, dispatch_attempt}` to
-   `worker:<worker-name>:jobs`.
-8. The worker atomically moves the delivery message to
+   `worker:<worker-name>:invocations` or `worker:<worker-name>:builds`.
+8. The worker checks its invocation queue before its build queue and atomically
+   moves the delivery message to
    `worker:<worker-name>:processing`.
 9. The worker claims the delivery through the backend.
 10. The backend verifies the worker and dispatch attempt, then marks the job
@@ -238,7 +252,7 @@ For each unfinished job ID, the scheduler:
 
 1. marks the durable job back to `queued`
 2. removes the job ID from the stale worker's processing queue
-3. pushes the job ID back to `scheduler-pending-jobs`
+3. pushes the job ID back to the matching scheduler pending queue
 
 Each dispatch receives a `dispatch_attempt` number. Worker reports include the
 job ID, worker name, and dispatch attempt, so old reports from recovered jobs do

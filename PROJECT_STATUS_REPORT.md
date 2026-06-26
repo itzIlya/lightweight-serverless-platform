@@ -167,11 +167,17 @@ Remaining:
 Status: Partially complete
 
 Implemented:
-- Shared typed queue for build and invocation jobs
+- Separate scheduler pending queues for build and invocation jobs
 - Durable `Job` table as the first scheduler/orchestrator migration step
 - Redis messages now carry a durable `job_id`
-- Dedicated scheduler process for simple job placement
-- Worker-specific Redis queues
+- Dedicated scheduler process for queue-aware job placement
+- Worker-specific invocation and build queues
+- Shared per-worker processing queues for recovery
+- Worker-side invocation priority before build work
+- Scheduler round-robin tie-breaking across suitable workers
+- Recent-function sticky invocation routing with a 10 second TTL
+- Scheduler avoids workers with active builds for invocation placement
+- Scheduler sends builds only to idle workers
 - Worker registration at startup
 - Worker heartbeat endpoint and loop
 - Stale-worker expiry
@@ -205,14 +211,15 @@ Remaining:
 - Multi-worker integration and failure tests
 - Warm pool or reusable container management
 
-The scheduler now places small delivery messages onto worker-specific queues.
-Each delivery message contains a durable `job_id` and `dispatch_attempt`. The
-worker atomically moves a delivery message to a worker-specific processing queue,
+The scheduler now places small delivery messages onto worker-specific invocation
+or build queues. Each delivery message contains a durable `job_id` and
+`dispatch_attempt`. The worker checks its invocation queue before its build queue,
+atomically moves a delivery message to a shared worker-specific processing queue,
 then claims that exact delivery through the backend before fetching the payload
 and executing. If a worker misses heartbeats, the scheduler marks it offline and
 requeues unfinished jobs from its processing queue. Recovered jobs increment a
-durable recovery counter, use type-specific backoff, and move to
-`dead_lettered` after too many recoveries.
+durable recovery counter, use type-specific backoff, and move to `dead_lettered`
+after too many recoveries.
 
 This is a meaningful reliability step, but it is not the final form. Remaining
 hardening includes duplicate-safe scheduler dispatch, graceful shutdown, and
@@ -304,12 +311,17 @@ Latest verification:
   `functions.0006_build_limits_and_leases`, and `jobs.0001_initial`
 - Migrations applied successfully for `jobs.0002_recovery_dead_letter_fields`
 - Backend Docker test suite passed: `60` tests
-- Worker Docker test suite passed: `38` tests
-- Scheduler test suite passed: `9` tests
+- Worker Docker test suite passed: `42` tests
+- Scheduler test suite passed: `17` tests
 - Compile check passed for backend, worker, and scheduler
 - Migration drift check passed: `No changes detected`
 - User journey smoke test passed with tmpfs-backed exported output file
-  `report.txt` using function `13`, version `20`, and invocation `23`
+- Single-worker user journey smoke test passed with split queues using function
+  `14`, version `21`, and invocation `24`
+- Two-worker user journey smoke test passed with split queues using function
+  `15`, version `22`, and invocation `25`
+- Multi-worker scheduler verification documented in
+  `docs/multi_worker_scheduler_test_report.md`
 
 The backend test suite now covers:
 - JWT registration, login, refresh support, and `/api/auth/me/`
@@ -324,6 +336,11 @@ The backend test suite now covers:
 - Worker self-registration for scheduler placement
 - Worker heartbeats and stale-worker expiry
 - Worker processing queue recovery
+- Separate build/invocation pending queues and worker queues
+- Queue-aware scheduler placement with round-robin tie-breaking
+- Short sticky routing for recently invoked functions
+- Build placement only on idle workers
+- Worker-side invocation priority before build work
 - Recovery backoff and dead-letter handling for recovered jobs
 - Dispatch blocking while a recovered job's `available_at` is still in the future
 - Worker claim validation before execution
@@ -339,7 +356,8 @@ The backend test suite now covers:
 ## Important Current Limitations
 
 - The deployment is a local Docker Compose prototype.
-- There is one scheduler and normally one worker process in local Compose.
+- There is one scheduler in local Compose; workers can be scaled with Docker
+  Compose, but multi-worker failure testing is still limited.
 - A worker crash after accepting a job no longer loses the job immediately;
   stale-worker recovery requeues it from the processing queue with backoff.
 - Jobs recovered too many times are moved to `dead_lettered` instead of being
@@ -347,8 +365,8 @@ The backend test suite now covers:
 - The current recovery loop is coarse and heartbeat-based, so recovery is not
   instant.
 - Durable jobs exist, but Redis is still the active queue transport.
-- Scheduler placement is simple first-online-worker selection, not capacity-aware
-  routing.
+- Scheduler placement is now queue-aware, but not yet capability-aware by
+  runtime, memory, CPU, cached image, or warm-container availability.
 - Only Python image builds are currently implemented.
 - Invocation input and declared output files are persisted, but retention cleanup
   is not implemented yet.

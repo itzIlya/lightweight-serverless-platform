@@ -34,6 +34,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       JOB_QUEUE_NAME: function-jobs
       SCHEDULER_QUEUE_NAME: scheduler-pending-jobs
+      SCHEDULER_INVOCATION_QUEUE_NAME: scheduler-pending-invocations
+      SCHEDULER_BUILD_QUEUE_NAME: scheduler-pending-builds
       WORKER_QUEUE_PREFIX: worker
       WORKER_STALE_AFTER_SECONDS: 30
       LOCAL_REGISTRY: localhost:5000
@@ -60,8 +62,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       JOB_QUEUE_NAME: function-jobs
       SCHEDULER_QUEUE_NAME: scheduler-pending-jobs
+      SCHEDULER_INVOCATION_QUEUE_NAME: scheduler-pending-invocations
+      SCHEDULER_BUILD_QUEUE_NAME: scheduler-pending-builds
       WORKER_QUEUE_PREFIX: worker
-      WORKER_NAME: worker-1
       WORKER_HEARTBEAT_SECONDS: 10
       LOCAL_REGISTRY: localhost:5000
       BACKEND_BASE_URL: http://backend:8000
@@ -85,10 +88,14 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       SCHEDULER_QUEUE_NAME: scheduler-pending-jobs
+      SCHEDULER_INVOCATION_QUEUE_NAME: scheduler-pending-invocations
+      SCHEDULER_BUILD_QUEUE_NAME: scheduler-pending-builds
       BACKEND_BASE_URL: http://backend:8000
       WORKER_SHARED_SECRET: ${WORKER_SHARED_SECRET:-change-me}
       WORKER_STALE_AFTER_SECONDS: 30
       SCHEDULER_RECOVERY_INTERVAL_SECONDS: 5
+      SCHEDULER_AFFINITY_TTL_SECONDS: 10
+      SCHEDULER_STICKY_MAX_INVOCATION_LOAD: 2
     volumes:
       - ./scheduler:/app/scheduler
     depends_on:

@@ -102,6 +102,14 @@ INVOCATION_QUEUE_NAME = os.getenv(
     JOB_QUEUE_NAME,
 )
 SCHEDULER_QUEUE_NAME = os.getenv("SCHEDULER_QUEUE_NAME", "scheduler-pending-jobs")
+SCHEDULER_INVOCATION_QUEUE_NAME = os.getenv(
+    "SCHEDULER_INVOCATION_QUEUE_NAME",
+    "scheduler-pending-invocations",
+)
+SCHEDULER_BUILD_QUEUE_NAME = os.getenv(
+    "SCHEDULER_BUILD_QUEUE_NAME",
+    "scheduler-pending-builds",
+)
 WORKER_QUEUE_PREFIX = os.getenv("WORKER_QUEUE_PREFIX", "worker")
 WORKER_STALE_AFTER_SECONDS = int(os.getenv("WORKER_STALE_AFTER_SECONDS", "30"))
 JOB_RECOVERY_MAX_ATTEMPTS_BUILD = int(

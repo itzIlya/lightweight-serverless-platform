@@ -10,10 +10,12 @@ from backend_client import BackendReportError
 from builder import BuildCancelled, BuildError, BuildResult
 from executor import DockerExecutor, ExecutionResult
 from worker import (
+    WorkerActivity,
     acknowledge_processing_job,
     claim_job_for_execution,
     job_report_metadata,
     move_job_to_processing,
+    move_next_job_to_processing,
     parse_delivery_message,
     process_build_job,
     worker_processing_queue_name,
@@ -24,6 +26,16 @@ class BuildWorkerTests(unittest.TestCase):
     def test_worker_processing_queue_name_replaces_jobs_suffix(self):
         self.assertEqual(
             worker_processing_queue_name("worker:worker-a:jobs"),
+            "worker:worker-a:processing",
+        )
+
+    def test_worker_processing_queue_name_is_shared_for_split_queues(self):
+        self.assertEqual(
+            worker_processing_queue_name("worker:worker-a:invocations"),
+            "worker:worker-a:processing",
+        )
+        self.assertEqual(
+            worker_processing_queue_name("worker:worker-a:builds"),
             "worker:worker-a:processing",
         )
 
@@ -45,6 +57,61 @@ class BuildWorkerTests(unittest.TestCase):
             "LEFT",
             "RIGHT",
             5,
+        )
+
+    def test_move_next_job_to_processing_prefers_invocation_queue(self):
+        redis_client = Mock()
+        redis_client.execute_command.side_effect = ["invoke-1"]
+
+        delivery, source_queue = move_next_job_to_processing(
+            redis_client,
+            "worker:worker-a:invocations",
+            "worker:worker-a:builds",
+            "worker:worker-a:processing",
+        )
+
+        self.assertEqual(delivery, "invoke-1")
+        self.assertEqual(source_queue, "worker:worker-a:invocations")
+        redis_client.execute_command.assert_called_once_with(
+            "LMOVE",
+            "worker:worker-a:invocations",
+            "worker:worker-a:processing",
+            "LEFT",
+            "RIGHT",
+        )
+
+    def test_move_next_job_to_processing_uses_build_queue_when_invocations_empty(self):
+        redis_client = Mock()
+        redis_client.execute_command.side_effect = [None, "build-1"]
+
+        delivery, source_queue = move_next_job_to_processing(
+            redis_client,
+            "worker:worker-a:invocations",
+            "worker:worker-a:builds",
+            "worker:worker-a:processing",
+        )
+
+        self.assertEqual(delivery, "build-1")
+        self.assertEqual(source_queue, "worker:worker-a:builds")
+        self.assertEqual(redis_client.execute_command.call_args_list[1].args[1], "worker:worker-a:builds")
+
+    def test_worker_activity_reports_active_builds(self):
+        activity = WorkerActivity()
+        activity.start("function.build")
+        self.assertEqual(
+            activity.snapshot(),
+            {
+                "active_jobs": 1,
+                "active_builds": 1,
+            },
+        )
+        activity.finish("function.build")
+        self.assertEqual(
+            activity.snapshot(),
+            {
+                "active_jobs": 0,
+                "active_builds": 0,
+            },
         )
 
     def test_acknowledge_processing_job_removes_job_id(self):

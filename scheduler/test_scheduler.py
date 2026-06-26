@@ -8,6 +8,8 @@ from unittest.mock import Mock
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from scheduler import (
+    choose_build_worker,
+    choose_invocation_worker,
     choose_worker,
     make_delivery_message,
     parse_delivery_message,
@@ -17,16 +19,240 @@ from scheduler import (
 
 
 class SchedulerTests(unittest.TestCase):
-    def test_choose_worker_uses_first_worker_by_name(self):
+    def test_choose_worker_uses_round_robin_tie_breaker(self):
+        state = {}
         worker = choose_worker(
             [
                 {"name": "worker-b"},
                 {"name": "worker-a"},
             ],
-            {"type": "build"},
+            {"payload": {"type": "unknown"}},
+            round_robin_state=state,
+        )
+        next_worker = choose_worker(
+            [
+                {"name": "worker-b"},
+                {"name": "worker-a"},
+            ],
+            {"payload": {"type": "unknown"}},
+            round_robin_state=state,
         )
 
         self.assertEqual(worker["name"], "worker-a")
+        self.assertEqual(next_worker["name"], "worker-b")
+
+    def test_choose_invocation_worker_uses_recent_light_worker(self):
+        worker = choose_invocation_worker(
+            [
+                {
+                    "name": "worker-a",
+                    "metadata": {"active_jobs": 0, "active_builds": 0},
+                    "queued_invocations": 1,
+                    "queued_builds": 0,
+                },
+                {
+                    "name": "worker-b",
+                    "metadata": {"active_jobs": 0, "active_builds": 0},
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+            ],
+            {"payload": {"type": "function.invoke", "function_version_id": 10}},
+            recent_invocations={
+                "10": {
+                    "worker_name": "worker-a",
+                    "last_seen": 100,
+                }
+            },
+            affinity_ttl_seconds=10,
+            sticky_max_invocation_load=2,
+            round_robin_state={},
+            now=105,
+        )
+
+        self.assertEqual(worker["name"], "worker-a")
+
+    def test_choose_invocation_worker_ignores_expired_recent_worker(self):
+        worker = choose_invocation_worker(
+            [
+                {
+                    "name": "worker-a",
+                    "metadata": {"active_jobs": 0, "active_builds": 0},
+                    "queued_invocations": 1,
+                    "queued_builds": 0,
+                },
+                {
+                    "name": "worker-b",
+                    "metadata": {"active_jobs": 0, "active_builds": 0},
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+            ],
+            {"payload": {"type": "function.invoke", "function_version_id": 10}},
+            recent_invocations={
+                "10": {
+                    "worker_name": "worker-a",
+                    "last_seen": 100,
+                }
+            },
+            affinity_ttl_seconds=10,
+            sticky_max_invocation_load=2,
+            round_robin_state={},
+            now=111,
+        )
+
+        self.assertEqual(worker["name"], "worker-b")
+
+    def test_choose_invocation_worker_ignores_overloaded_recent_worker(self):
+        worker = choose_invocation_worker(
+            [
+                {
+                    "name": "worker-a",
+                    "metadata": {"active_jobs": 2, "active_builds": 0},
+                    "queued_invocations": 1,
+                    "queued_builds": 0,
+                },
+                {
+                    "name": "worker-b",
+                    "metadata": {"active_jobs": 0, "active_builds": 0},
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+            ],
+            {"payload": {"type": "function.invoke", "function_version_id": 10}},
+            recent_invocations={
+                "10": {
+                    "worker_name": "worker-a",
+                    "last_seen": 100,
+                }
+            },
+            affinity_ttl_seconds=10,
+            sticky_max_invocation_load=2,
+            round_robin_state={},
+            now=105,
+        )
+
+        self.assertEqual(worker["name"], "worker-b")
+
+    def test_choose_invocation_worker_prefers_no_build_queue(self):
+        worker = choose_invocation_worker(
+            [
+                {
+                    "name": "worker-a",
+                    "metadata": {"active_jobs": 0, "active_builds": 0},
+                    "queued_invocations": 0,
+                    "queued_builds": 1,
+                },
+                {
+                    "name": "worker-b",
+                    "metadata": {"active_jobs": 0, "active_builds": 0},
+                    "queued_invocations": 2,
+                    "queued_builds": 0,
+                },
+            ],
+            {"payload": {"type": "function.invoke", "function_version_id": 10}},
+            recent_invocations={},
+            affinity_ttl_seconds=10,
+            sticky_max_invocation_load=2,
+            round_robin_state={},
+            now=105,
+        )
+
+        self.assertEqual(worker["name"], "worker-b")
+
+    def test_choose_invocation_worker_avoids_active_builds(self):
+        worker = choose_invocation_worker(
+            [
+                {
+                    "name": "worker-a",
+                    "metadata": {"active_jobs": 1, "active_builds": 1},
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+                {
+                    "name": "worker-b",
+                    "metadata": {"active_jobs": 0, "active_builds": 0},
+                    "queued_invocations": 2,
+                    "queued_builds": 0,
+                },
+            ],
+            {"payload": {"type": "function.invoke", "function_version_id": 10}},
+            recent_invocations={},
+            affinity_ttl_seconds=10,
+            sticky_max_invocation_load=2,
+            round_robin_state={},
+            now=105,
+        )
+
+        self.assertEqual(worker["name"], "worker-b")
+
+    def test_choose_invocation_worker_returns_none_when_every_worker_building(self):
+        worker = choose_invocation_worker(
+            [
+                {
+                    "name": "worker-a",
+                    "metadata": {"active_jobs": 1, "active_builds": 1},
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+                {
+                    "name": "worker-b",
+                    "metadata": {"active_jobs": 1, "active_builds": 1},
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+            ],
+            {"payload": {"type": "function.invoke", "function_version_id": 10}},
+            recent_invocations={},
+            affinity_ttl_seconds=10,
+            sticky_max_invocation_load=2,
+            round_robin_state={},
+            now=105,
+        )
+
+        self.assertIsNone(worker)
+
+    def test_choose_build_worker_requires_idle_worker(self):
+        worker = choose_build_worker(
+            [
+                {
+                    "name": "worker-a",
+                    "metadata": {"active_jobs": 1, "active_builds": 0},
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+                {
+                    "name": "worker-b",
+                    "metadata": {"active_jobs": 0, "active_builds": 0},
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+            ],
+            round_robin_state={},
+        )
+
+        self.assertEqual(worker["name"], "worker-b")
+
+    def test_choose_build_worker_returns_none_without_idle_worker(self):
+        worker = choose_build_worker(
+            [
+                {
+                    "name": "worker-a",
+                    "metadata": {"active_jobs": 1, "active_builds": 0},
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+                {
+                    "name": "worker-b",
+                    "metadata": {"active_jobs": 0, "active_builds": 0},
+                    "queued_invocations": 1,
+                    "queued_builds": 0,
+                },
+            ],
+            round_robin_state={},
+        )
+
+        self.assertIsNone(worker)
 
     def test_delivery_message_round_trips_job_id_and_attempt(self):
         message = make_delivery_message("job-1", 3)
@@ -55,7 +281,8 @@ class SchedulerTests(unittest.TestCase):
         backend.list_workers.return_value = [
             {
                 "name": "worker-a",
-                "queue_name": "worker:worker-a:jobs",
+                "invocation_queue_name": "worker:worker-a:invocations",
+                "build_queue_name": "worker:worker-a:builds",
             }
         ]
         backend.dispatch_job.return_value = {
@@ -71,13 +298,17 @@ class SchedulerTests(unittest.TestCase):
             job_id="job-1",
             backend=backend,
             redis_client=redis_client,
-            pending_queue="scheduler-pending-jobs",
+            pending_queue="scheduler-pending-builds",
+            pending_queues={
+                "function.invoke": "scheduler-pending-invocations",
+                "function.build": "scheduler-pending-builds",
+            },
             requeue_delay_seconds=0,
         )
 
         self.assertTrue(dispatched)
         queue_name, delivery_message = redis_client.rpush.call_args.args
-        self.assertEqual(queue_name, "worker:worker-a:jobs")
+        self.assertEqual(queue_name, "worker:worker-a:builds")
         self.assertEqual(
             json.loads(delivery_message),
             {
@@ -88,7 +319,7 @@ class SchedulerTests(unittest.TestCase):
         backend.dispatch_job.assert_called_once_with(
             "job-1",
             worker_name="worker-a",
-            queue_name="worker:worker-a:jobs",
+            queue_name="worker:worker-a:builds",
         )
 
     def test_process_job_requeues_when_no_workers_are_available(self):
@@ -98,7 +329,7 @@ class SchedulerTests(unittest.TestCase):
             "job_id": "job-1",
             "type": "build",
             "status": "queued",
-            "payload": {"job_id": "job-1"},
+            "payload": {"job_id": "job-1", "type": "function.build"},
         }
         backend.list_workers.return_value = []
 
@@ -107,11 +338,15 @@ class SchedulerTests(unittest.TestCase):
             backend=backend,
             redis_client=redis_client,
             pending_queue="scheduler-pending-jobs",
+            pending_queues={
+                "function.invoke": "scheduler-pending-invocations",
+                "function.build": "scheduler-pending-builds",
+            },
             requeue_delay_seconds=0,
         )
 
         self.assertFalse(dispatched)
-        redis_client.rpush.assert_called_once_with("scheduler-pending-jobs", "job-1")
+        redis_client.rpush.assert_called_once_with("scheduler-pending-builds", "job-1")
         backend.dispatch_job.assert_not_called()
 
     def test_process_job_requeues_when_job_is_not_available_yet(self):
@@ -124,7 +359,7 @@ class SchedulerTests(unittest.TestCase):
             "available_at": (
                 datetime.now(timezone.utc) + timedelta(seconds=5)
             ).isoformat(),
-            "payload": {"job_id": "job-1"},
+            "payload": {"job_id": "job-1", "type": "function.invoke"},
         }
 
         dispatched = process_job_id(
@@ -132,11 +367,18 @@ class SchedulerTests(unittest.TestCase):
             backend=backend,
             redis_client=redis_client,
             pending_queue="scheduler-pending-jobs",
+            pending_queues={
+                "function.invoke": "scheduler-pending-invocations",
+                "function.build": "scheduler-pending-builds",
+            },
             requeue_delay_seconds=0,
         )
 
         self.assertFalse(dispatched)
-        redis_client.rpush.assert_called_once_with("scheduler-pending-jobs", "job-1")
+        redis_client.rpush.assert_called_once_with(
+            "scheduler-pending-invocations",
+            "job-1",
+        )
         backend.list_workers.assert_not_called()
         backend.dispatch_job.assert_not_called()
 
@@ -147,12 +389,13 @@ class SchedulerTests(unittest.TestCase):
             "job_id": "job-1",
             "type": "build",
             "status": "queued",
-            "payload": {"job_id": "job-1"},
+            "payload": {"job_id": "job-1", "type": "function.build"},
         }
         backend.list_workers.return_value = [
             {
                 "name": "worker-a",
-                "queue_name": "worker:worker-a:jobs",
+                "invocation_queue_name": "worker:worker-a:invocations",
+                "build_queue_name": "worker:worker-a:builds",
             }
         ]
         backend.dispatch_job.return_value = {
@@ -196,13 +439,24 @@ class SchedulerTests(unittest.TestCase):
         backend.get_job.return_value = {
             "job_id": "job-1",
             "status": "running",
+            "payload": {"type": "function.invoke"},
         }
-        backend.requeue_job.return_value = {"requeued": True}
+        backend.requeue_job.return_value = {
+            "requeued": True,
+            "job": {
+                "queue_name": "scheduler-pending-invocations",
+                "payload": {"type": "function.invoke"},
+            },
+        }
 
         recovered = recover_stale_workers(
             backend=backend,
             redis_client=redis_client,
             pending_queue="scheduler-pending-jobs",
+            pending_queues={
+                "function.invoke": "scheduler-pending-invocations",
+                "function.build": "scheduler-pending-builds",
+            },
             stale_after_seconds=30,
         )
 
@@ -219,7 +473,10 @@ class SchedulerTests(unittest.TestCase):
             1,
             delivery_message,
         )
-        redis_client.rpush.assert_called_once_with("scheduler-pending-jobs", "job-1")
+        redis_client.rpush.assert_called_once_with(
+            "scheduler-pending-invocations",
+            "job-1",
+        )
 
     def test_recover_stale_workers_removes_dead_lettered_processing_job(self):
         backend = Mock()

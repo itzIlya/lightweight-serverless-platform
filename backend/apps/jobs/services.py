@@ -44,7 +44,7 @@ def create_build_job_record(build_attempt, payload: dict) -> Job:
     job = Job.objects.create(
         type=JobType.BUILD,
         status=JobStatus.QUEUED,
-        queue_name=settings.SCHEDULER_QUEUE_NAME,
+        queue_name=scheduler_queue_name_for_type(JobType.BUILD),
         payload=payload,
         build_attempt=build_attempt,
         available_at=build_attempt.queued_at,
@@ -60,7 +60,7 @@ def create_invocation_job_record(invocation, payload: dict) -> Job:
     job = Job.objects.create(
         type=JobType.INVOCATION,
         status=JobStatus.QUEUED,
-        queue_name=settings.SCHEDULER_QUEUE_NAME,
+        queue_name=scheduler_queue_name_for_type(JobType.INVOCATION),
         payload=payload,
         invocation=invocation,
         available_at=invocation.queued_at,
@@ -116,8 +116,24 @@ def worker_queue_name(worker_name: str) -> str:
     return f"{settings.WORKER_QUEUE_PREFIX}:{worker_name}:jobs"
 
 
+def worker_invocation_queue_name(worker_name: str) -> str:
+    return f"{settings.WORKER_QUEUE_PREFIX}:{worker_name}:invocations"
+
+
+def worker_build_queue_name(worker_name: str) -> str:
+    return f"{settings.WORKER_QUEUE_PREFIX}:{worker_name}:builds"
+
+
 def worker_processing_queue_name(worker_name: str) -> str:
     return f"{settings.WORKER_QUEUE_PREFIX}:{worker_name}:processing"
+
+
+def scheduler_queue_name_for_type(job_type: str) -> str:
+    if job_type == JobType.INVOCATION:
+        return settings.SCHEDULER_INVOCATION_QUEUE_NAME
+    if job_type == JobType.BUILD:
+        return settings.SCHEDULER_BUILD_QUEUE_NAME
+    return settings.SCHEDULER_QUEUE_NAME
 
 
 def available_workers():

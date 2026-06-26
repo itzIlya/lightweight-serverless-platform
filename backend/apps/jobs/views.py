@@ -11,6 +11,9 @@ from .models import Job, JobStatus
 from .services import (
     available_workers,
     recovery_backoff_seconds,
+    scheduler_queue_name_for_type,
+    worker_build_queue_name,
+    worker_invocation_queue_name,
     worker_processing_queue_name,
     worker_queue_name,
 )
@@ -312,7 +315,7 @@ def requeue_scheduler_job(request, job_id):
             job.available_at = now
 
         job.status = JobStatus.QUEUED
-        job.queue_name = settings.SCHEDULER_QUEUE_NAME
+        job.queue_name = scheduler_queue_name_for_type(job.type)
         job.last_error = reason
         job.save(
             update_fields=[
@@ -367,6 +370,9 @@ def _scheduler_worker_payload(worker):
         "max_concurrency": worker.max_concurrency,
         "max_build_concurrency": worker.max_build_concurrency,
         "queue_name": worker_queue_name(worker.name),
+        "invocation_queue_name": worker_invocation_queue_name(worker.name),
+        "build_queue_name": worker_build_queue_name(worker.name),
         "processing_queue_name": worker_processing_queue_name(worker.name),
         "last_seen_at": worker.last_seen_at,
+        "metadata": worker.metadata or {},
     }
