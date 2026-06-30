@@ -12,11 +12,26 @@ services:
 
   redis:
     image: redis:7
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
     ports:
       - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
 
   registry:
     image: registry:2
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
     ports:
       - "5000:5000"
     volumes:
@@ -40,49 +55,171 @@ services:
       WORKER_STALE_AFTER_SECONDS: 30
       LOCAL_REGISTRY: localhost:5000
       WORKER_SHARED_SECRET: ${WORKER_SHARED_SECRET:-change-me}
+      V2_BUILD_PILOT_ENABLED: ${V2_BUILD_PILOT_ENABLED:-false}
+      V2_INVOCATION_PILOT_ENABLED: ${V2_INVOCATION_PILOT_ENABLED:-false}
     volumes:
       - ./backend:/app
       - backend-media:/app/media
     ports:
       - "8000:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/', timeout=2)"
+      interval: 3s
+      timeout: 3s
+      retries: 20
     depends_on:
-      - postgres
-      - redis
-      - registry
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      registry:
+        condition: service_started
+
+  outbox-relay:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: python manage.py relay_outbox --poll-seconds 0.2
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      ORCHESTRATOR_EVENT_STREAM: orchestrator:events
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+
+  orchestrator-projector:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: python manage.py project_orchestrator_events
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+
+  orchestrator:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    command: python scheduler/production_orchestrator.py
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      ORCHESTRATOR_PORT: 8010
+      ORCHESTRATOR_JOB_LEASE_SECONDS: 30
+      WORKER_SHARED_SECRET: ${WORKER_SHARED_SECRET:-change-me}
+    volumes:
+      - ./scheduler:/app/scheduler
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8010/health/', timeout=2)"
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      redis:
+        condition: service_healthy
+      outbox-relay:
+        condition: service_started
+
+  orphan-image-cleaner:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    command: python scheduler/orphan_image_cleaner.py
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      REGISTRY_INTERNAL_BASE_URL: http://registry:5000
+    volumes:
+      - ./scheduler:/app/scheduler
+    depends_on:
+      redis:
+        condition: service_healthy
+      registry:
+        condition: service_started
 
   worker:
     build:
       context: .
       dockerfile: worker/Dockerfile
     command: python worker/worker.py
+    restart: unless-stopped
     env_file:
       - .env
     environment:
       POSTGRES_HOST: postgres
       REDIS_URL: redis://redis:6379/0
+      PYTHONPATH: /app
       JOB_QUEUE_NAME: function-jobs
       SCHEDULER_QUEUE_NAME: scheduler-pending-jobs
       SCHEDULER_INVOCATION_QUEUE_NAME: scheduler-pending-invocations
       SCHEDULER_BUILD_QUEUE_NAME: scheduler-pending-builds
       WORKER_QUEUE_PREFIX: worker
       WORKER_HEARTBEAT_SECONDS: 10
+      ORCHESTRATOR_WORKER_STALE_AFTER_SECONDS: 30
+      WORKER_MAX_CONCURRENCY: 4
+      WORKER_MAX_INVOCATION_CONCURRENCY: 4
+      WORKER_MAX_BUILD_CONCURRENCY: 1
+      WORKER_IDLE_SLEEP_SECONDS: 0.2
       LOCAL_REGISTRY: localhost:5000
       BACKEND_BASE_URL: http://backend:8000
+      ORCHESTRATOR_BASE_URL: http://orchestrator:8010
       WORKER_SHARED_SECRET: ${WORKER_SHARED_SECRET:-change-me}
     volumes:
       - ./worker:/app/worker
+      - ./scheduler:/app/scheduler
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
-      - postgres
-      - redis
-      - backend
-      - registry
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      orchestrator:
+        condition: service_healthy
+      registry:
+        condition: service_started
 
   scheduler:
     build:
       context: .
       dockerfile: worker/Dockerfile
     command: python scheduler/scheduler.py
+    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -99,10 +236,37 @@ services:
     volumes:
       - ./scheduler:/app/scheduler
     depends_on:
-      - redis
-      - backend
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+
+  orchestrator-shadow:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    command: python scheduler/shadow_orchestrator.py
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      ORCHESTRATOR_EVENT_STREAM: orchestrator:events
+      ORCHESTRATOR_SHADOW_GROUP: orchestrator-shadow-v1
+      BACKEND_BASE_URL: http://backend:8000
+      WORKER_SHARED_SECRET: ${WORKER_SHARED_SECRET:-change-me}
+    volumes:
+      - ./scheduler:/app/scheduler
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      outbox-relay:
+        condition: service_started
 
 volumes:
   postgres-data:
+  redis-data:
   registry-data:
   backend-media:

@@ -80,6 +80,13 @@ def make_image_ref(version: FunctionVersion, registry: str | None = None) -> str
     return f"{registry}/functions/{slug}:v{version.id}-{version_part}"
 
 
+def make_attempt_image_ref(attempt: BuildAttempt) -> str:
+    return (
+        f"{make_image_ref(attempt.function_version)}"
+        f"-a{attempt.attempt_number}-{attempt.request_id.hex[:12]}"
+    )
+
+
 def sanitize_tag_part(value: str) -> str:
     normalized = re.sub(r"[^a-zA-Z0-9_.-]+", "-", value).strip(".-")
     return normalized.lower() or "function"
@@ -349,7 +356,11 @@ def build_function_job(attempt: BuildAttempt) -> dict:
         "version": version.version,
         "runtime": version.runtime,
         "handler": version.handler,
-        "image_ref": make_image_ref(version),
+        "image_ref": (
+            make_attempt_image_ref(attempt)
+            if settings.V2_BUILD_PILOT_ENABLED
+            else make_image_ref(version)
+        ),
         "queued_at": attempt.queued_at.isoformat(),
     }
 
@@ -360,6 +371,7 @@ def enqueue_build_attempt(attempt: BuildAttempt) -> dict:
 
     payload = build_function_job(attempt)
     job = create_build_job_record(attempt, payload)
-    client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
-    client.rpush(settings.SCHEDULER_BUILD_QUEUE_NAME, str(job.job_id))
+    if job.coordination_version == 1:
+        client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
+        client.rpush(settings.SCHEDULER_BUILD_QUEUE_NAME, str(job.job_id))
     return payload

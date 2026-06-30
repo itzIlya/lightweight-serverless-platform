@@ -6,17 +6,21 @@ import socket
 import tempfile
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
 from backend_client import BackendClient, BackendReportError
 from builder import BuildCancelled, BuildError, DockerBuilder
 from executor import DockerExecutor, ExecutionError, ExecutionResult
+from orchestrator_client import OrchestratorClient, OrchestratorError
+from scheduler.orchestrator_workers import WorkerOperationalStateStore
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("worker")
 
 TERMINAL_JOB_STATUSES = {"succeeded", "failed", "cancelled"}
+V2_WORKER_GROUP = "v2-workers"
 
 
 class WorkerActivity:
@@ -24,24 +28,54 @@ class WorkerActivity:
         self._lock = threading.Lock()
         self._active_jobs = 0
         self._active_builds = 0
+        self._active_invocations = 0
 
     def start(self, job_type: str) -> None:
         with self._lock:
             self._active_jobs += 1
             if job_type == "function.build":
                 self._active_builds += 1
+            elif job_type == "function.invoke":
+                self._active_invocations += 1
 
     def finish(self, job_type: str) -> None:
         with self._lock:
             self._active_jobs = max(self._active_jobs - 1, 0)
             if job_type == "function.build":
                 self._active_builds = max(self._active_builds - 1, 0)
+            elif job_type == "function.invoke":
+                self._active_invocations = max(self._active_invocations - 1, 0)
+
+    def can_start_invocation(
+        self,
+        *,
+        max_concurrency: int,
+        max_invocation_concurrency: int,
+    ) -> bool:
+        with self._lock:
+            return (
+                self._active_jobs < max_concurrency
+                and self._active_invocations < max_invocation_concurrency
+            )
+
+    def can_start_build(
+        self,
+        *,
+        max_concurrency: int,
+        max_build_concurrency: int,
+    ) -> bool:
+        with self._lock:
+            return (
+                self._active_jobs < max_concurrency
+                and self._active_builds < max_build_concurrency
+            )
 
     def snapshot(self) -> dict:
         with self._lock:
             return {
                 "active_jobs": self._active_jobs,
                 "active_builds": self._active_builds,
+                "active_invocations": self._active_invocations,
             }
 
 
@@ -81,19 +115,38 @@ def heartbeat_loop(
     interval_seconds: float,
     activity: WorkerActivity | None = None,
     stop_event: threading.Event | None = None,
+    operational_store: WorkerOperationalStateStore | None = None,
+    operational_payload: dict | None = None,
 ) -> None:
     stop_event = stop_event or threading.Event()
     while not stop_event.wait(interval_seconds):
+        state = activity.snapshot() if activity is not None else {}
+        if operational_store is not None:
+            try:
+                operational_store.record_heartbeat(
+                    {
+                        **(operational_payload or {}),
+                        "name": worker_name,
+                        "active_jobs": state.get("active_jobs", 0),
+                        "active_builds": state.get("active_builds", 0),
+                        "active_invocations": state.get("active_invocations", 0),
+                    }
+                )
+            except Exception:
+                logger.exception(
+                    "failed to record orchestrator heartbeat name=%s",
+                    worker_name,
+                )
         try:
-            state = activity.snapshot() if activity is not None else {}
             backend.heartbeat_worker(
                 {
                     "name": worker_name,
                     "active_jobs": state.get("active_jobs", 0),
                     "active_builds": state.get("active_builds", 0),
+                    "active_invocations": state.get("active_invocations", 0),
                 }
             )
-        except BackendReportError:
+        except Exception:
             logger.exception("failed to send worker heartbeat name=%s", worker_name)
 
 
@@ -127,6 +180,76 @@ def move_job_to_processing_nowait(client, queue_name: str, processing_queue_name
     )
 
 
+def ensure_v2_stream_group(client, stream_name: str) -> None:
+    import redis
+
+    try:
+        client.xgroup_create(stream_name, V2_WORKER_GROUP, id="0-0", mkstream=True)
+    except redis.ResponseError as exc:
+        if "BUSYGROUP" not in str(exc):
+            raise
+
+
+def read_v2_stream_delivery(client, stream_name: str, consumer_name: str):
+    messages = client.xreadgroup(
+        V2_WORKER_GROUP,
+        consumer_name,
+        {stream_name: ">"},
+        count=1,
+        block=1,
+    )
+    if not messages:
+        return None
+    _, entries = messages[0]
+    return entries[0] if entries else None
+
+
+class LeaseRenewer:
+    def __init__(
+        self,
+        orchestrator: OrchestratorClient,
+        *,
+        job_id: str,
+        worker_name: str,
+        dispatch_attempt: int,
+        interval_seconds: float = 5,
+    ):
+        self.orchestrator = orchestrator
+        self.job_id = job_id
+        self.worker_name = worker_name
+        self.dispatch_attempt = dispatch_attempt
+        self.interval_seconds = interval_seconds
+        self.stop_event = threading.Event()
+        self.lost = threading.Event()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        self.stop_event.set()
+        self.thread.join(timeout=self.interval_seconds + 1)
+
+    def _run(self):
+        while not self.stop_event.wait(self.interval_seconds):
+            try:
+                response = self.orchestrator.renew_lease(
+                    self.job_id,
+                    {
+                        "worker_name": self.worker_name,
+                        "dispatch_attempt": self.dispatch_attempt,
+                    },
+                )
+                if not response.get("accepted"):
+                    self.lost.set()
+                    return
+            except OrchestratorError:
+                logger.exception("could not renew V2 lease job_id=%s", self.job_id)
+                self.lost.set()
+                return
+
+
 def move_next_job_to_processing(
     client,
     invocation_queue_name: str,
@@ -156,6 +279,36 @@ def move_next_job_to_processing(
     )
     if delivery is not None:
         return delivery, invocation_queue_name
+    return None, None
+
+
+def move_next_job_to_processing_for_capacity(
+    client,
+    invocation_queue_name: str,
+    build_queue_name: str,
+    processing_queue_name: str,
+    *,
+    can_run_invocation: bool,
+    can_run_build: bool,
+):
+    if can_run_invocation:
+        delivery = move_job_to_processing_nowait(
+            client,
+            invocation_queue_name,
+            processing_queue_name,
+        )
+        if delivery is not None:
+            return delivery, invocation_queue_name
+
+    if can_run_build:
+        delivery = move_job_to_processing_nowait(
+            client,
+            build_queue_name,
+            processing_queue_name,
+        )
+        if delivery is not None:
+            return delivery, build_queue_name
+
     return None, None
 
 
@@ -230,7 +383,9 @@ def process_invocation_job(
 ) -> None:
     request_id = job["request_id"]
     started_at = utc_now()
+    worker_started = time.monotonic()
     report_metadata = job_report_metadata(job)
+    running_report_started = time.monotonic()
     report_invocation_safely(
         backend,
         request_id,
@@ -241,6 +396,7 @@ def process_invocation_job(
             "cold_start": True,
         },
     )
+    running_report_ms = int((time.monotonic() - running_report_started) * 1000)
 
     try:
         result = executor.run(job)
@@ -268,6 +424,7 @@ def process_invocation_job(
             cold_start=True,
         )
 
+    final_report_started = time.monotonic()
     report_invocation_safely(
         backend,
         request_id,
@@ -283,6 +440,21 @@ def process_invocation_job(
             "duration_ms": result.duration_ms,
             "finished_at": utc_now(),
         },
+    )
+    final_report_ms = int((time.monotonic() - final_report_started) * 1000)
+    worker_total_ms = int((time.monotonic() - worker_started) * 1000)
+    timing = dict(getattr(result, "timing_ms", {}) or {})
+    timing.update(
+        {
+            "backend_running_report_ms": running_report_ms,
+            "backend_final_report_ms": final_report_ms,
+            "worker_process_total_ms": worker_total_ms,
+        }
+    )
+    logger.info(
+        "invocation worker timing request_id=%s timings=%s",
+        request_id,
+        json.dumps(timing, sort_keys=True),
     )
 
 
@@ -358,6 +530,7 @@ def process_build_job(
             "build_started_at": utc_now(),
         },
     )
+
 
     try:
         with tempfile.TemporaryDirectory(prefix="build-source-") as root:
@@ -442,11 +615,238 @@ def process_build_job(
     )
 
 
+def process_v2_build_job(
+    job: dict,
+    backend: BackendClient,
+    builder: DockerBuilder,
+    orchestrator: OrchestratorClient,
+    *,
+    worker_name: str,
+) -> bool:
+    job_id = job["job_id"]
+    dispatch_attempt = int(job["dispatch_attempt"])
+    build_request_id = job["build_request_id"]
+    status = "failed"
+    artifact_commit_id = ""
+    completion_payload = {}
+
+    try:
+        if backend.is_build_cancel_requested(build_request_id):
+            raise BuildCancelled("Build cancelled before execution.")
+        with LeaseRenewer(
+            orchestrator,
+            job_id=job_id,
+            worker_name=worker_name,
+            dispatch_attempt=dispatch_attempt,
+        ) as lease:
+            with tempfile.TemporaryDirectory(prefix="build-source-") as root:
+                source_bundle = Path(root) / "function.zip"
+                backend.download_build_source(build_request_id, source_bundle)
+                result = builder.build(
+                    job,
+                    source_bundle,
+                    should_cancel=lambda: lease.lost.is_set()
+                    or backend.is_build_cancel_requested(build_request_id),
+                )
+            if lease.lost.is_set():
+                raise BuildError("V2 build lease was lost before completion.")
+        status = "succeeded"
+        artifact_commit_id = result.image_ref
+        completion_payload = {
+            "image_ref": result.image_ref,
+            "build_log": result.build_log,
+            "build_finished_at": utc_now(),
+        }
+    except (BuildCancelled, BuildError, BackendReportError) as exc:
+        logger.exception("V2 build failed job_id=%s", job_id)
+        completion_payload = {
+            "build_log": str(exc),
+            "build_finished_at": utc_now(),
+        }
+
+    response = orchestrator.complete_job(
+        job_id,
+        {
+            "worker_name": worker_name,
+            "dispatch_attempt": dispatch_attempt,
+            "completion_id": f"{job_id}:{dispatch_attempt}:build",
+            "status": status,
+            "completion_payload": completion_payload,
+            "artifact_commit_id": artifact_commit_id,
+        },
+    )
+    return bool(response.get("completed"))
+
+
+def process_v2_invocation_job(
+    job: dict,
+    backend: BackendClient,
+    executor: DockerExecutor,
+    orchestrator: OrchestratorClient,
+    *,
+    worker_name: str,
+) -> bool:
+    job_id = job["job_id"]
+    dispatch_attempt = int(job["dispatch_attempt"])
+    request_id = job["request_id"]
+    try:
+        with LeaseRenewer(
+            orchestrator,
+            job_id=job_id,
+            worker_name=worker_name,
+            dispatch_attempt=dispatch_attempt,
+        ) as lease:
+            result = executor.run(job)
+            if lease.lost.is_set():
+                return False
+    except Exception as exc:
+        if not isinstance(exc, ExecutionError):
+            logger.exception("unexpected V2 invocation failure job_id=%s", job_id)
+        result = ExecutionResult(
+            status="failed",
+            result={},
+            stdout="",
+            stderr="",
+            exit_code=None,
+            duration_ms=0,
+            error_message=str(exc),
+            cold_start=True,
+        )
+
+    backend.report_invocation(
+        request_id,
+        {
+            "status": result.status,
+            "result": result.result,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "exit_code": result.exit_code,
+            "cold_start": result.cold_start,
+            "error_message": result.error_message,
+            "duration_ms": result.duration_ms,
+            "finished_at": utc_now(),
+        },
+    )
+    terminal_status = "succeeded" if result.status == "succeeded" else "failed"
+    response = orchestrator.complete_job(
+        job_id,
+        {
+            "worker_name": worker_name,
+            "dispatch_attempt": dispatch_attempt,
+            "completion_id": f"{job_id}:{dispatch_attempt}:invocation",
+            "status": terminal_status,
+            "completion_payload": {"request_id": request_id, "status": result.status},
+            "artifact_commit_id": (
+                f"invocation-result:{request_id}"
+                if terminal_status == "succeeded"
+                else ""
+            ),
+        },
+    )
+    return bool(response.get("completed"))
+
+
+def run_claimed_job(
+    *,
+    job: dict,
+    backend: BackendClient,
+    redis_client,
+    processing_queue_name: str,
+    delivery_message: str,
+    source_queue_name: str,
+    worker_name: str,
+    hostname: str,
+    max_build_concurrency: int,
+    activity: WorkerActivity,
+    executor_factory=DockerExecutor,
+    builder_factory=DockerBuilder,
+) -> None:
+    job_type = job.get("type")
+    try:
+        if job_type == "function.invoke":
+            logger.info(
+                "received invocation job request_id=%s function=%s version=%s",
+                job.get("request_id"),
+                job.get("function_slug"),
+                job.get("version"),
+            )
+            process_invocation_job(
+                job,
+                backend,
+                executor_factory(backend_client=backend),
+            )
+        elif job_type == "function.build":
+            logger.info(
+                "received build job build_request_id=%s function=%s version=%s",
+                job.get("build_request_id"),
+                job.get("function_slug"),
+                job.get("version"),
+            )
+            process_build_job(
+                job,
+                backend,
+                builder_factory(),
+                worker_name=worker_name,
+                hostname=hostname,
+                max_build_concurrency=max_build_concurrency,
+                requeue=lambda: redis_client.rpush(source_queue_name, delivery_message),
+            )
+        else:
+            logger.error("discarding unknown job type: %s", job_type)
+    except Exception:
+        logger.exception("unexpected threaded job failure type=%s", job_type)
+    finally:
+        acknowledge_processing_job(redis_client, processing_queue_name, delivery_message)
+        activity.finish(job_type)
+        logger.info("job complete type=%s", job_type)
+
+
+def run_v2_claimed_job(
+    *,
+    job: dict,
+    backend: BackendClient,
+    orchestrator: OrchestratorClient,
+    worker_name: str,
+    activity: WorkerActivity,
+    executor_factory=DockerExecutor,
+    builder_factory=DockerBuilder,
+) -> None:
+    job_type = job.get("type")
+    try:
+        if job_type == "function.build":
+            process_v2_build_job(
+                job,
+                backend,
+                builder_factory(),
+                orchestrator,
+                worker_name=worker_name,
+            )
+        elif job_type == "function.invoke":
+            process_v2_invocation_job(
+                job,
+                backend,
+                executor_factory(backend_client=backend),
+                orchestrator,
+                worker_name=worker_name,
+            )
+        else:
+            logger.error("discarding unknown V2 job type: %s", job_type)
+    except Exception:
+        logger.exception("unexpected V2 threaded job failure type=%s", job_type)
+    finally:
+        activity.finish(job_type)
+        logger.info("V2 job processing ended type=%s job_id=%s", job_type, job.get("job_id"))
+
+
 def main() -> None:
     import redis
 
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     backend_base_url = os.getenv("BACKEND_BASE_URL", "http://backend:8000")
+    orchestrator_base_url = os.getenv(
+        "ORCHESTRATOR_BASE_URL",
+        "http://orchestrator:8010",
+    )
     worker_token = os.getenv("WORKER_SHARED_SECRET", "change-me")
     worker_name = os.getenv("WORKER_NAME", socket.gethostname())
     worker_queue_prefix = os.getenv("WORKER_QUEUE_PREFIX", "worker")
@@ -466,28 +866,67 @@ def main() -> None:
         "WORKER_PROCESSING_QUEUE_NAME",
         worker_processing_queue_name(invocation_queue_name),
     )
+    v2_invocation_stream = f"worker:{worker_name}:v2:invocations"
+    v2_build_stream = f"worker:{worker_name}:v2:builds"
     max_concurrency = int(os.getenv("WORKER_MAX_CONCURRENCY", "1"))
+    max_invocation_concurrency = int(
+        os.getenv("WORKER_MAX_INVOCATION_CONCURRENCY", str(max_concurrency))
+    )
     max_build_concurrency = int(os.getenv("WORKER_MAX_BUILD_CONCURRENCY", "1"))
     heartbeat_interval_seconds = float(os.getenv("WORKER_HEARTBEAT_SECONDS", "10"))
+    worker_stale_after_seconds = float(
+        os.getenv(
+            "ORCHESTRATOR_WORKER_STALE_AFTER_SECONDS",
+            str(heartbeat_interval_seconds * 3),
+        )
+    )
+    idle_sleep_seconds = float(os.getenv("WORKER_IDLE_SLEEP_SECONDS", "0.2"))
 
     client = redis.Redis.from_url(redis_url, decode_responses=True)
     backend = BackendClient(backend_base_url, worker_token)
-    executor = DockerExecutor(backend_client=backend)
-    builder = DockerBuilder()
+    orchestrator = OrchestratorClient(orchestrator_base_url, worker_token)
     activity = WorkerActivity()
+    hostname = socket.gethostname()
+    operational_payload = {
+        "name": worker_name,
+        "hostname": hostname,
+        "max_concurrency": max_concurrency,
+        "max_build_concurrency": max_build_concurrency,
+        "max_invocation_concurrency": max_invocation_concurrency,
+        "queue_name": legacy_queue_name,
+        "invocation_queue_name": invocation_queue_name,
+        "build_queue_name": build_queue_name,
+        "processing_queue_name": processing_queue_name,
+        "metadata": {"legacy_queue_name": legacy_queue_name},
+    }
+    worker_state = WorkerOperationalStateStore(
+        client,
+        lease_ttl_ms=max(int(worker_stale_after_seconds * 1000), 1000),
+    )
+    ensure_v2_stream_group(client, v2_invocation_stream)
+    ensure_v2_stream_group(client, v2_build_stream)
+
+    try:
+        worker_state.record_heartbeat(operational_payload)
+    except Exception:
+        logger.exception(
+            "failed to register worker with orchestrator state name=%s",
+            worker_name,
+        )
 
     try:
         backend.register_worker(
             {
                 "name": worker_name,
-                "hostname": socket.gethostname(),
-            "max_concurrency": max_concurrency,
-            "max_build_concurrency": max_build_concurrency,
-            "metadata": {
-                "legacy_queue_name": legacy_queue_name,
-            },
-        }
-    )
+                "hostname": hostname,
+                "max_concurrency": max_concurrency,
+                "max_build_concurrency": max_build_concurrency,
+                "metadata": {
+                    "legacy_queue_name": legacy_queue_name,
+                    "max_invocation_concurrency": max_invocation_concurrency,
+                },
+            }
+        )
     except BackendReportError:
         logger.exception("failed to register worker name=%s", worker_name)
 
@@ -498,77 +937,136 @@ def main() -> None:
             "worker_name": worker_name,
             "interval_seconds": heartbeat_interval_seconds,
             "activity": activity,
+            "operational_store": worker_state,
+            "operational_payload": operational_payload,
         },
         daemon=True,
     ).start()
 
     logger.info(
-        "worker started; worker=%s invocation_queue=%s build_queue=%s processing_queue=%s",
+        (
+            "worker started; worker=%s invocation_queue=%s build_queue=%s "
+            "processing_queue=%s max_concurrency=%s max_invocation_concurrency=%s "
+            "max_build_concurrency=%s"
+        ),
         worker_name,
         invocation_queue_name,
         build_queue_name,
         processing_queue_name,
+        max_concurrency,
+        max_invocation_concurrency,
+        max_build_concurrency,
     )
 
-    while True:
-        delivery_message, source_queue_name = move_next_job_to_processing(
-            client,
-            invocation_queue_name,
-            build_queue_name,
-            processing_queue_name,
-        )
-        if delivery_message is None:
-            continue
-
-        delivery = parse_delivery_message(delivery_message)
-        job_id = delivery["job_id"]
-        try:
-            job = claim_job_for_execution(
-                backend,
-                job_id=job_id,
-                worker_name=worker_name,
-                dispatch_attempt=delivery.get("dispatch_attempt"),
+    with ThreadPoolExecutor(max_workers=max_concurrency) as pool:
+        while True:
+            can_run_invocation = activity.can_start_invocation(
+                max_concurrency=max_concurrency,
+                max_invocation_concurrency=max_invocation_concurrency,
             )
-        except BackendReportError:
-            logger.exception("could not claim job job_id=%s", job_id)
-            continue
-
-        if job is None:
-            acknowledge_processing_job(
-                client,
-                processing_queue_name,
-                delivery_message,
+            can_run_build = activity.can_start_build(
+                max_concurrency=max_concurrency,
+                max_build_concurrency=max_build_concurrency,
             )
-            continue
+            v2_delivery = None
+            delivery_message = None
+            source_queue_name = None
+            if can_run_invocation:
+                v2_delivery = read_v2_stream_delivery(
+                    client,
+                    v2_invocation_stream,
+                    worker_name,
+                )
+                if v2_delivery is None:
+                    delivery_message = move_job_to_processing_nowait(
+                        client,
+                        invocation_queue_name,
+                        processing_queue_name,
+                    )
+                    if delivery_message is not None:
+                        source_queue_name = invocation_queue_name
+            if v2_delivery is None and delivery_message is None and can_run_build:
+                v2_delivery = read_v2_stream_delivery(
+                    client,
+                    v2_build_stream,
+                    worker_name,
+                )
+                if v2_delivery is None:
+                    delivery_message = move_job_to_processing_nowait(
+                        client,
+                        build_queue_name,
+                        processing_queue_name,
+                    )
+                    if delivery_message is not None:
+                        source_queue_name = build_queue_name
 
-        job_type = job.get("type")
-        activity.start(job_type)
-        try:
-            if job_type == "function.invoke":
-                logger.info(
-                    "received invocation job request_id=%s function=%s version=%s",
-                    job.get("request_id"),
-                    job.get("function_slug"),
-                    job.get("version"),
-                )
-                process_invocation_job(job, backend, executor)
-            elif job_type == "function.build":
-                logger.info(
-                    "received build job build_request_id=%s function=%s version=%s",
-                    job.get("build_request_id"),
-                    job.get("function_slug"),
-                    job.get("version"),
-                )
-                process_build_job(
-                    job,
-                    backend,
-                    builder,
+            if v2_delivery is not None:
+                stream_id, delivery = v2_delivery
+                job_id = delivery.get("job_id", "")
+                try:
+                    claim = orchestrator.claim_job(
+                        job_id,
+                        {
+                            "worker_name": worker_name,
+                            "dispatch_attempt": int(delivery.get("dispatch_attempt", 0)),
+                        },
+                    )
+                except OrchestratorError:
+                    logger.exception("could not claim V2 job job_id=%s", job_id)
+                    time.sleep(idle_sleep_seconds)
+                    continue
+                if not claim.get("claimed"):
+                    client.xack(
+                        v2_invocation_stream
+                        if delivery.get("job_type") == "invocation"
+                        else v2_build_stream,
+                        V2_WORKER_GROUP,
+                        stream_id,
+                    )
+                    continue
+                job = dict(claim.get("payload") or {})
+                job_type = job.get("type")
+                if job_type not in {"function.invoke", "function.build"}:
+                    logger.error("discarding unknown claimed V2 job type=%s", job_type)
+                    continue
+                activity.start(job_type)
+                pool.submit(
+                    run_v2_claimed_job,
+                    job=job,
+                    backend=backend,
+                    orchestrator=orchestrator,
                     worker_name=worker_name,
-                    hostname=socket.gethostname(),
-                    max_build_concurrency=max_build_concurrency,
-                    requeue=lambda: client.rpush(source_queue_name, delivery_message),
+                    activity=activity,
                 )
-            else:
+                continue
+
+            if delivery_message is None:
+                time.sleep(idle_sleep_seconds)
+                continue
+
+            delivery = parse_delivery_message(delivery_message)
+            job_id = delivery["job_id"]
+            try:
+                job = claim_job_for_execution(
+                    backend,
+                    job_id=job_id,
+                    worker_name=worker_name,
+                    dispatch_attempt=delivery.get("dispatch_attempt"),
+                )
+            except BackendReportError:
+                logger.exception("could not claim job job_id=%s", job_id)
+                continue
+
+            if job is None:
+                acknowledge_processing_job(
+                    client,
+                    processing_queue_name,
+                    delivery_message,
+                )
+                continue
+
+            job_type = job.get("type")
+            if job_type not in {"function.invoke", "function.build"}:
                 logger.error("discarding unknown job type: %s", job_type)
                 acknowledge_processing_job(
                     client,
@@ -576,11 +1074,21 @@ def main() -> None:
                     delivery_message,
                 )
                 continue
-        finally:
-            activity.finish(job_type)
 
-        acknowledge_processing_job(client, processing_queue_name, delivery_message)
-        logger.info("job complete type=%s", job_type)
+            activity.start(job_type)
+            pool.submit(
+                run_claimed_job,
+                job=job,
+                backend=backend,
+                redis_client=client,
+                processing_queue_name=processing_queue_name,
+                delivery_message=delivery_message,
+                source_queue_name=source_queue_name,
+                worker_name=worker_name,
+                hostname=hostname,
+                max_build_concurrency=max_build_concurrency,
+                activity=activity,
+            )
 
 
 if __name__ == "__main__":

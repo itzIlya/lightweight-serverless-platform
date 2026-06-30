@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import io
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
+import logging
 import mimetypes
 import os
 from pathlib import Path
@@ -12,9 +13,12 @@ import tempfile
 import time
 from typing import Any
 
+from requests.exceptions import ReadTimeout
+
 
 SANDBOX_EXPORT_PATH = "/sandbox/export"
 SANDBOX_EXPORT_OUTPUT_PATH = "/sandbox/export/output"
+logger = logging.getLogger("worker.executor")
 
 
 class ExecutionError(RuntimeError):
@@ -35,6 +39,7 @@ class ExecutionResult:
     duration_ms: int
     error_message: str = ""
     cold_start: bool = True
+    timing_ms: dict[str, int] = field(default_factory=dict)
 
 
 def get_docker_client():
@@ -64,10 +69,16 @@ class DockerExecutor:
         runtime_root.mkdir(parents=True, exist_ok=True)
 
         started = time.monotonic()
+        timing: dict[str, int] = {}
+
+        def record_step(name: str, step_started: float) -> None:
+            timing[name] = int((time.monotonic() - step_started) * 1000)
+
         with tempfile.TemporaryDirectory(
             prefix=f"invocation-{job['request_id']}-",
             dir=runtime_root,
         ) as root:
+            setup_started = time.monotonic()
             root_path = Path(root)
             input_dir = root_path / "input"
             input_files_dir = input_dir / "files"
@@ -81,9 +92,15 @@ class DockerExecutor:
                 encoding="utf-8",
             )
             input_files = self._prepare_input_files(job, input_files_dir)
+            record_step("sandbox_prepare_ms", setup_started)
+
+            volume_started = time.monotonic()
             sandbox_volume = self.docker_client.volumes.create(
                 name=f"invocation-{job['request_id']}"
             )
+            record_step("docker_volume_create_ms", volume_started)
+
+            create_started = time.monotonic()
             container = self.docker_client.containers.create(
                 image_ref,
                 command=[
@@ -108,18 +125,36 @@ class DockerExecutor:
                 },
                 volumes={sandbox_volume.name: {"bind": "/sandbox", "mode": "rw"}},
             )
+            record_step("docker_container_create_ms", create_started)
 
             try:
+                input_copy_started = time.monotonic()
                 self._copy_directory_into_container(container, input_dir, "/sandbox")
+                record_step("docker_input_copy_ms", input_copy_started)
+
+                start_started = time.monotonic()
                 container.start()
+                record_step("docker_container_start_ms", start_started)
+
+                wait_started = time.monotonic()
                 exit_code = self._wait_for_exit(container, timeout_seconds)
+                record_step("docker_wait_ms", wait_started)
+
+                logs_started = time.monotonic()
                 stdout = self._read_logs(container, stdout=True, stderr=False)
                 stderr = self._read_logs(container, stdout=False, stderr=True)
+                record_step("docker_logs_read_ms", logs_started)
+                timing.update(self._read_runner_timings(stdout))
+
+                export_started = time.monotonic()
                 self._copy_directory_from_container(
                     container,
                     SANDBOX_EXPORT_PATH,
                     export_dir,
                 )
+                record_step("docker_export_copy_ms", export_started)
+
+                result_started = time.monotonic()
                 effective_export_dir = self._effective_export_dir(export_dir)
                 copy_exit_code = self._read_export_status(
                     effective_export_dir,
@@ -127,8 +162,15 @@ class DockerExecutor:
                 )
                 effective_output_dir = self._effective_output_dir(effective_export_dir)
                 result = self._read_result(effective_output_dir, stdout)
+                record_step("result_read_ms", result_started)
                 duration_ms = int((time.monotonic() - started) * 1000)
                 if copy_exit_code not in (None, 0):
+                    timing["executor_duration_ms"] = duration_ms
+                    logger.info(
+                        "invocation executor timing request_id=%s timings=%s",
+                        job["request_id"],
+                        json.dumps(timing, sort_keys=True),
+                    )
                     return ExecutionResult(
                         status="failed",
                         result=result,
@@ -137,13 +179,22 @@ class DockerExecutor:
                         exit_code=exit_code,
                         duration_ms=duration_ms,
                         error_message=self._read_export_error(effective_export_dir),
+                        timing_ms=timing,
                     )
                 try:
+                    validation_started = time.monotonic()
                     output_files = self._validate_declared_output_files(
                         job,
                         effective_output_dir,
                     )
+                    record_step("output_validation_ms", validation_started)
                 except OutputValidationError as exc:
+                    timing["executor_duration_ms"] = duration_ms
+                    logger.info(
+                        "invocation executor timing request_id=%s timings=%s",
+                        job["request_id"],
+                        json.dumps(timing, sort_keys=True),
+                    )
                     return ExecutionResult(
                         status="failed",
                         result=result,
@@ -152,14 +203,23 @@ class DockerExecutor:
                         exit_code=exit_code,
                         duration_ms=duration_ms,
                         error_message=str(exc),
+                        timing_ms=timing,
                     )
 
+                output_upload_started = time.monotonic()
                 self._upload_output_files(job, output_files)
+                record_step("output_upload_ms", output_upload_started)
                 status = "succeeded" if exit_code == 0 else "failed"
                 error_message = (
                     ""
                     if exit_code == 0
                     else "Container exited with a non-zero status."
+                )
+                timing["executor_duration_ms"] = duration_ms
+                logger.info(
+                    "invocation executor timing request_id=%s timings=%s",
+                    job["request_id"],
+                    json.dumps(timing, sort_keys=True),
                 )
 
                 return ExecutionResult(
@@ -170,10 +230,21 @@ class DockerExecutor:
                     exit_code=exit_code,
                     duration_ms=duration_ms,
                     error_message=error_message,
+                    timing_ms=timing,
                 )
             finally:
+                cleanup_started = time.monotonic()
                 self._remove_container(container)
                 self._remove_volume(sandbox_volume)
+                record_step("docker_cleanup_ms", cleanup_started)
+                timing["executor_wall_with_cleanup_ms"] = int(
+                    (time.monotonic() - started) * 1000
+                )
+                logger.info(
+                    "invocation executor final timing request_id=%s timings=%s",
+                    job["request_id"],
+                    json.dumps(timing, sort_keys=True),
+                )
 
     def _runner_export_command(self) -> str:
         return (
@@ -189,16 +260,14 @@ class DockerExecutor:
         )
 
     def _wait_for_exit(self, container, timeout_seconds: int) -> int | None:
-        deadline = time.monotonic() + timeout_seconds
-        while time.monotonic() < deadline:
-            container.reload()
-            state = container.attrs.get("State", {})
-            if not state.get("Running", False):
-                return state.get("ExitCode")
-            time.sleep(0.5)
-
-        container.kill()
-        raise ExecutionError(f"Function execution timed out after {timeout_seconds} seconds.")
+        try:
+            wait_result = container.wait(timeout=timeout_seconds)
+        except ReadTimeout as exc:
+            container.kill()
+            raise ExecutionError(
+                f"Function execution timed out after {timeout_seconds} seconds."
+            ) from exc
+        return wait_result.get("StatusCode")
 
     def _read_logs(self, container, *, stdout: bool, stderr: bool) -> str:
         logs = container.logs(stdout=stdout, stderr=stderr)
@@ -229,6 +298,26 @@ class DockerExecutor:
                     return json.loads(payload)
                 except json.JSONDecodeError:
                     return {"raw_result": payload}
+        return {}
+
+    def _read_runner_timings(self, stdout: str) -> dict[str, int]:
+        for line in reversed(stdout.splitlines()):
+            if not line.startswith("__FUNCTION_TIMING__="):
+                continue
+            payload = line.split("=", 1)[1]
+            try:
+                timings = json.loads(payload)
+            except json.JSONDecodeError:
+                return {}
+            if not isinstance(timings, dict):
+                return {}
+            return {
+                key: value
+                for key, value in timings.items()
+                if key.startswith("runner_")
+                and isinstance(value, int)
+                and not isinstance(value, bool)
+            }
         return {}
 
     def _effective_output_dir(self, output_dir: Path) -> Path:

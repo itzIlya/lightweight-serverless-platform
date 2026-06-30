@@ -75,7 +75,7 @@ def heartbeat_worker(request):
 
     metadata = dict(worker.metadata or {})
     metadata.update(request.data.get("metadata", {}) or {})
-    for key in ("active_jobs", "active_builds"):
+    for key in ("active_jobs", "active_builds", "active_invocations"):
         if key in request.data:
             metadata[key] = int(request.data.get(key) or 0)
 

@@ -90,6 +90,19 @@ MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+ORCHESTRATOR_EVENT_STREAM = os.getenv(
+    "ORCHESTRATOR_EVENT_STREAM",
+    "orchestrator:events",
+)
+V2_BUILD_PILOT_ENABLED = os.getenv("V2_BUILD_PILOT_ENABLED", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+V2_INVOCATION_PILOT_ENABLED = os.getenv(
+    "V2_INVOCATION_PILOT_ENABLED",
+    "false",
+).lower() in {"1", "true", "yes"}
 JOB_QUEUE_NAME = os.getenv(
     "JOB_QUEUE_NAME",
     os.getenv(

@@ -19,6 +19,28 @@ from scheduler import (
 
 
 class SchedulerTests(unittest.TestCase):
+    def test_v1_scheduler_refuses_v2_job(self):
+        backend = Mock()
+        redis_client = Mock()
+        backend.get_job.return_value = {
+            "job_id": "job-v2",
+            "coordination_version": 2,
+            "status": "queued",
+        }
+
+        dispatched = process_job_id(
+            job_id="job-v2",
+            backend=backend,
+            redis_client=redis_client,
+            pending_queue="scheduler-pending-jobs",
+            requeue_delay_seconds=0,
+        )
+
+        self.assertFalse(dispatched)
+        backend.list_workers.assert_not_called()
+        backend.dispatch_job.assert_not_called()
+        redis_client.rpush.assert_not_called()
+
     def test_choose_worker_uses_round_robin_tie_breaker(self):
         state = {}
         worker = choose_worker(
@@ -130,6 +152,101 @@ class SchedulerTests(unittest.TestCase):
             sticky_max_invocation_load=2,
             round_robin_state={},
             now=105,
+        )
+
+        self.assertEqual(worker["name"], "worker-b")
+
+    def test_choose_invocation_worker_uses_local_dispatch_load_for_bursts(self):
+        worker = choose_invocation_worker(
+            [
+                {
+                    "name": "worker-a",
+                    "max_concurrency": 4,
+                    "metadata": {
+                        "active_jobs": 0,
+                        "active_builds": 0,
+                        "max_invocation_concurrency": 4,
+                    },
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+                {
+                    "name": "worker-b",
+                    "max_concurrency": 4,
+                    "metadata": {
+                        "active_jobs": 0,
+                        "active_builds": 0,
+                        "max_invocation_concurrency": 4,
+                    },
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+                {
+                    "name": "worker-c",
+                    "max_concurrency": 4,
+                    "metadata": {
+                        "active_jobs": 0,
+                        "active_builds": 0,
+                        "max_invocation_concurrency": 4,
+                    },
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+            ],
+            {"payload": {"type": "function.invoke", "function_version_id": 10}},
+            recent_invocations={},
+            local_invocation_loads={
+                "worker-a": [99, 99, 99, 99],
+                "worker-b": [99],
+            },
+            local_load_ttl_seconds=10,
+            affinity_ttl_seconds=10,
+            sticky_max_invocation_load=2,
+            round_robin_state={},
+            now=100,
+        )
+
+        self.assertEqual(worker["name"], "worker-c")
+
+    def test_choose_invocation_worker_does_not_stick_to_locally_loaded_worker(self):
+        worker = choose_invocation_worker(
+            [
+                {
+                    "name": "worker-a",
+                    "max_concurrency": 4,
+                    "metadata": {
+                        "active_jobs": 0,
+                        "active_builds": 0,
+                        "max_invocation_concurrency": 4,
+                    },
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+                {
+                    "name": "worker-b",
+                    "max_concurrency": 4,
+                    "metadata": {
+                        "active_jobs": 0,
+                        "active_builds": 0,
+                        "max_invocation_concurrency": 4,
+                    },
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+            ],
+            {"payload": {"type": "function.invoke", "function_version_id": 10}},
+            recent_invocations={
+                "10": {
+                    "worker_name": "worker-a",
+                    "last_seen": 99,
+                }
+            },
+            local_invocation_loads={"worker-a": [99, 99, 99]},
+            local_load_ttl_seconds=10,
+            affinity_ttl_seconds=10,
+            sticky_max_invocation_load=2,
+            round_robin_state={},
+            now=100,
         )
 
         self.assertEqual(worker["name"], "worker-b")

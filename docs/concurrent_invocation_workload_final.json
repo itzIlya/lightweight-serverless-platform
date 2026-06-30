@@ -1,0 +1,49 @@
+{
+  "base_url": "http://localhost:8000",
+  "username": "workload_d96b2145",
+  "function_id": 21,
+  "function_slug": "concurrent-sleep-d96b2145",
+  "version_id": 28,
+  "image_ref": "localhost:5000/functions/concurrent-sleep-d96b2145:v28-v1",
+  "invocation_count": 12,
+  "sleep_seconds": 3.0,
+  "sequential_sleep_seconds": 36.0,
+  "client_submit_elapsed_seconds": 0.437,
+  "client_poll_elapsed_seconds": 17.266,
+  "client_wall_elapsed_seconds": 17.703,
+  "statuses": [
+    "succeeded"
+  ],
+  "duration_ms_min": 5675,
+  "duration_ms_max": 7418,
+  "duration_ms_median": 6490,
+  "invocation_ids": [
+    53,
+    54,
+    56,
+    55,
+    57,
+    59,
+    58,
+    62,
+    60,
+    61,
+    63,
+    64
+  ],
+  "request_ids": [
+    "568f701d-a13f-4ac7-82fe-21d5a2889cab",
+    "386355c9-293b-42e4-871c-fda42aca79ff",
+    "da29fb3e-91d4-4f34-bbb5-78b241503065",
+    "8e45a5bf-9f3e-4f90-90f9-81faf8410493",
+    "35d02dda-058c-4821-9b6e-0f061d392153",
+    "d0aae074-c620-4474-a0ea-ee9d6c71d110",
+    "910e4fdd-89ff-4afd-97e1-afd4434fc506",
+    "b013ee0d-d6fc-4252-aa15-45b26ee910ab",
+    "476dbb04-dbc9-4a2d-b88a-551216bb9826",
+    "bac8f06f-e5ee-4628-a9be-7d24c74653f7",
+    "b27ab443-1c23-4870-9691-8d2e6ea6c300",
+    "89d4751e-b423-4412-9fb9-01b6f1ebb098"
+  ],
+  "read_token_returned": true
+}

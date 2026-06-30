@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from django.conf import settings
+from django.db import transaction
 
 from apps.functions.models import BuildStatus
 from apps.invocations.models import InvocationStatus
 from apps.workers.models import WorkerStatus
 
-from .models import Job, JobStatus, JobType
+from .models import CoordinationVersion, Job, JobStatus, JobType, OutboxEvent
 
 
 def max_recovery_attempts_for_type(job_type: str) -> int:
@@ -41,34 +42,63 @@ def _recovery_backoff_values(job_type: str) -> list[int]:
 
 
 def create_build_job_record(build_attempt, payload: dict) -> Job:
-    job = Job.objects.create(
-        type=JobType.BUILD,
-        status=JobStatus.QUEUED,
-        queue_name=scheduler_queue_name_for_type(JobType.BUILD),
-        payload=payload,
-        build_attempt=build_attempt,
-        available_at=build_attempt.queued_at,
-        max_recovery_attempts=max_recovery_attempts_for_type(JobType.BUILD),
-    )
-    payload["job_id"] = str(job.job_id)
-    job.payload = payload
-    job.save(update_fields=["payload", "updated_at"])
-    return job
+    with transaction.atomic():
+        job = Job.objects.create(
+            type=JobType.BUILD,
+            status=JobStatus.QUEUED,
+            queue_name=scheduler_queue_name_for_type(JobType.BUILD),
+            payload=payload,
+            build_attempt=build_attempt,
+            available_at=build_attempt.queued_at,
+            max_recovery_attempts=max_recovery_attempts_for_type(JobType.BUILD),
+            coordination_version=(
+                CoordinationVersion.V2
+                if settings.V2_BUILD_PILOT_ENABLED
+                else CoordinationVersion.V1
+            ),
+        )
+        return _finish_job_creation(job, payload)
 
 
 def create_invocation_job_record(invocation, payload: dict) -> Job:
-    job = Job.objects.create(
-        type=JobType.INVOCATION,
-        status=JobStatus.QUEUED,
-        queue_name=scheduler_queue_name_for_type(JobType.INVOCATION),
-        payload=payload,
-        invocation=invocation,
-        available_at=invocation.queued_at,
-        max_recovery_attempts=max_recovery_attempts_for_type(JobType.INVOCATION),
-    )
+    with transaction.atomic():
+        job = Job.objects.create(
+            type=JobType.INVOCATION,
+            status=JobStatus.QUEUED,
+            queue_name=scheduler_queue_name_for_type(JobType.INVOCATION),
+            payload=payload,
+            invocation=invocation,
+            available_at=invocation.queued_at,
+            max_recovery_attempts=max_recovery_attempts_for_type(JobType.INVOCATION),
+            coordination_version=(
+                CoordinationVersion.V2
+                if settings.V2_INVOCATION_PILOT_ENABLED
+                else CoordinationVersion.V1
+            ),
+        )
+        return _finish_job_creation(job, payload)
+
+
+def _finish_job_creation(job: Job, payload: dict) -> Job:
     payload["job_id"] = str(job.job_id)
     job.payload = payload
     job.save(update_fields=["payload", "updated_at"])
+    OutboxEvent.objects.create(
+        aggregate_id=job.job_id,
+        event_type="job.created",
+        payload={
+            "job_id": str(job.job_id),
+            "job_type": job.type,
+            "coordination_version": job.coordination_version,
+            "status": job.status,
+            "queue_name": job.queue_name,
+            "available_at": job.available_at.isoformat(),
+            "dispatch_attempts": job.dispatch_attempts,
+            "recovery_count": job.recovery_count,
+            "max_recovery_attempts": job.max_recovery_attempts,
+            "payload": job.payload,
+        },
+    )
     return job
 
 

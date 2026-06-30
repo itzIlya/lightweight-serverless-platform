@@ -26,12 +26,24 @@ class BuildResult:
 
 
 RUNNER_SOURCE = r'''
+import time
+
+RUNNER_STARTED_NS = time.perf_counter_ns()
+
 import importlib
 import json
 import os
 from pathlib import Path
 import sys
 import traceback
+
+RUNNER_MODULE_IMPORTS_MS = int(
+    (time.perf_counter_ns() - RUNNER_STARTED_NS) / 1_000_000
+)
+
+
+def elapsed_ms(started_ns):
+    return int((time.perf_counter_ns() - started_ns) / 1_000_000)
 
 
 def load_handler(handler_path):
@@ -43,39 +55,58 @@ def load_handler(handler_path):
 
 
 def main():
+    timings = {"runner_module_imports_ms": RUNNER_MODULE_IMPORTS_MS}
+    environment_started = time.perf_counter_ns()
     event_path_value = os.environ.get("FUNCTION_EVENT_PATH", "")
     event_json = os.environ.get("FUNCTION_EVENT_JSON", "")
     output_dir_value = os.environ.get("FUNCTION_OUTPUT_DIR", "")
     handler_path = os.environ.get("FUNCTION_HANDLER", "handler.main")
     request_id = os.environ.get("FUNCTION_REQUEST_ID", "")
+    timings["runner_environment_read_ms"] = elapsed_ms(environment_started)
 
+    event_started = time.perf_counter_ns()
     if event_json:
         event = json.loads(event_json)
     else:
         event = json.loads(Path(event_path_value).read_text(encoding="utf-8"))
+    timings["runner_event_load_ms"] = elapsed_ms(event_started)
 
+    setup_started = time.perf_counter_ns()
     sys.path.insert(0, "/function")
     output_dir = Path(output_dir_value) if output_dir_value else None
     if output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
-    handler = load_handler(handler_path)
-    result = handler(event, {"request_id": request_id})
+    timings["runner_setup_ms"] = elapsed_ms(setup_started)
 
+    import_started = time.perf_counter_ns()
+    handler = load_handler(handler_path)
+    timings["runner_handler_import_ms"] = elapsed_ms(import_started)
+
+    handler_started = time.perf_counter_ns()
+    result = handler(event, {"request_id": request_id})
+    timings["runner_handler_execution_ms"] = elapsed_ms(handler_started)
+
+    serialize_started = time.perf_counter_ns()
     result_payload = result
     try:
         serialized = json.dumps(result_payload)
     except TypeError:
         result_payload = {"repr": repr(result_payload)}
         serialized = json.dumps(result_payload)
+    timings["runner_result_serialize_ms"] = elapsed_ms(serialize_started)
 
+    write_started = time.perf_counter_ns()
     if output_dir is not None:
         try:
             result_path = output_dir / "result.json"
             result_path.write_text(serialized, encoding="utf-8")
         except Exception:
             pass
+    timings["runner_result_write_ms"] = elapsed_ms(write_started)
+    timings["runner_total_ms"] = elapsed_ms(RUNNER_STARTED_NS)
 
     print(f"__FUNCTION_RESULT__={serialized}")
+    print(f"__FUNCTION_TIMING__={json.dumps(timings, sort_keys=True)}")
 
 
 if __name__ == "__main__":

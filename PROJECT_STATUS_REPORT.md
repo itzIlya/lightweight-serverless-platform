@@ -1,6 +1,6 @@
 # Project Status Report
 
-Date: 2026-06-25
+Date: 2026-06-30
 
 Source basis:
 - `ROADMAP.md`
@@ -18,9 +18,18 @@ The platform currently includes:
 - PostgreSQL metadata storage
 - Redis build and invocation queue
 - Durable Postgres job records for builds and invocations
+- Transactional job outbox with idempotent Redis Stream publication
+- Read-only V2 shadow orchestrator and V1/V2 placement comparison gate
+- Redis-owned worker heartbeat and capacity leases with a Django compatibility
+  projection
+- Pilot V2 build and invocation authority using Redis Streams and orchestrator
+  leases
+- Asynchronous PostgreSQL projection of V2 dispatch, running, recovery, and
+  terminal state
 - Simple scheduler service for worker placement
 - Worker registration and worker-specific queues
 - Worker heartbeat detection and stale-worker recovery
+- Multithreaded workers with bounded invocation/build concurrency
 - Recovery backoff for stale-worker recovered jobs
 - Dead-letter state for jobs recovered too many times
 - Non-destructive worker queue consumption with processing queues and ACK
@@ -180,10 +189,14 @@ Implemented:
 - Scheduler sends builds only to idle workers
 - Worker registration at startup
 - Worker heartbeat endpoint and loop
+- Worker heartbeat metadata for active jobs, active builds, and active
+  invocations
 - Stale-worker expiry
 - Worker processing queues for non-destructive job acceptance
 - Worker claim validation before execution
 - Worker ACK by removing completed job IDs from processing queues
+- Per-worker thread-pool execution with separate total, invocation, and build
+  concurrency limits
 - Scheduler recovery of unfinished jobs from stale workers
 - Type-specific recovery backoff for stale-worker recovered jobs:
   - invocations: immediate, then 2 seconds, then 8 seconds
@@ -205,10 +218,11 @@ Implemented:
 Remaining:
 - Invocation retries with configurable backoff
 - More complete idempotency protection for duplicate scheduler dispatches
-- Worker capability reporting, such as runtimes and available capacity
-- Capacity-aware scheduling and routing across multiple workers
-- Per-worker concurrency limits and graceful shutdown
-- Multi-worker integration and failure tests
+- Worker capability reporting, such as runtimes, memory classes, cached images,
+  and supported runtimes
+- More advanced capacity-aware scheduling beyond queue depth and active builds
+- Graceful worker shutdown and draining
+- Broader multi-worker crash and network-partition tests
 - Warm pool or reusable container management
 
 The scheduler now places small delivery messages onto worker-specific invocation
@@ -222,8 +236,58 @@ durable recovery counter, use type-specific backoff, and move to `dead_lettered`
 after too many recoveries.
 
 This is a meaningful reliability step, but it is not the final form. Remaining
-hardening includes duplicate-safe scheduler dispatch, graceful shutdown, and
-multi-worker failure tests.
+hardening includes duplicate-safe scheduler dispatch, graceful shutdown, richer
+capability-aware routing, and multi-worker failure tests.
+
+### Orchestrator V2 Migration Foundation
+
+Status: Steps 1-9 implemented; V2 pilots available but disabled by default
+
+Implemented:
+- Frozen and documented V1 coordination contract
+- Per-job `coordination_version`, with all existing and new jobs defaulting to V1
+- V1 scheduler guard that refuses accidentally queued V2 jobs
+- Redis AOF persistence with a Docker-managed data volume
+- Redis and backend health-gated service startup
+- Scheduler and worker restart policies for Redis restart recovery
+- Shadow-only V2 Redis job state machine with atomic Lua transitions for create,
+  dispatch, claim, lease renewal, requeue, cancellation, dead-lettering,
+  finalization, and terminal completion
+- Dispatch-attempt fencing and idempotent claim/completion behavior
+- Artifact-commit requirement before a V2 job can become `succeeded`
+- Real-Redis integration tests for legal, illegal, duplicate, and stale
+  transitions
+- Transactional `job.created` outbox rows committed with their `Job`
+- Idempotent outbox relay to the `orchestrator:events` Redis Stream
+- Real crash-window test proving retry does not duplicate a Stream event
+- Read-only shadow orchestrator with no backend dispatch or worker-queue push
+- V1/V2 placement comparison suite for invocation and build decisions
+- Redis worker operational records with atomic heartbeat/lease updates and
+  stale-worker expiry
+- V2 shadow placement reads Redis worker state
+- Django worker heartbeat remains as the V1 compatibility projection
+- Live three-worker verification of matching Redis and Django capacity state
+- Production V2 orchestrator service with protected claim, lease-renewal, and
+  completion APIs
+- Atomic V2 dispatch state plus worker-Stream publication
+- Dispatch and running leases with recovery and stale-attempt fencing
+- Consumer-group pending-entry reclamation for creation events
+- Attempt- and dispatch-specific immutable build image tags
+- Artifact-commit requirement before a V2 image becomes API-visible
+- Idempotent duplicate completion and projection publication
+- Asynchronous PostgreSQL projector with stale-event rejection
+- Worker-specific V2 build and invocation Streams
+- Orphan-image detection and registry manifest cleanup
+- V2 recovery ceiling and dead-letter projection
+- Creation-time build and invocation pilot flags, both defaulting to off
+- Two successful live V2 builds and one successful live V2 invocation
+
+Not implemented yet:
+- Staged output upload and finalizer services
+- Full invocation artifact staging independent of the backend
+- Broad canary load, network-partition, and process-kill experiments
+
+All production execution remains on coordination V1.
 
 ### Phase 5: Metrics and Evaluation
 
@@ -241,6 +305,8 @@ Implemented:
 - Live upload/build/invoke smoke tests
 - Live output-file smoke test
 - Output validation test plan in `docs/output_file_validation_tests.md`
+- Real concurrent workload test in `docs/real_workload_test_report.md`
+- Invocation latency profile in `docs/invocation_latency_profile_report.md`
 
 Remaining:
 - Structured, searchable logs
@@ -251,7 +317,8 @@ Remaining:
 - Metrics endpoint and dashboard
 - Repeatable benchmark scripts and workloads
 - Cold versus warm execution comparison
-- Single-worker versus multi-worker evaluation
+- Broader single-worker versus multi-worker evaluation
+- More detailed Docker lifecycle and warm-start benchmarking
 - Failure-recovery experiments
 - Evaluation tables, charts, and analysis
 - Final report with results, limitations, and comparison to the proposal
@@ -310,9 +377,11 @@ Latest verification:
 - Migrations applied successfully for `workers.0002_worker_build_concurrency`,
   `functions.0006_build_limits_and_leases`, and `jobs.0001_initial`
 - Migrations applied successfully for `jobs.0002_recovery_dead_letter_fields`
-- Backend Docker test suite passed: `60` tests
-- Worker Docker test suite passed: `42` tests
-- Scheduler test suite passed: `17` tests
+- Migrations applied successfully for `jobs.0003_job_coordination_version` and
+  `jobs.0004_outboxevent`
+- Backend Docker test suite passed: `67` tests
+- Worker Docker test suite passed: `56` tests
+- Scheduler/orchestrator test suite passed: `52` tests
 - Compile check passed for backend, worker, and scheduler
 - Migration drift check passed: `No changes detected`
 - User journey smoke test passed with tmpfs-backed exported output file
@@ -322,6 +391,14 @@ Latest verification:
   `15`, version `22`, and invocation `25`
 - Multi-worker scheduler verification documented in
   `docs/multi_worker_scheduler_test_report.md`
+- Real concurrent invocation workload documented in
+  `docs/real_workload_test_report.md`
+- Invocation latency profiling documented in
+  `docs/invocation_latency_profile_report.md`
+- Orchestrator steps 5-7 verification documented in
+  `docs/orchestrator_migration_steps_5_7_test_report.md`
+- V2 build and invocation pilot verification documented in
+  `docs/orchestrator_migration_steps_8_9_test_report.md`
 
 The backend test suite now covers:
 - JWT registration, login, refresh support, and `/api/auth/me/`
@@ -341,6 +418,8 @@ The backend test suite now covers:
 - Short sticky routing for recently invoked functions
 - Build placement only on idle workers
 - Worker-side invocation priority before build work
+- Worker-side thread pool with bounded total/invocation/build concurrency
+- Worker heartbeats report active invocation and build counts
 - Recovery backoff and dead-letter handling for recovered jobs
 - Dispatch blocking while a recovered job's `available_at` is still in the future
 - Worker claim validation before execution
@@ -352,12 +431,23 @@ The backend test suite now covers:
   limit, per-file size limit, total-size limit, and no-upload-on-failure
 - Worker tmpfs output mount, export-copy wrapper, Docker archive extraction
   from the stopped container, and no-upload-on-validation-failure behavior
+- Transactional outbox rollback and Redis publication retry behavior
+- Shadow orchestrator authority isolation and replay idempotency
+- V1/V2 worker-placement equivalence across five policy scenarios
+- Redis worker lease refresh, capacity updates, and race-safe stale expiry
+- Heartbeat dual-write isolation and survival after transient transport errors
+- Atomic V2 worker-Stream dispatch and pending-event recovery
+- Duplicate/lost-response completion idempotency
+- Build worker crash recovery and orphan-image cleanup
+- Dispatch, delivery, claim, and running-transition stale-attempt fencing
+- Asynchronous PostgreSQL projection and image visibility ordering
 
 ## Important Current Limitations
 
 - The deployment is a local Docker Compose prototype.
 - There is one scheduler in local Compose; workers can be scaled with Docker
-  Compose, but multi-worker failure testing is still limited.
+  Compose. Basic scheduler policy tests and one real concurrent invocation
+  workload exist, but multi-worker failure testing is still limited.
 - A worker crash after accepting a job no longer loses the job immediately;
   stale-worker recovery requeues it from the processing queue with backoff.
 - Jobs recovered too many times are moved to `dead_lettered` instead of being
@@ -365,7 +455,11 @@ The backend test suite now covers:
 - The current recovery loop is coarse and heartbeat-based, so recovery is not
   instant.
 - Durable jobs exist, but Redis is still the active queue transport.
-- Scheduler placement is now queue-aware, but not yet capability-aware by
+- V2 build and invocation pilots are implemented, but both pilot flags default
+  to false. Normal API-created jobs therefore remain V1 until explicitly enabled.
+- V2 invocation inputs, output uploads, and durable result persistence still use
+  the backend. The orchestrator fences terminal completion only after that write.
+- Scheduler placement is queue-aware and build-aware, but not yet capability-aware by
   runtime, memory, CPU, cached image, or warm-container availability.
 - Only Python image builds are currently implemented.
 - Invocation input and declared output files are persisted, but retention cleanup
@@ -392,9 +486,10 @@ The backend test suite now covers:
 
 ### Priority 2: Make Workers Truly Distributed
 
-7. Report worker capabilities and available capacity.
-8. Route jobs to suitable workers.
-9. Add per-worker concurrency controls and graceful worker shutdown.
+7. Report richer worker capabilities, including runtimes, memory classes, CPU,
+   cached images, and warm-container availability.
+8. Route jobs to suitable workers using those capabilities.
+9. Add graceful worker shutdown and draining.
 10. Test multiple workers and worker-failure scenarios.
 
 ### Priority 3: Security and Resource Isolation
@@ -428,14 +523,13 @@ The backend test suite now covers:
 
 The next milestone should be:
 
-`stronger multi-worker reliability + invocation retries/cancellation`
+`staged invocation artifact finalization and controlled V2 canary traffic`
 
-Durable job records, scheduler placement, startup worker registration,
-worker-specific queues, processing queues, ACK, heartbeat detection,
-stale-worker recovery, invocation input files, and invocation output files now
-exist. Recovery backoff and dead-letter handling now exist too. The next
-reliability steps are duplicate-safe dispatch, invocation retry/cancellation,
-and multi-worker failure testing.
+V2 build and invocation dispatch, claims, leases, completion fencing, and
+PostgreSQL projection now work behind creation-time pilot flags. The next
+careful migration step is to stage invocation outputs/results as one committed
+artifact set, then enable V2 for controlled canary traffic with rollback and
+process-kill testing.
 
 Before exposing token-protected or public functions to real users, add
 function-invocation-token management APIs and rate limits.

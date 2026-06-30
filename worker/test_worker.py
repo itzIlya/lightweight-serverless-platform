@@ -4,11 +4,13 @@ import sys
 import unittest
 from unittest.mock import Mock
 
+from requests.exceptions import ReadTimeout
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from backend_client import BackendReportError
 from builder import BuildCancelled, BuildError, BuildResult
-from executor import DockerExecutor, ExecutionResult
+from executor import DockerExecutor, ExecutionError, ExecutionResult
 from worker import (
     WorkerActivity,
     acknowledge_processing_job,
@@ -16,13 +18,188 @@ from worker import (
     job_report_metadata,
     move_job_to_processing,
     move_next_job_to_processing,
+    move_next_job_to_processing_for_capacity,
     parse_delivery_message,
     process_build_job,
+    process_v2_build_job,
+    process_v2_invocation_job,
+    read_v2_stream_delivery,
+    run_claimed_job,
     worker_processing_queue_name,
+    heartbeat_loop,
 )
 
 
 class BuildWorkerTests(unittest.TestCase):
+    def test_v2_stream_delivery_reads_worker_consumer_group(self):
+        redis_client = Mock()
+        redis_client.xreadgroup.return_value = [
+            (
+                "worker:worker-a:v2:builds",
+                [("1-0", {"job_id": "job-1", "dispatch_attempt": "2"})],
+            )
+        ]
+
+        delivery = read_v2_stream_delivery(
+            redis_client,
+            "worker:worker-a:v2:builds",
+            "worker-a",
+        )
+
+        self.assertEqual(delivery[0], "1-0")
+        self.assertEqual(delivery[1]["dispatch_attempt"], "2")
+        redis_client.xreadgroup.assert_called_once_with(
+            "v2-workers",
+            "worker-a",
+            {"worker:worker-a:v2:builds": ">"},
+            count=1,
+            block=1,
+        )
+
+    def test_v2_build_uses_orchestrator_without_django_coordination(self):
+        backend = Mock()
+        backend.is_build_cancel_requested.return_value = False
+        builder = Mock()
+        builder.build.return_value = BuildResult(
+            image_ref="localhost:5000/functions/example:v1-a1-abc-d1",
+            build_log="built",
+            duration_ms=10,
+        )
+        orchestrator = Mock()
+        orchestrator.complete_job.return_value = {"completed": True}
+        job = {
+            "type": "function.build",
+            "job_id": "job-1",
+            "dispatch_attempt": 1,
+            "build_request_id": "build-1",
+            "image_ref": "localhost:5000/functions/example:v1-a1-abc-d1",
+        }
+
+        completed = process_v2_build_job(
+            job,
+            backend,
+            builder,
+            orchestrator,
+            worker_name="worker-a",
+        )
+
+        self.assertTrue(completed)
+        backend.acquire_build_lease.assert_not_called()
+        backend.report_build.assert_not_called()
+        orchestrator.complete_job.assert_called_once()
+        completion = orchestrator.complete_job.call_args.args[1]
+        self.assertEqual(completion["status"], "succeeded")
+        self.assertEqual(completion["artifact_commit_id"], job["image_ref"])
+
+    def test_v2_invocation_persists_result_before_orchestrator_completion(self):
+        backend = Mock()
+        executor = Mock()
+        executor.run.return_value = ExecutionResult(
+            status="succeeded",
+            result={"ok": True},
+            stdout="done",
+            stderr="",
+            exit_code=0,
+            duration_ms=5,
+            error_message="",
+            cold_start=True,
+        )
+        orchestrator = Mock()
+        orchestrator.complete_job.return_value = {"completed": True}
+        job = {
+            "type": "function.invoke",
+            "job_id": "job-1",
+            "dispatch_attempt": 1,
+            "request_id": "invoke-1",
+        }
+
+        completed = process_v2_invocation_job(
+            job,
+            backend,
+            executor,
+            orchestrator,
+            worker_name="worker-a",
+        )
+
+        self.assertTrue(completed)
+        backend.report_invocation.assert_called_once()
+        self.assertEqual(
+            backend.report_invocation.call_args.args[1]["status"],
+            "succeeded",
+        )
+        orchestrator.complete_job.assert_called_once()
+    def test_heartbeat_updates_orchestrator_and_backend_projection(self):
+        backend = Mock()
+        operational_store = Mock()
+        activity = WorkerActivity()
+        activity.start("function.invoke")
+        stop_event = Mock()
+        stop_event.wait.side_effect = [False, True]
+
+        heartbeat_loop(
+            backend,
+            worker_name="worker-a",
+            interval_seconds=0,
+            activity=activity,
+            stop_event=stop_event,
+            operational_store=operational_store,
+            operational_payload={
+                "hostname": "worker-a.local",
+                "max_concurrency": 4,
+            },
+        )
+
+        operational_store.record_heartbeat.assert_called_once_with(
+            {
+                "name": "worker-a",
+                "hostname": "worker-a.local",
+                "max_concurrency": 4,
+                "active_jobs": 1,
+                "active_builds": 0,
+                "active_invocations": 1,
+            }
+        )
+        backend.heartbeat_worker.assert_called_once_with(
+            {
+                "name": "worker-a",
+                "active_jobs": 1,
+                "active_builds": 0,
+                "active_invocations": 1,
+            }
+        )
+
+    def test_orchestrator_heartbeat_failure_does_not_skip_backend_projection(self):
+        backend = Mock()
+        operational_store = Mock()
+        operational_store.record_heartbeat.side_effect = RuntimeError("redis down")
+        stop_event = Mock()
+        stop_event.wait.side_effect = [False, True]
+
+        heartbeat_loop(
+            backend,
+            worker_name="worker-a",
+            interval_seconds=0,
+            stop_event=stop_event,
+            operational_store=operational_store,
+        )
+
+        backend.heartbeat_worker.assert_called_once()
+
+    def test_transient_backend_transport_error_does_not_stop_heartbeat_loop(self):
+        backend = Mock()
+        backend.heartbeat_worker.side_effect = [ConnectionResetError(), {}]
+        stop_event = Mock()
+        stop_event.wait.side_effect = [False, False, True]
+
+        heartbeat_loop(
+            backend,
+            worker_name="worker-a",
+            interval_seconds=0,
+            stop_event=stop_event,
+        )
+
+        self.assertEqual(backend.heartbeat_worker.call_count, 2)
+
     def test_worker_processing_queue_name_replaces_jobs_suffix(self):
         self.assertEqual(
             worker_processing_queue_name("worker:worker-a:jobs"),
@@ -95,22 +272,174 @@ class BuildWorkerTests(unittest.TestCase):
         self.assertEqual(source_queue, "worker:worker-a:builds")
         self.assertEqual(redis_client.execute_command.call_args_list[1].args[1], "worker:worker-a:builds")
 
-    def test_worker_activity_reports_active_builds(self):
+    def test_worker_activity_reports_active_job_types_and_capacity(self):
         activity = WorkerActivity()
-        activity.start("function.build")
+        self.assertTrue(
+            activity.can_start_invocation(
+                max_concurrency=2,
+                max_invocation_concurrency=1,
+            )
+        )
+
+        activity.start("function.invoke")
         self.assertEqual(
             activity.snapshot(),
             {
                 "active_jobs": 1,
-                "active_builds": 1,
+                "active_builds": 0,
+                "active_invocations": 1,
             },
         )
+        self.assertFalse(
+            activity.can_start_invocation(
+                max_concurrency=2,
+                max_invocation_concurrency=1,
+            )
+        )
+        self.assertTrue(
+            activity.can_start_build(
+                max_concurrency=2,
+                max_build_concurrency=1,
+            )
+        )
+
+        activity.start("function.build")
+        self.assertEqual(
+            activity.snapshot(),
+            {
+                "active_jobs": 2,
+                "active_builds": 1,
+                "active_invocations": 1,
+            },
+        )
+        self.assertFalse(
+            activity.can_start_build(
+                max_concurrency=2,
+                max_build_concurrency=1,
+            )
+        )
+        activity.finish("function.invoke")
         activity.finish("function.build")
         self.assertEqual(
             activity.snapshot(),
             {
                 "active_jobs": 0,
                 "active_builds": 0,
+                "active_invocations": 0,
+            },
+        )
+
+    def test_capacity_aware_move_does_not_pop_without_capacity(self):
+        redis_client = Mock()
+
+        delivery, source_queue = move_next_job_to_processing_for_capacity(
+            redis_client,
+            "worker:worker-a:invocations",
+            "worker:worker-a:builds",
+            "worker:worker-a:processing",
+            can_run_invocation=False,
+            can_run_build=False,
+        )
+
+        self.assertIsNone(delivery)
+        self.assertIsNone(source_queue)
+        redis_client.execute_command.assert_not_called()
+
+    def test_capacity_aware_move_prefers_invocation_when_capacity_exists(self):
+        redis_client = Mock()
+        redis_client.execute_command.return_value = "invoke-1"
+
+        delivery, source_queue = move_next_job_to_processing_for_capacity(
+            redis_client,
+            "worker:worker-a:invocations",
+            "worker:worker-a:builds",
+            "worker:worker-a:processing",
+            can_run_invocation=True,
+            can_run_build=True,
+        )
+
+        self.assertEqual(delivery, "invoke-1")
+        self.assertEqual(source_queue, "worker:worker-a:invocations")
+        redis_client.execute_command.assert_called_once_with(
+            "LMOVE",
+            "worker:worker-a:invocations",
+            "worker:worker-a:processing",
+            "LEFT",
+            "RIGHT",
+        )
+
+    def test_capacity_aware_move_checks_build_when_invocation_capacity_is_full(self):
+        redis_client = Mock()
+        redis_client.execute_command.return_value = None
+
+        delivery, source_queue = move_next_job_to_processing_for_capacity(
+            redis_client,
+            "worker:worker-a:invocations",
+            "worker:worker-a:builds",
+            "worker:worker-a:processing",
+            can_run_invocation=False,
+            can_run_build=True,
+        )
+
+        self.assertIsNone(delivery)
+        self.assertIsNone(source_queue)
+        redis_client.execute_command.assert_called_once_with(
+            "LMOVE",
+            "worker:worker-a:builds",
+            "worker:worker-a:processing",
+            "LEFT",
+            "RIGHT",
+        )
+
+    def test_run_claimed_job_acks_after_invocation_finishes(self):
+        backend = Mock()
+        redis_client = Mock()
+        activity = WorkerActivity()
+        activity.start("function.invoke")
+        executor = Mock()
+        executor.run.return_value = ExecutionResult(
+            status="succeeded",
+            result={"ok": True},
+            stdout="hello",
+            stderr="",
+            exit_code=0,
+            duration_ms=12,
+            error_message="",
+            cold_start=True,
+        )
+
+        run_claimed_job(
+            job={
+                "type": "function.invoke",
+                "request_id": "invoke-1",
+                "job_id": "job-1",
+                "dispatch_attempt": 1,
+                "assigned_worker": "worker-a",
+            },
+            backend=backend,
+            redis_client=redis_client,
+            processing_queue_name="worker:worker-a:processing",
+            delivery_message='{"job_id":"job-1","dispatch_attempt":1}',
+            source_queue_name="worker:worker-a:invocations",
+            worker_name="worker-a",
+            hostname="worker-a.local",
+            max_build_concurrency=1,
+            activity=activity,
+            executor_factory=lambda backend_client: executor,
+        )
+
+        self.assertEqual(backend.report_invocation.call_count, 2)
+        redis_client.lrem.assert_called_once_with(
+            "worker:worker-a:processing",
+            1,
+            '{"job_id":"job-1","dispatch_attempt":1}',
+        )
+        self.assertEqual(
+            activity.snapshot(),
+            {
+                "active_jobs": 0,
+                "active_builds": 0,
+                "active_invocations": 0,
             },
         )
 
@@ -757,7 +1086,49 @@ class BuildWorkerTests(unittest.TestCase):
     def test_wait_for_exit_returns_container_exit_code(self):
         executor = DockerExecutor(docker_client=Mock())
         container = Mock()
-        container.attrs = {"State": {"Running": False, "ExitCode": 7}}
+        container.wait.return_value = {"StatusCode": 7}
 
         self.assertEqual(executor._wait_for_exit(container, 1), 7)
+        container.wait.assert_called_once_with(timeout=1)
         container.kill.assert_not_called()
+
+    def test_read_runner_timings_accepts_only_internal_integer_fields(self):
+        executor = DockerExecutor(docker_client=Mock())
+        stdout = "\n".join(
+            [
+                "user output",
+                '__FUNCTION_TIMING__={"runner_handler_import_ms": 12, '
+                '"runner_handler_execution_ms": 1000, "other": 99, '
+                '"runner_invalid": "no"}',
+            ]
+        )
+
+        self.assertEqual(
+            executor._read_runner_timings(stdout),
+            {
+                "runner_handler_import_ms": 12,
+                "runner_handler_execution_ms": 1000,
+            },
+        )
+
+    def test_read_runner_timings_ignores_malformed_marker(self):
+        executor = DockerExecutor(docker_client=Mock())
+
+        self.assertEqual(
+            executor._read_runner_timings("__FUNCTION_TIMING__=not-json"),
+            {},
+        )
+
+    def test_wait_for_exit_kills_container_after_timeout(self):
+        executor = DockerExecutor(docker_client=Mock())
+        container = Mock()
+        container.wait.side_effect = ReadTimeout("timed out")
+
+        with self.assertRaisesRegex(
+            ExecutionError,
+            "Function execution timed out after 3 seconds.",
+        ):
+            executor._wait_for_exit(container, 3)
+
+        container.wait.assert_called_once_with(timeout=3)
+        container.kill.assert_called_once_with()

@@ -4,6 +4,7 @@ import unittest
 import zipfile
 
 from builder import (
+    RUNNER_SOURCE,
     BuildCancelled,
     BuildError,
     base_image_for_runtime,
@@ -13,6 +14,13 @@ from builder import (
 
 
 class BuilderTests(unittest.TestCase):
+    def test_runner_emits_internal_phase_timings(self):
+        self.assertIn("runner_handler_import_ms", RUNNER_SOURCE)
+        self.assertIn("runner_handler_execution_ms", RUNNER_SOURCE)
+        self.assertIn("runner_module_imports_ms", RUNNER_SOURCE)
+        self.assertIn("runner_result_write_ms", RUNNER_SOURCE)
+        self.assertIn("__FUNCTION_TIMING__=", RUNNER_SOURCE)
+
     def test_runtime_selects_python_slim_image(self):
         self.assertEqual(
             base_image_for_runtime("python3.13"),

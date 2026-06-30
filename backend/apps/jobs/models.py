@@ -19,6 +19,11 @@ class JobStatus(models.TextChoices):
     DEAD_LETTERED = "dead_lettered", "Dead-lettered"
 
 
+class CoordinationVersion(models.IntegerChoices):
+    V1 = 1, "V1 - Django/PostgreSQL"
+    V2 = 2, "V2 - Redis orchestrator"
+
+
 class Job(models.Model):
     job_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     type = models.CharField(max_length=20, choices=JobType.choices)
@@ -26,6 +31,11 @@ class Job(models.Model):
         max_length=20,
         choices=JobStatus.choices,
         default=JobStatus.QUEUED,
+    )
+    coordination_version = models.PositiveSmallIntegerField(
+        choices=CoordinationVersion.choices,
+        default=CoordinationVersion.V1,
+        db_index=True,
     )
     queue_name = models.CharField(max_length=120)
     payload = models.JSONField(default=dict, blank=True)
@@ -64,3 +74,22 @@ class Job(models.Model):
 
     def __str__(self) -> str:
         return f"{self.type}:{self.job_id}"
+
+
+class OutboxEvent(models.Model):
+    event_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    aggregate_id = models.UUIDField(db_index=True)
+    event_type = models.CharField(max_length=80)
+    payload = models.JSONField(default=dict)
+    publish_attempts = models.PositiveIntegerField(default=0)
+    published_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    stream_id = models.CharField(max_length=128, blank=True)
+    last_error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.event_type}:{self.event_id}"

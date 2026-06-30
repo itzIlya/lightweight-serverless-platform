@@ -4,6 +4,7 @@ import zipfile
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from datetime import timedelta
@@ -15,7 +16,9 @@ from apps.invocations.models import Invocation
 from apps.invocations.services import enqueue_invocation
 from apps.workers.models import WorkerNode
 
-from .models import Job, JobStatus, JobType
+from .models import CoordinationVersion, Job, JobStatus, JobType, OutboxEvent
+from .outbox import publish_pending_outbox_events
+from .services import create_build_job_record
 
 
 def function_bundle() -> SimpleUploadedFile:
@@ -61,8 +64,13 @@ class DurableJobRecordTests(APITestCase):
         job = Job.objects.get(build_attempt=attempt)
         self.assertEqual(job.type, JobType.BUILD)
         self.assertEqual(job.status, JobStatus.QUEUED)
+        self.assertEqual(job.coordination_version, CoordinationVersion.V1)
         self.assertEqual(job.payload["job_id"], str(job.job_id))
         self.assertEqual(payload["job_id"], str(job.job_id))
+        event = OutboxEvent.objects.get(aggregate_id=job.job_id)
+        self.assertEqual(event.event_type, "job.created")
+        self.assertEqual(event.payload["coordination_version"], CoordinationVersion.V1)
+        self.assertEqual(event.payload["payload"]["job_id"], str(job.job_id))
         redis_client.rpush.assert_called_once_with(
             "scheduler-pending-builds",
             str(job.job_id),
@@ -82,6 +90,7 @@ class DurableJobRecordTests(APITestCase):
         job = Job.objects.get(invocation=invocation)
         self.assertEqual(job.type, JobType.INVOCATION)
         self.assertEqual(job.status, JobStatus.QUEUED)
+        self.assertEqual(job.coordination_version, CoordinationVersion.V1)
         self.assertEqual(job.payload["job_id"], str(job.job_id))
         self.assertEqual(
             job.payload["declared_output_files"],
@@ -91,6 +100,9 @@ class DurableJobRecordTests(APITestCase):
         self.assertEqual(job.payload["invocation_output_max_file_size_mb"], 3)
         self.assertEqual(job.payload["invocation_output_max_total_size_mb"], 10)
         self.assertEqual(payload["job_id"], str(job.job_id))
+        event = OutboxEvent.objects.get(aggregate_id=job.job_id)
+        self.assertEqual(event.event_type, "job.created")
+        self.assertEqual(event.payload["job_type"], JobType.INVOCATION)
         redis_client.rpush.assert_called_once_with(
             "scheduler-pending-invocations",
             str(job.job_id),
@@ -193,6 +205,7 @@ class DurableJobRecordTests(APITestCase):
                 "name": "worker-a",
                 "active_jobs": 1,
                 "active_builds": 0,
+                "active_invocations": 1,
             },
             format="json",
             HTTP_X_INTERNAL_TOKEN="change-me",
@@ -203,6 +216,7 @@ class DurableJobRecordTests(APITestCase):
         self.assertEqual(worker.status, "online")
         self.assertEqual(worker.metadata["active_jobs"], 1)
         self.assertEqual(worker.metadata["active_builds"], 0)
+        self.assertEqual(worker.metadata["active_invocations"], 1)
         self.assertIsNotNone(worker.last_seen_at)
 
     @patch("redis.Redis.from_url")
@@ -236,6 +250,10 @@ class DurableJobRecordTests(APITestCase):
 
         self.assertEqual(get_response.status_code, 200)
         self.assertEqual(get_response.data["status"], JobStatus.QUEUED)
+        self.assertEqual(
+            get_response.data["coordination_version"],
+            CoordinationVersion.V1,
+        )
         self.assertEqual(workers_response.status_code, 200)
         self.assertEqual(
             workers_response.data[0]["invocation_queue_name"],
@@ -283,6 +301,15 @@ class DurableJobRecordTests(APITestCase):
         job.refresh_from_db()
         self.assertEqual(job.status, JobStatus.QUEUED)
         self.assertEqual(job.dispatch_attempts, 0)
+
+    def test_outbox_failure_rolls_back_job_creation(self):
+        attempt = create_build_attempt(self.version)
+
+        with patch.object(OutboxEvent.objects, "create", side_effect=RuntimeError("db error")):
+            with self.assertRaisesRegex(RuntimeError, "db error"):
+                create_build_job_record(attempt, {"type": "build"})
+
+        self.assertFalse(Job.objects.filter(build_attempt=attempt).exists())
 
     @patch("redis.Redis.from_url")
     def test_worker_can_claim_dispatched_job(self, redis_from_url):
@@ -672,3 +699,61 @@ class DurableJobRecordTests(APITestCase):
         job.refresh_from_db()
         self.assertEqual(attempt.status, BuildStatus.QUEUED)
         self.assertEqual(job.status, JobStatus.QUEUED)
+
+
+class OutboxPublisherTests(TestCase):
+    def make_event(self) -> OutboxEvent:
+        import uuid
+
+        job_id = uuid.uuid4()
+        return OutboxEvent.objects.create(
+            aggregate_id=job_id,
+            event_type="job.created",
+            payload={"job_id": str(job_id), "status": "queued"},
+        )
+
+    def test_successful_publish_marks_event(self):
+        event = self.make_event()
+        client = Mock()
+        client.eval.return_value = "1710000000000-0"
+
+        result = publish_pending_outbox_events(client, stream_name="test:events")
+
+        self.assertEqual(result, {"published": 1, "failed": 0})
+        event.refresh_from_db()
+        self.assertEqual(event.publish_attempts, 1)
+        self.assertEqual(event.stream_id, "1710000000000-0")
+        self.assertIsNotNone(event.published_at)
+        self.assertEqual(event.last_error, "")
+        args = client.eval.call_args.args
+        self.assertEqual(args[2], "test:events")
+        self.assertEqual(
+            args[3],
+            f"orchestrator:outbox:published:{event.event_id}",
+        )
+
+    def test_failed_publish_remains_retryable(self):
+        event = self.make_event()
+        client = Mock()
+        client.eval.side_effect = ConnectionError("redis unavailable")
+
+        result = publish_pending_outbox_events(client)
+
+        self.assertEqual(result, {"published": 0, "failed": 1})
+        event.refresh_from_db()
+        self.assertEqual(event.publish_attempts, 1)
+        self.assertIsNone(event.published_at)
+        self.assertEqual(event.stream_id, "")
+        self.assertIn("redis unavailable", event.last_error)
+
+    def test_already_published_event_is_not_republished(self):
+        event = self.make_event()
+        event.published_at = timezone.now()
+        event.stream_id = "1-0"
+        event.save(update_fields=["published_at", "stream_id", "updated_at"])
+        client = Mock()
+
+        result = publish_pending_outbox_events(client)
+
+        self.assertEqual(result, {"published": 0, "failed": 0})
+        client.eval.assert_not_called()

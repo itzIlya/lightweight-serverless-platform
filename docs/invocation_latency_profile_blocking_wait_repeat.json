@@ -1,0 +1,1614 @@
+{
+  "base_url": "http://localhost:8000",
+  "username": "profile_9b904564",
+  "function_id": 24,
+  "function_slug": "invocation-profile-9b904564",
+  "version_id": 31,
+  "image_ref": "localhost:5000/functions/invocation-profile-9b904564:v31-v1",
+  "scenarios": [
+    {
+      "name": "noop_sequential",
+      "count": 5,
+      "sleep_seconds": 0,
+      "concurrency": 1,
+      "client_wall_ms": 20328,
+      "invocations": [
+        {
+          "id": 109,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "5dc75c76-f1ce-4033-93f2-95266867c3d1",
+          "status": "succeeded",
+          "event": {
+            "index": 0,
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 0,
+            "request_id": "5dc75c76-f1ce-4033-93f2-95266867c3d1",
+            "sleep_seconds": 0.0,
+            "user_code_elapsed_ms": 0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 0, \"sleep_seconds\": 0.0, \"user_code_elapsed_ms\": 0, \"request_id\": \"5dc75c76-f1ce-4033-93f2-95266867c3d1\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:24:32.690118Z",
+          "started_at": "2026-06-27T12:24:33.141396Z",
+          "finished_at": "2026-06-27T12:24:35.435323Z",
+          "duration_ms": 2022,
+          "function_version": 31,
+          "client_submit_ms": 110,
+          "client_poll_until_terminal_ms": 3171,
+          "queue_to_started_ms": 451,
+          "started_to_finished_ms": 2293,
+          "queued_to_finished_ms": 2745,
+          "user_code_elapsed_ms": 0,
+          "worker_overhead_vs_user_code_ms": 2022,
+          "worker_timing": {
+            "backend_final_report_ms": 166,
+            "backend_running_report_ms": 104,
+            "docker_cleanup_ms": 162,
+            "docker_container_create_ms": 157,
+            "docker_container_start_ms": 373,
+            "docker_export_copy_ms": 131,
+            "docker_input_copy_ms": 68,
+            "docker_logs_read_ms": 123,
+            "docker_volume_create_ms": 17,
+            "docker_wait_ms": 1110,
+            "executor_duration_ms": 2022,
+            "executor_wall_with_cleanup_ms": 2186,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "sandbox_prepare_ms": 38,
+            "worker_process_total_ms": 2460
+          }
+        },
+        {
+          "id": 110,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "37230d25-20d1-4abb-985d-d6ac024ca471",
+          "status": "succeeded",
+          "event": {
+            "index": 1,
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 1,
+            "request_id": "37230d25-20d1-4abb-985d-d6ac024ca471",
+            "sleep_seconds": 0.0,
+            "user_code_elapsed_ms": 0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 1, \"sleep_seconds\": 0.0, \"user_code_elapsed_ms\": 0, \"request_id\": \"37230d25-20d1-4abb-985d-d6ac024ca471\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:24:35.999619Z",
+          "started_at": "2026-06-27T12:24:36.447801Z",
+          "finished_at": "2026-06-27T12:24:39.070889Z",
+          "duration_ms": 2474,
+          "function_version": 31,
+          "client_submit_ms": 156,
+          "client_poll_until_terminal_ms": 3405,
+          "queue_to_started_ms": 448,
+          "started_to_finished_ms": 2623,
+          "queued_to_finished_ms": 3071,
+          "user_code_elapsed_ms": 0,
+          "worker_overhead_vs_user_code_ms": 2474,
+          "worker_timing": {
+            "backend_final_report_ms": 91,
+            "backend_running_report_ms": 84,
+            "docker_cleanup_ms": 61,
+            "docker_container_create_ms": 456,
+            "docker_container_start_ms": 625,
+            "docker_export_copy_ms": 44,
+            "docker_input_copy_ms": 167,
+            "docker_logs_read_ms": 59,
+            "docker_volume_create_ms": 30,
+            "docker_wait_ms": 1014,
+            "executor_duration_ms": 2474,
+            "executor_wall_with_cleanup_ms": 2536,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "sandbox_prepare_ms": 73,
+            "worker_process_total_ms": 2714
+          }
+        },
+        {
+          "id": 111,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "0873f877-3b52-4299-8996-e2775bcfae7c",
+          "status": "succeeded",
+          "event": {
+            "index": 2,
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 2,
+            "request_id": "0873f877-3b52-4299-8996-e2775bcfae7c",
+            "sleep_seconds": 0.0,
+            "user_code_elapsed_ms": 0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 2, \"sleep_seconds\": 0.0, \"user_code_elapsed_ms\": 0, \"request_id\": \"0873f877-3b52-4299-8996-e2775bcfae7c\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:24:39.545829Z",
+          "started_at": "2026-06-27T12:24:39.903656Z",
+          "finished_at": "2026-06-27T12:24:43.075031Z",
+          "duration_ms": 2715,
+          "function_version": 31,
+          "client_submit_ms": 125,
+          "client_poll_until_terminal_ms": 4125,
+          "queue_to_started_ms": 357,
+          "started_to_finished_ms": 3171,
+          "queued_to_finished_ms": 3529,
+          "user_code_elapsed_ms": 0,
+          "worker_overhead_vs_user_code_ms": 2715,
+          "worker_timing": {
+            "backend_final_report_ms": 195,
+            "backend_running_report_ms": 114,
+            "docker_cleanup_ms": 332,
+            "docker_container_create_ms": 233,
+            "docker_container_start_ms": 783,
+            "docker_export_copy_ms": 109,
+            "docker_input_copy_ms": 52,
+            "docker_logs_read_ms": 138,
+            "docker_volume_create_ms": 26,
+            "docker_wait_ms": 1266,
+            "executor_duration_ms": 2715,
+            "executor_wall_with_cleanup_ms": 3048,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 1,
+            "sandbox_prepare_ms": 102,
+            "worker_process_total_ms": 3366
+          }
+        },
+        {
+          "id": 112,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "ea75d4d1-3048-4d5c-b418-7b446750cafc",
+          "status": "succeeded",
+          "event": {
+            "index": 3,
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 3,
+            "request_id": "ea75d4d1-3048-4d5c-b418-7b446750cafc",
+            "sleep_seconds": 0.0,
+            "user_code_elapsed_ms": 0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 3, \"sleep_seconds\": 0.0, \"user_code_elapsed_ms\": 0, \"request_id\": \"ea75d4d1-3048-4d5c-b418-7b446750cafc\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:24:43.897397Z",
+          "started_at": "2026-06-27T12:24:44.477299Z",
+          "finished_at": "2026-06-27T12:24:47.942687Z",
+          "duration_ms": 2991,
+          "function_version": 31,
+          "client_submit_ms": 266,
+          "client_poll_until_terminal_ms": 4375,
+          "queue_to_started_ms": 579,
+          "started_to_finished_ms": 3465,
+          "queued_to_finished_ms": 4045,
+          "user_code_elapsed_ms": 0,
+          "worker_overhead_vs_user_code_ms": 2991,
+          "worker_timing": {
+            "backend_final_report_ms": 265,
+            "backend_running_report_ms": 215,
+            "docker_cleanup_ms": 247,
+            "docker_container_create_ms": 424,
+            "docker_container_start_ms": 568,
+            "docker_export_copy_ms": 148,
+            "docker_input_copy_ms": 159,
+            "docker_logs_read_ms": 161,
+            "docker_volume_create_ms": 77,
+            "docker_wait_ms": 1288,
+            "executor_duration_ms": 2991,
+            "executor_wall_with_cleanup_ms": 3239,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "sandbox_prepare_ms": 150,
+            "worker_process_total_ms": 3734
+          }
+        },
+        {
+          "id": 113,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "2c9bcf8f-2e0f-4581-9839-289f8d4e70b2",
+          "status": "succeeded",
+          "event": {
+            "index": 4,
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 4,
+            "request_id": "2c9bcf8f-2e0f-4581-9839-289f8d4e70b2",
+            "sleep_seconds": 0.0,
+            "user_code_elapsed_ms": 0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 4, \"sleep_seconds\": 0.0, \"user_code_elapsed_ms\": 0, \"request_id\": \"2c9bcf8f-2e0f-4581-9839-289f8d4e70b2\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:24:48.500782Z",
+          "started_at": "2026-06-27T12:24:49.123715Z",
+          "finished_at": "2026-06-27T12:24:52.614294Z",
+          "duration_ms": 3114,
+          "function_version": 31,
+          "client_submit_ms": 218,
+          "client_poll_until_terminal_ms": 4375,
+          "queue_to_started_ms": 622,
+          "started_to_finished_ms": 3490,
+          "queued_to_finished_ms": 4113,
+          "user_code_elapsed_ms": 0,
+          "worker_overhead_vs_user_code_ms": 3114,
+          "worker_timing": {
+            "backend_final_report_ms": 259,
+            "backend_running_report_ms": 170,
+            "docker_cleanup_ms": 198,
+            "docker_container_create_ms": 218,
+            "docker_container_start_ms": 706,
+            "docker_export_copy_ms": 185,
+            "docker_input_copy_ms": 133,
+            "docker_logs_read_ms": 218,
+            "docker_volume_create_ms": 31,
+            "docker_wait_ms": 1500,
+            "executor_duration_ms": 3114,
+            "executor_wall_with_cleanup_ms": 3313,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "sandbox_prepare_ms": 117,
+            "worker_process_total_ms": 3749
+          }
+        }
+      ]
+    },
+    {
+      "name": "one_second_sequential",
+      "count": 5,
+      "sleep_seconds": 1,
+      "concurrency": 1,
+      "client_wall_ms": 33656,
+      "invocations": [
+        {
+          "id": 114,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "9f45fa62-b322-42ef-9064-f81553df6fbf",
+          "status": "succeeded",
+          "event": {
+            "index": 0,
+            "sleep_seconds": 1
+          },
+          "result": {
+            "index": 0,
+            "request_id": "9f45fa62-b322-42ef-9064-f81553df6fbf",
+            "sleep_seconds": 1.0,
+            "user_code_elapsed_ms": 1009
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 0, \"sleep_seconds\": 1.0, \"user_code_elapsed_ms\": 1009, \"request_id\": \"9f45fa62-b322-42ef-9064-f81553df6fbf\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:24:53.165301Z",
+          "started_at": "2026-06-27T12:24:53.910766Z",
+          "finished_at": "2026-06-27T12:25:00.727841Z",
+          "duration_ms": 6248,
+          "function_version": 31,
+          "client_submit_ms": 296,
+          "client_poll_until_terminal_ms": 7922,
+          "queue_to_started_ms": 745,
+          "started_to_finished_ms": 6817,
+          "queued_to_finished_ms": 7562,
+          "user_code_elapsed_ms": 1009,
+          "worker_overhead_vs_user_code_ms": 5239,
+          "worker_timing": {
+            "backend_final_report_ms": 324,
+            "backend_running_report_ms": 326,
+            "docker_cleanup_ms": 228,
+            "docker_container_create_ms": 685,
+            "docker_container_start_ms": 1246,
+            "docker_export_copy_ms": 203,
+            "docker_input_copy_ms": 138,
+            "docker_logs_read_ms": 336,
+            "docker_volume_create_ms": 63,
+            "docker_wait_ms": 3413,
+            "executor_duration_ms": 6248,
+            "executor_wall_with_cleanup_ms": 6478,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 1,
+            "sandbox_prepare_ms": 153,
+            "worker_process_total_ms": 7141
+          }
+        },
+        {
+          "id": 115,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "44b8bc57-0fd9-4a05-b7cf-2cf20ac2ecaa",
+          "status": "succeeded",
+          "event": {
+            "index": 1,
+            "sleep_seconds": 1
+          },
+          "result": {
+            "index": 1,
+            "request_id": "44b8bc57-0fd9-4a05-b7cf-2cf20ac2ecaa",
+            "sleep_seconds": 1.0,
+            "user_code_elapsed_ms": 1000
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 1, \"sleep_seconds\": 1.0, \"user_code_elapsed_ms\": 1000, \"request_id\": \"44b8bc57-0fd9-4a05-b7cf-2cf20ac2ecaa\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:25:01.356502Z",
+          "started_at": "2026-06-27T12:25:02.038672Z",
+          "finished_at": "2026-06-27T12:25:07.127619Z",
+          "duration_ms": 4714,
+          "function_version": 31,
+          "client_submit_ms": 281,
+          "client_poll_until_terminal_ms": 6437,
+          "queue_to_started_ms": 682,
+          "started_to_finished_ms": 5088,
+          "queued_to_finished_ms": 5771,
+          "user_code_elapsed_ms": 1000,
+          "worker_overhead_vs_user_code_ms": 3714,
+          "worker_timing": {
+            "backend_final_report_ms": 234,
+            "backend_running_report_ms": 224,
+            "docker_cleanup_ms": 141,
+            "docker_container_create_ms": 602,
+            "docker_container_start_ms": 964,
+            "docker_export_copy_ms": 73,
+            "docker_input_copy_ms": 144,
+            "docker_logs_read_ms": 186,
+            "docker_volume_create_ms": 72,
+            "docker_wait_ms": 2463,
+            "executor_duration_ms": 4714,
+            "executor_wall_with_cleanup_ms": 4856,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 10,
+            "sandbox_prepare_ms": 194,
+            "worker_process_total_ms": 5323
+          }
+        },
+        {
+          "id": 116,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "f060bc46-9ccb-4a39-83e5-74b1b178bf72",
+          "status": "succeeded",
+          "event": {
+            "index": 2,
+            "sleep_seconds": 1
+          },
+          "result": {
+            "index": 2,
+            "request_id": "f060bc46-9ccb-4a39-83e5-74b1b178bf72",
+            "sleep_seconds": 1.0,
+            "user_code_elapsed_ms": 1000
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 2, \"sleep_seconds\": 1.0, \"user_code_elapsed_ms\": 1000, \"request_id\": \"f060bc46-9ccb-4a39-83e5-74b1b178bf72\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:25:08.024517Z",
+          "started_at": "2026-06-27T12:25:08.663954Z",
+          "finished_at": "2026-06-27T12:25:14.938866Z",
+          "duration_ms": 5891,
+          "function_version": 31,
+          "client_submit_ms": 187,
+          "client_poll_until_terminal_ms": 7265,
+          "queue_to_started_ms": 639,
+          "started_to_finished_ms": 6274,
+          "queued_to_finished_ms": 6914,
+          "user_code_elapsed_ms": 1000,
+          "worker_overhead_vs_user_code_ms": 4891,
+          "worker_timing": {
+            "backend_final_report_ms": 230,
+            "backend_running_report_ms": 259,
+            "docker_cleanup_ms": 121,
+            "docker_container_create_ms": 1541,
+            "docker_container_start_ms": 922,
+            "docker_export_copy_ms": 84,
+            "docker_input_copy_ms": 284,
+            "docker_logs_read_ms": 174,
+            "docker_volume_create_ms": 105,
+            "docker_wait_ms": 2569,
+            "executor_duration_ms": 5891,
+            "executor_wall_with_cleanup_ms": 6012,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 1,
+            "sandbox_prepare_ms": 204,
+            "worker_process_total_ms": 6505
+          }
+        },
+        {
+          "id": 117,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "7646e915-359f-48ef-be4f-0021368be75f",
+          "status": "succeeded",
+          "event": {
+            "index": 3,
+            "sleep_seconds": 1
+          },
+          "result": {
+            "index": 3,
+            "request_id": "7646e915-359f-48ef-be4f-0021368be75f",
+            "sleep_seconds": 1.0,
+            "user_code_elapsed_ms": 1000
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 3, \"sleep_seconds\": 1.0, \"user_code_elapsed_ms\": 1000, \"request_id\": \"7646e915-359f-48ef-be4f-0021368be75f\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:25:15.502228Z",
+          "started_at": "2026-06-27T12:25:16.048403Z",
+          "finished_at": "2026-06-27T12:25:20.153817Z",
+          "duration_ms": 3817,
+          "function_version": 31,
+          "client_submit_ms": 234,
+          "client_poll_until_terminal_ms": 5437,
+          "queue_to_started_ms": 546,
+          "started_to_finished_ms": 4105,
+          "queued_to_finished_ms": 4651,
+          "user_code_elapsed_ms": 1000,
+          "worker_overhead_vs_user_code_ms": 2817,
+          "worker_timing": {
+            "backend_final_report_ms": 197,
+            "backend_running_report_ms": 92,
+            "docker_cleanup_ms": 192,
+            "docker_container_create_ms": 461,
+            "docker_container_start_ms": 581,
+            "docker_export_copy_ms": 122,
+            "docker_input_copy_ms": 68,
+            "docker_logs_read_ms": 206,
+            "docker_volume_create_ms": 27,
+            "docker_wait_ms": 2249,
+            "executor_duration_ms": 3817,
+            "executor_wall_with_cleanup_ms": 4010,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 1,
+            "sandbox_prepare_ms": 96,
+            "worker_process_total_ms": 4303
+          }
+        },
+        {
+          "id": 118,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "53385421-362c-41da-b8c2-ea55d2f446b8",
+          "status": "succeeded",
+          "event": {
+            "index": 4,
+            "sleep_seconds": 1
+          },
+          "result": {
+            "index": 4,
+            "request_id": "53385421-362c-41da-b8c2-ea55d2f446b8",
+            "sleep_seconds": 1.0,
+            "user_code_elapsed_ms": 1000
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 4, \"sleep_seconds\": 1.0, \"user_code_elapsed_ms\": 1000, \"request_id\": \"53385421-362c-41da-b8c2-ea55d2f446b8\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:25:21.176809Z",
+          "started_at": "2026-06-27T12:25:21.705176Z",
+          "finished_at": "2026-06-27T12:25:25.948944Z",
+          "duration_ms": 3912,
+          "function_version": 31,
+          "client_submit_ms": 202,
+          "client_poll_until_terminal_ms": 5391,
+          "queue_to_started_ms": 528,
+          "started_to_finished_ms": 4243,
+          "queued_to_finished_ms": 4772,
+          "user_code_elapsed_ms": 1000,
+          "worker_overhead_vs_user_code_ms": 2912,
+          "worker_timing": {
+            "backend_final_report_ms": 191,
+            "backend_running_report_ms": 156,
+            "docker_cleanup_ms": 171,
+            "docker_container_create_ms": 364,
+            "docker_container_start_ms": 607,
+            "docker_export_copy_ms": 217,
+            "docker_input_copy_ms": 169,
+            "docker_logs_read_ms": 122,
+            "docker_volume_create_ms": 52,
+            "docker_wait_ms": 2254,
+            "executor_duration_ms": 3912,
+            "executor_wall_with_cleanup_ms": 4084,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "sandbox_prepare_ms": 122,
+            "worker_process_total_ms": 4435
+          }
+        }
+      ]
+    },
+    {
+      "name": "three_second_concurrent",
+      "count": 12,
+      "sleep_seconds": 3,
+      "concurrency": 12,
+      "client_wall_ms": 44889,
+      "invocations": [
+        {
+          "id": 120,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "b9a7ddf8-ce43-44e1-aecc-2f2b46f9cf01",
+          "status": "succeeded",
+          "event": {
+            "index": 0,
+            "sleep_seconds": 3
+          },
+          "result": {
+            "index": 0,
+            "request_id": "b9a7ddf8-ce43-44e1-aecc-2f2b46f9cf01",
+            "sleep_seconds": 3.0,
+            "user_code_elapsed_ms": 3000
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 0, \"sleep_seconds\": 3.0, \"user_code_elapsed_ms\": 3000, \"request_id\": \"b9a7ddf8-ce43-44e1-aecc-2f2b46f9cf01\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:25:26.803700Z",
+          "started_at": "2026-06-27T12:25:31.084327Z",
+          "finished_at": "2026-06-27T12:25:40.004720Z",
+          "duration_ms": 7837,
+          "function_version": 31,
+          "client_submit_ms": 266,
+          "client_poll_until_terminal_ms": 13968,
+          "queue_to_started_ms": 4280,
+          "started_to_finished_ms": 8920,
+          "queued_to_finished_ms": 13201,
+          "user_code_elapsed_ms": 3000,
+          "worker_overhead_vs_user_code_ms": 4837,
+          "worker_timing": {
+            "backend_final_report_ms": 1356,
+            "backend_running_report_ms": 804,
+            "docker_cleanup_ms": 274,
+            "docker_container_create_ms": 775,
+            "docker_container_start_ms": 745,
+            "docker_export_copy_ms": 281,
+            "docker_input_copy_ms": 178,
+            "docker_logs_read_ms": 284,
+            "docker_volume_create_ms": 40,
+            "docker_wait_ms": 4776,
+            "executor_duration_ms": 7837,
+            "executor_wall_with_cleanup_ms": 8112,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "sandbox_prepare_ms": 752,
+            "worker_process_total_ms": 10276
+          }
+        },
+        {
+          "id": 119,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "01dc4412-cf2f-40ca-9b2f-9801645d3311",
+          "status": "succeeded",
+          "event": {
+            "index": 1,
+            "sleep_seconds": 3
+          },
+          "result": {
+            "index": 1,
+            "request_id": "01dc4412-cf2f-40ca-9b2f-9801645d3311",
+            "sleep_seconds": 3.0,
+            "user_code_elapsed_ms": 3000
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 1, \"sleep_seconds\": 3.0, \"user_code_elapsed_ms\": 3000, \"request_id\": \"01dc4412-cf2f-40ca-9b2f-9801645d3311\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:25:26.788299Z",
+          "started_at": "2026-06-27T12:25:29.683070Z",
+          "finished_at": "2026-06-27T12:25:38.115688Z",
+          "duration_ms": 7414,
+          "function_version": 31,
+          "client_submit_ms": 297,
+          "client_poll_until_terminal_ms": 11984,
+          "queue_to_started_ms": 2894,
+          "started_to_finished_ms": 8432,
+          "queued_to_finished_ms": 11327,
+          "user_code_elapsed_ms": 3000,
+          "worker_overhead_vs_user_code_ms": 4414,
+          "worker_timing": {
+            "backend_final_report_ms": 1290,
+            "backend_running_report_ms": 494,
+            "docker_cleanup_ms": 501,
+            "docker_container_create_ms": 384,
+            "docker_container_start_ms": 783,
+            "docker_export_copy_ms": 357,
+            "docker_input_copy_ms": 234,
+            "docker_logs_read_ms": 254,
+            "docker_volume_create_ms": 64,
+            "docker_wait_ms": 4743,
+            "executor_duration_ms": 7414,
+            "executor_wall_with_cleanup_ms": 7927,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "sandbox_prepare_ms": 589,
+            "worker_process_total_ms": 9723
+          }
+        },
+        {
+          "id": 122,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "e299b258-3290-410a-adcb-89b35763f773",
+          "status": "succeeded",
+          "event": {
+            "index": 2,
+            "sleep_seconds": 3
+          },
+          "result": {
+            "index": 2,
+            "request_id": "e299b258-3290-410a-adcb-89b35763f773",
+            "sleep_seconds": 3.0,
+            "user_code_elapsed_ms": 3000
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 2, \"sleep_seconds\": 3.0, \"user_code_elapsed_ms\": 3000, \"request_id\": \"e299b258-3290-410a-adcb-89b35763f773\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:25:27.129779Z",
+          "started_at": "2026-06-27T12:25:35.828855Z",
+          "finished_at": "2026-06-27T12:25:45.823200Z",
+          "duration_ms": 8966,
+          "function_version": 31,
+          "client_submit_ms": 625,
+          "client_poll_until_terminal_ms": 19500,
+          "queue_to_started_ms": 8699,
+          "started_to_finished_ms": 9994,
+          "queued_to_finished_ms": 18693,
+          "user_code_elapsed_ms": 3000,
+          "worker_overhead_vs_user_code_ms": 5966,
+          "worker_timing": {
+            "backend_final_report_ms": 859,
+            "backend_running_report_ms": 667,
+            "docker_cleanup_ms": 345,
+            "docker_container_create_ms": 996,
+            "docker_container_start_ms": 1077,
+            "docker_export_copy_ms": 363,
+            "docker_input_copy_ms": 284,
+            "docker_logs_read_ms": 292,
+            "docker_volume_create_ms": 119,
+            "docker_wait_ms": 5115,
+            "executor_duration_ms": 8966,
+            "executor_wall_with_cleanup_ms": 9313,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "sandbox_prepare_ms": 714,
+            "worker_process_total_ms": 10853
+          }
+        },
+        {
+          "id": 121,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "f7c8cdb3-bda7-4f4a-ae01-903492f50218",
+          "status": "succeeded",
+          "event": {
+            "index": 3,
+            "sleep_seconds": 3
+          },
+          "result": {
+            "index": 3,
+            "request_id": "f7c8cdb3-bda7-4f4a-ae01-903492f50218",
+            "sleep_seconds": 3.0,
+            "user_code_elapsed_ms": 3002
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 3, \"sleep_seconds\": 3.0, \"user_code_elapsed_ms\": 3002, \"request_id\": \"f7c8cdb3-bda7-4f4a-ae01-903492f50218\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:25:27.119807Z",
+          "started_at": "2026-06-27T12:25:33.091846Z",
+          "finished_at": "2026-06-27T12:25:41.698931Z",
+          "duration_ms": 7374,
+          "function_version": 31,
+          "client_submit_ms": 594,
+          "client_poll_until_terminal_ms": 15219,
+          "queue_to_started_ms": 5972,
+          "started_to_finished_ms": 8607,
+          "queued_to_finished_ms": 14579,
+          "user_code_elapsed_ms": 3002,
+          "worker_overhead_vs_user_code_ms": 4372,
+          "worker_timing": {
+            "backend_final_report_ms": 885,
+            "backend_running_report_ms": 838,
+            "docker_cleanup_ms": 335,
+            "docker_container_create_ms": 524,
+            "docker_container_start_ms": 566,
+            "docker_export_copy_ms": 196,
+            "docker_input_copy_ms": 285,
+            "docker_logs_read_ms": 338,
+            "docker_volume_create_ms": 59,
+            "docker_wait_ms": 4653,
+            "executor_duration_ms": 7374,
+            "executor_wall_with_cleanup_ms": 7710,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "sandbox_prepare_ms": 741,
+            "worker_process_total_ms": 9492
+          }
+        },
+        {
+          "id": 123,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "5e3f1533-8fa2-469f-b6bb-fd0dc3b773eb",
+          "status": "succeeded",
+          "event": {
+            "index": 4,
+            "sleep_seconds": 3
+          },
+          "result": {
+            "index": 4,
+            "request_id": "5e3f1533-8fa2-469f-b6bb-fd0dc3b773eb",
+            "sleep_seconds": 3.0,
+            "user_code_elapsed_ms": 3006
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 4, \"sleep_seconds\": 3.0, \"user_code_elapsed_ms\": 3006, \"request_id\": \"5e3f1533-8fa2-469f-b6bb-fd0dc3b773eb\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:25:27.402727Z",
+          "started_at": "2026-06-27T12:25:38.210236Z",
+          "finished_at": "2026-06-27T12:25:49.718498Z",
+          "duration_ms": 9648,
+          "function_version": 31,
+          "client_submit_ms": 844,
+          "client_poll_until_terminal_ms": 22828,
+          "queue_to_started_ms": 10807,
+          "started_to_finished_ms": 11508,
+          "queued_to_finished_ms": 22315,
+          "user_code_elapsed_ms": 3006,
+          "worker_overhead_vs_user_code_ms": 6642,
+          "worker_timing": {
+            "backend_final_report_ms": 1041,
+            "backend_running_report_ms": 1526,
+            "docker_cleanup_ms": 334,
+            "docker_container_create_ms": 946,
+            "docker_container_start_ms": 700,
+            "docker_export_copy_ms": 254,
+            "docker_input_copy_ms": 97,
+            "docker_logs_read_ms": 552,
+            "docker_volume_create_ms": 85,
+            "docker_wait_ms": 5615,
+            "executor_duration_ms": 9648,
+            "executor_wall_with_cleanup_ms": 9994,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 1,
+            "sandbox_prepare_ms": 1387,
+            "worker_process_total_ms": 12565
+          }
+        },
+        {
+          "id": 124,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "d89d98e5-f158-4040-94c2-3aa52716c2af",
+          "status": "succeeded",
+          "event": {
+            "index": 5,
+            "sleep_seconds": 3
+          },
+          "result": {
+            "index": 5,
+            "request_id": "d89d98e5-f158-4040-94c2-3aa52716c2af",
+            "sleep_seconds": 3.0,
+            "user_code_elapsed_ms": 3003
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 5, \"sleep_seconds\": 3.0, \"user_code_elapsed_ms\": 3003, \"request_id\": \"d89d98e5-f158-4040-94c2-3aa52716c2af\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:25:27.411517Z",
+          "started_at": "2026-06-27T12:25:41.812318Z",
+          "finished_at": "2026-06-27T12:25:53.223444Z",
+          "duration_ms": 9958,
+          "function_version": 31,
+          "client_submit_ms": 859,
+          "client_poll_until_terminal_ms": 26312,
+          "queue_to_started_ms": 14400,
+          "started_to_finished_ms": 11411,
+          "queued_to_finished_ms": 25811,
+          "user_code_elapsed_ms": 3003,
+          "worker_overhead_vs_user_code_ms": 6955,
+          "worker_timing": {
+            "backend_final_report_ms": 724,
+            "backend_running_report_ms": 1015,
+            "docker_cleanup_ms": 449,
+            "docker_container_create_ms": 675,
+            "docker_container_start_ms": 1199,
+            "docker_export_copy_ms": 298,
+            "docker_input_copy_ms": 393,
+            "docker_logs_read_ms": 421,
+            "docker_volume_create_ms": 114,
+            "docker_wait_ms": 5926,
+            "executor_duration_ms": 9958,
+            "executor_wall_with_cleanup_ms": 10408,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "sandbox_prepare_ms": 926,
+            "worker_process_total_ms": 12151
+          }
+        },
+        {
+          "id": 125,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "cfd87b3d-d1ab-42e3-9ad3-4675655f684d",
+          "status": "succeeded",
+          "event": {
+            "index": 6,
+            "sleep_seconds": 3
+          },
+          "result": {
+            "index": 6,
+            "request_id": "cfd87b3d-d1ab-42e3-9ad3-4675655f684d",
+            "sleep_seconds": 3.0,
+            "user_code_elapsed_ms": 3004
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 6, \"sleep_seconds\": 3.0, \"user_code_elapsed_ms\": 3004, \"request_id\": \"cfd87b3d-d1ab-42e3-9ad3-4675655f684d\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:25:27.660433Z",
+          "started_at": "2026-06-27T12:25:45.363407Z",
+          "finished_at": "2026-06-27T12:25:59.532088Z",
+          "duration_ms": 11597,
+          "function_version": 31,
+          "client_submit_ms": 1109,
+          "client_poll_until_terminal_ms": 32937,
+          "queue_to_started_ms": 17702,
+          "started_to_finished_ms": 14168,
+          "queued_to_finished_ms": 31871,
+          "user_code_elapsed_ms": 3004,
+          "worker_overhead_vs_user_code_ms": 8593,
+          "worker_timing": {
+            "backend_final_report_ms": 1325,
+            "backend_running_report_ms": 1091,
+            "docker_cleanup_ms": 1487,
+            "docker_container_create_ms": 1183,
+            "docker_container_start_ms": 1240,
+            "docker_export_copy_ms": 550,
+            "docker_input_copy_ms": 423,
+            "docker_logs_read_ms": 960,
+            "docker_volume_create_ms": 91,
+            "docker_wait_ms": 6346,
+            "executor_duration_ms": 11597,
+            "executor_wall_with_cleanup_ms": 13086,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 12,
+            "sandbox_prepare_ms": 785,
+            "worker_process_total_ms": 15510
+          }
+        },
+        {
+          "id": 126,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "c045110f-5a4a-4c8b-b21c-db04b178026f",
+          "status": "succeeded",
+          "event": {
+            "index": 7,
+            "sleep_seconds": 3
+          },
+          "result": {
+            "index": 7,
+            "request_id": "c045110f-5a4a-4c8b-b21c-db04b178026f",
+            "sleep_seconds": 3.0,
+            "user_code_elapsed_ms": 3003
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 7, \"sleep_seconds\": 3.0, \"user_code_elapsed_ms\": 3003, \"request_id\": \"c045110f-5a4a-4c8b-b21c-db04b178026f\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:25:27.675237Z",
+          "started_at": "2026-06-27T12:25:47.853847Z",
+          "finished_at": "2026-06-27T12:26:01.285957Z",
+          "duration_ms": 11728,
+          "function_version": 31,
+          "client_submit_ms": 1125,
+          "client_poll_until_terminal_ms": 34062,
+          "queue_to_started_ms": 20178,
+          "started_to_finished_ms": 13432,
+          "queued_to_finished_ms": 33610,
+          "user_code_elapsed_ms": 3003,
+          "worker_overhead_vs_user_code_ms": 8725,
+          "worker_timing": {
+            "backend_final_report_ms": 945,
+            "backend_running_report_ms": 1168,
+            "docker_cleanup_ms": 526,
+            "docker_container_create_ms": 1292,
+            "docker_container_start_ms": 1374,
+            "docker_export_copy_ms": 357,
+            "docker_input_copy_ms": 306,
+            "docker_logs_read_ms": 1251,
+            "docker_volume_create_ms": 260,
+            "docker_wait_ms": 6320,
+            "executor_duration_ms": 11728,
+            "executor_wall_with_cleanup_ms": 12255,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "sandbox_prepare_ms": 562,
+            "worker_process_total_ms": 14385
+          }
+        },
+        {
+          "id": 127,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "cbbe961c-e540-4c26-8d62-cbfaec4fa093",
+          "status": "succeeded",
+          "event": {
+            "index": 8,
+            "sleep_seconds": 3
+          },
+          "result": {
+            "index": 8,
+            "request_id": "cbbe961c-e540-4c26-8d62-cbfaec4fa093",
+            "sleep_seconds": 3.0,
+            "user_code_elapsed_ms": 3000
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 8, \"sleep_seconds\": 3.0, \"user_code_elapsed_ms\": 3000, \"request_id\": \"cbbe961c-e540-4c26-8d62-cbfaec4fa093\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:25:27.940116Z",
+          "started_at": "2026-06-27T12:25:51.512012Z",
+          "finished_at": "2026-06-27T12:26:05.174913Z",
+          "duration_ms": 11912,
+          "function_version": 31,
+          "client_submit_ms": 1375,
+          "client_poll_until_terminal_ms": 37281,
+          "queue_to_started_ms": 23571,
+          "started_to_finished_ms": 13662,
+          "queued_to_finished_ms": 37234,
+          "user_code_elapsed_ms": 3000,
+          "worker_overhead_vs_user_code_ms": 8912,
+          "worker_timing": {
+            "backend_final_report_ms": 323,
+            "backend_running_report_ms": 1137,
+            "docker_cleanup_ms": 599,
+            "docker_container_create_ms": 1352,
+            "docker_container_start_ms": 1916,
+            "docker_export_copy_ms": 395,
+            "docker_input_copy_ms": 315,
+            "docker_logs_read_ms": 472,
+            "docker_volume_create_ms": 214,
+            "docker_wait_ms": 6198,
+            "executor_duration_ms": 11912,
+            "executor_wall_with_cleanup_ms": 12512,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 6,
+            "sandbox_prepare_ms": 1010,
+            "worker_process_total_ms": 13986
+          }
+        },
+        {
+          "id": 129,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "e1140d39-ff08-4a76-9520-4b99e91ce085",
+          "status": "succeeded",
+          "event": {
+            "index": 9,
+            "sleep_seconds": 3
+          },
+          "result": {
+            "index": 9,
+            "request_id": "e1140d39-ff08-4a76-9520-4b99e91ce085",
+            "sleep_seconds": 3.0,
+            "user_code_elapsed_ms": 3000
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 9, \"sleep_seconds\": 3.0, \"user_code_elapsed_ms\": 3000, \"request_id\": \"e1140d39-ff08-4a76-9520-4b99e91ce085\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:25:28.134695Z",
+          "started_at": "2026-06-27T12:25:57.964774Z",
+          "finished_at": "2026-06-27T12:26:09.782767Z",
+          "duration_ms": 9834,
+          "function_version": 31,
+          "client_submit_ms": 1547,
+          "client_poll_until_terminal_ms": 41625,
+          "queue_to_started_ms": 29830,
+          "started_to_finished_ms": 11817,
+          "queued_to_finished_ms": 41648,
+          "user_code_elapsed_ms": 3000,
+          "worker_overhead_vs_user_code_ms": 6834,
+          "worker_timing": {
+            "backend_final_report_ms": 289,
+            "backend_running_report_ms": 1848,
+            "docker_cleanup_ms": 113,
+            "docker_container_create_ms": 1801,
+            "docker_container_start_ms": 1243,
+            "docker_export_copy_ms": 60,
+            "docker_input_copy_ms": 280,
+            "docker_logs_read_ms": 96,
+            "docker_volume_create_ms": 175,
+            "docker_wait_ms": 4571,
+            "executor_duration_ms": 9834,
+            "executor_wall_with_cleanup_ms": 9948,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "sandbox_prepare_ms": 1508,
+            "worker_process_total_ms": 12107
+          }
+        },
+        {
+          "id": 128,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "c7c984c5-eaa8-436d-a044-b38fa7b2d87f",
+          "status": "succeeded",
+          "event": {
+            "index": 10,
+            "sleep_seconds": 3
+          },
+          "result": {
+            "index": 10,
+            "request_id": "c7c984c5-eaa8-436d-a044-b38fa7b2d87f",
+            "sleep_seconds": 3.0,
+            "user_code_elapsed_ms": 3000
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 10, \"sleep_seconds\": 3.0, \"user_code_elapsed_ms\": 3000, \"request_id\": \"c7c984c5-eaa8-436d-a044-b38fa7b2d87f\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:25:27.994939Z",
+          "started_at": "2026-06-27T12:25:54.650792Z",
+          "finished_at": "2026-06-27T12:26:07.255042Z",
+          "duration_ms": 11682,
+          "function_version": 31,
+          "client_submit_ms": 1390,
+          "client_poll_until_terminal_ms": 39343,
+          "queue_to_started_ms": 26655,
+          "started_to_finished_ms": 12604,
+          "queued_to_finished_ms": 39260,
+          "user_code_elapsed_ms": 3000,
+          "worker_overhead_vs_user_code_ms": 8682,
+          "worker_timing": {
+            "backend_final_report_ms": 220,
+            "backend_running_report_ms": 703,
+            "docker_cleanup_ms": 213,
+            "docker_container_create_ms": 2027,
+            "docker_container_start_ms": 2142,
+            "docker_export_copy_ms": 266,
+            "docker_input_copy_ms": 734,
+            "docker_logs_read_ms": 252,
+            "docker_volume_create_ms": 177,
+            "docker_wait_ms": 5253,
+            "executor_duration_ms": 11682,
+            "executor_wall_with_cleanup_ms": 11896,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 1,
+            "sandbox_prepare_ms": 826,
+            "worker_process_total_ms": 12824
+          }
+        },
+        {
+          "id": 130,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "667f384f-cdd0-4f07-b610-11817e8059bd",
+          "status": "succeeded",
+          "event": {
+            "index": 11,
+            "sleep_seconds": 3
+          },
+          "result": {
+            "index": 11,
+            "request_id": "667f384f-cdd0-4f07-b610-11817e8059bd",
+            "sleep_seconds": 3.0,
+            "user_code_elapsed_ms": 3000
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 11, \"sleep_seconds\": 3.0, \"user_code_elapsed_ms\": 3000, \"request_id\": \"667f384f-cdd0-4f07-b610-11817e8059bd\"}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-06-27T12:25:28.205226Z",
+          "started_at": "2026-06-27T12:26:01.401896Z",
+          "finished_at": "2026-06-27T12:26:11.068004Z",
+          "duration_ms": 8513,
+          "function_version": 31,
+          "client_submit_ms": 1625,
+          "client_poll_until_terminal_ms": 43093,
+          "queue_to_started_ms": 33196,
+          "started_to_finished_ms": 9666,
+          "queued_to_finished_ms": 42862,
+          "user_code_elapsed_ms": 3000,
+          "worker_overhead_vs_user_code_ms": 5513,
+          "worker_timing": {
+            "backend_final_report_ms": 195,
+            "backend_running_report_ms": 992,
+            "docker_cleanup_ms": 156,
+            "docker_container_create_ms": 1104,
+            "docker_container_start_ms": 1045,
+            "docker_export_copy_ms": 120,
+            "docker_input_copy_ms": 419,
+            "docker_logs_read_ms": 131,
+            "docker_volume_create_ms": 251,
+            "docker_wait_ms": 4925,
+            "executor_duration_ms": 8513,
+            "executor_wall_with_cleanup_ms": 8671,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "sandbox_prepare_ms": 512,
+            "worker_process_total_ms": 9861
+          }
+        }
+      ]
+    }
+  ],
+  "scenario_summary": {
+    "noop_sequential": {
+      "client_wall_ms": 20328,
+      "statuses": [
+        "succeeded"
+      ],
+      "client_submit_ms": {
+        "min": 110,
+        "median": 156,
+        "max": 266
+      },
+      "queue_to_started_ms": {
+        "min": 357,
+        "median": 451,
+        "max": 622
+      },
+      "duration_ms": {
+        "min": 2022,
+        "median": 2715,
+        "max": 3114
+      },
+      "started_to_finished_ms": {
+        "min": 2293,
+        "median": 3171,
+        "max": 3490
+      },
+      "queued_to_finished_ms": {
+        "min": 2745,
+        "median": 3529,
+        "max": 4113
+      },
+      "user_code_elapsed_ms": {
+        "min": 0,
+        "median": 0,
+        "max": 0
+      },
+      "worker_overhead_vs_user_code_ms": {
+        "min": 2022,
+        "median": 2715,
+        "max": 3114
+      }
+    },
+    "one_second_sequential": {
+      "client_wall_ms": 33656,
+      "statuses": [
+        "succeeded"
+      ],
+      "client_submit_ms": {
+        "min": 187,
+        "median": 234,
+        "max": 296
+      },
+      "queue_to_started_ms": {
+        "min": 528,
+        "median": 639,
+        "max": 745
+      },
+      "duration_ms": {
+        "min": 3817,
+        "median": 4714,
+        "max": 6248
+      },
+      "started_to_finished_ms": {
+        "min": 4105,
+        "median": 5088,
+        "max": 6817
+      },
+      "queued_to_finished_ms": {
+        "min": 4651,
+        "median": 5771,
+        "max": 7562
+      },
+      "user_code_elapsed_ms": {
+        "min": 1000,
+        "median": 1000,
+        "max": 1009
+      },
+      "worker_overhead_vs_user_code_ms": {
+        "min": 2817,
+        "median": 3714,
+        "max": 5239
+      }
+    },
+    "three_second_concurrent": {
+      "client_wall_ms": 44889,
+      "statuses": [
+        "succeeded"
+      ],
+      "client_submit_ms": {
+        "min": 266,
+        "median": 984,
+        "max": 1625
+      },
+      "queue_to_started_ms": {
+        "min": 2894,
+        "median": 16051,
+        "max": 33196
+      },
+      "duration_ms": {
+        "min": 7374,
+        "median": 9741,
+        "max": 11912
+      },
+      "started_to_finished_ms": {
+        "min": 8432,
+        "median": 11459,
+        "max": 14168
+      },
+      "queued_to_finished_ms": {
+        "min": 11327,
+        "median": 28841,
+        "max": 42862
+      },
+      "user_code_elapsed_ms": {
+        "min": 3000,
+        "median": 3000,
+        "max": 3006
+      },
+      "worker_overhead_vs_user_code_ms": {
+        "min": 4372,
+        "median": 6738,
+        "max": 8912
+      }
+    }
+  },
+  "worker_timing_summary": {
+    "noop_sequential": {
+      "backend_final_report_ms": {
+        "min": 91,
+        "median": 195,
+        "max": 265
+      },
+      "backend_running_report_ms": {
+        "min": 84,
+        "median": 114,
+        "max": 215
+      },
+      "docker_cleanup_ms": {
+        "min": 61,
+        "median": 198,
+        "max": 332
+      },
+      "docker_container_create_ms": {
+        "min": 157,
+        "median": 233,
+        "max": 456
+      },
+      "docker_container_start_ms": {
+        "min": 373,
+        "median": 625,
+        "max": 783
+      },
+      "docker_export_copy_ms": {
+        "min": 44,
+        "median": 131,
+        "max": 185
+      },
+      "docker_input_copy_ms": {
+        "min": 52,
+        "median": 133,
+        "max": 167
+      },
+      "docker_logs_read_ms": {
+        "min": 59,
+        "median": 138,
+        "max": 218
+      },
+      "docker_volume_create_ms": {
+        "min": 17,
+        "median": 30,
+        "max": 77
+      },
+      "docker_wait_ms": {
+        "min": 1014,
+        "median": 1266,
+        "max": 1500
+      },
+      "executor_duration_ms": {
+        "min": 2022,
+        "median": 2715,
+        "max": 3114
+      },
+      "executor_wall_with_cleanup_ms": {
+        "min": 2186,
+        "median": 3048,
+        "max": 3313
+      },
+      "output_upload_ms": {
+        "min": 0,
+        "median": 0,
+        "max": 0
+      },
+      "output_validation_ms": {
+        "min": 0,
+        "median": 0,
+        "max": 0
+      },
+      "result_read_ms": {
+        "min": 0,
+        "median": 0,
+        "max": 1
+      },
+      "sandbox_prepare_ms": {
+        "min": 38,
+        "median": 102,
+        "max": 150
+      },
+      "worker_process_total_ms": {
+        "min": 2460,
+        "median": 3366,
+        "max": 3749
+      }
+    },
+    "one_second_sequential": {
+      "backend_final_report_ms": {
+        "min": 191,
+        "median": 230,
+        "max": 324
+      },
+      "backend_running_report_ms": {
+        "min": 92,
+        "median": 224,
+        "max": 326
+      },
+      "docker_cleanup_ms": {
+        "min": 121,
+        "median": 171,
+        "max": 228
+      },
+      "docker_container_create_ms": {
+        "min": 364,
+        "median": 602,
+        "max": 1541
+      },
+      "docker_container_start_ms": {
+        "min": 581,
+        "median": 922,
+        "max": 1246
+      },
+      "docker_export_copy_ms": {
+        "min": 73,
+        "median": 122,
+        "max": 217
+      },
+      "docker_input_copy_ms": {
+        "min": 68,
+        "median": 144,
+        "max": 284
+      },
+      "docker_logs_read_ms": {
+        "min": 122,
+        "median": 186,
+        "max": 336
+      },
+      "docker_volume_create_ms": {
+        "min": 27,
+        "median": 63,
+        "max": 105
+      },
+      "docker_wait_ms": {
+        "min": 2249,
+        "median": 2463,
+        "max": 3413
+      },
+      "executor_duration_ms": {
+        "min": 3817,
+        "median": 4714,
+        "max": 6248
+      },
+      "executor_wall_with_cleanup_ms": {
+        "min": 4010,
+        "median": 4856,
+        "max": 6478
+      },
+      "output_upload_ms": {
+        "min": 0,
+        "median": 0,
+        "max": 0
+      },
+      "output_validation_ms": {
+        "min": 0,
+        "median": 0,
+        "max": 0
+      },
+      "result_read_ms": {
+        "min": 0,
+        "median": 1,
+        "max": 10
+      },
+      "sandbox_prepare_ms": {
+        "min": 96,
+        "median": 153,
+        "max": 204
+      },
+      "worker_process_total_ms": {
+        "min": 4303,
+        "median": 5323,
+        "max": 7141
+      }
+    },
+    "three_second_concurrent": {
+      "backend_final_report_ms": {
+        "min": 195,
+        "median": 872,
+        "max": 1356
+      },
+      "backend_running_report_ms": {
+        "min": 494,
+        "median": 1003,
+        "max": 1848
+      },
+      "docker_cleanup_ms": {
+        "min": 113,
+        "median": 340,
+        "max": 1487
+      },
+      "docker_container_create_ms": {
+        "min": 384,
+        "median": 1050,
+        "max": 2027
+      },
+      "docker_container_start_ms": {
+        "min": 566,
+        "median": 1138,
+        "max": 2142
+      },
+      "docker_export_copy_ms": {
+        "min": 60,
+        "median": 289,
+        "max": 550
+      },
+      "docker_input_copy_ms": {
+        "min": 97,
+        "median": 295,
+        "max": 734
+      },
+      "docker_logs_read_ms": {
+        "min": 96,
+        "median": 315,
+        "max": 1251
+      },
+      "docker_volume_create_ms": {
+        "min": 40,
+        "median": 116,
+        "max": 260
+      },
+      "docker_wait_ms": {
+        "min": 4571,
+        "median": 5184,
+        "max": 6346
+      },
+      "executor_duration_ms": {
+        "min": 7374,
+        "median": 9741,
+        "max": 11912
+      },
+      "executor_wall_with_cleanup_ms": {
+        "min": 7710,
+        "median": 9971,
+        "max": 13086
+      },
+      "output_upload_ms": {
+        "min": 0,
+        "median": 0,
+        "max": 0
+      },
+      "output_validation_ms": {
+        "min": 0,
+        "median": 0,
+        "max": 0
+      },
+      "result_read_ms": {
+        "min": 0,
+        "median": 0,
+        "max": 12
+      },
+      "sandbox_prepare_ms": {
+        "min": 512,
+        "median": 768,
+        "max": 1508
+      },
+      "worker_process_total_ms": {
+        "min": 9492,
+        "median": 12129,
+        "max": 15510
+      }
+    }
+  },
+  "worker_timing_collection": "ok"
+}

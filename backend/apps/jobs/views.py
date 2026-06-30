@@ -347,6 +347,7 @@ def _job_payload(job):
         "job_id": str(job.job_id),
         "type": job.type,
         "status": job.status,
+        "coordination_version": job.coordination_version,
         "queue_name": job.queue_name,
         "payload": job.payload,
         "dispatch_attempts": job.dispatch_attempts,

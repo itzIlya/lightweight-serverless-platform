@@ -33,6 +33,21 @@ def worker_active_builds(worker: dict) -> int:
     return safe_int(worker_metadata(worker).get("active_builds"))
 
 
+def worker_max_concurrency(worker: dict) -> int:
+    return max(safe_int(worker.get("max_concurrency"), default=1), 1)
+
+
+def worker_max_invocation_concurrency(worker: dict) -> int:
+    metadata = worker_metadata(worker)
+    return max(
+        safe_int(
+            metadata.get("max_invocation_concurrency"),
+            default=worker_max_concurrency(worker),
+        ),
+        1,
+    )
+
+
 def worker_queued_invocations(worker: dict) -> int:
     return safe_int(worker.get("queued_invocations"))
 
@@ -56,6 +71,8 @@ def choose_worker(
     job: dict,
     *,
     recent_invocations: dict[str, dict] | None = None,
+    local_invocation_loads: dict[str, list[float]] | None = None,
+    local_load_ttl_seconds: float = 10.0,
     affinity_ttl_seconds: float = 10.0,
     sticky_max_invocation_load: int = 2,
     round_robin_state: dict[str, int] | None = None,
@@ -70,6 +87,8 @@ def choose_worker(
             workers,
             job,
             recent_invocations=recent_invocations,
+            local_invocation_loads=local_invocation_loads,
+            local_load_ttl_seconds=local_load_ttl_seconds,
             affinity_ttl_seconds=affinity_ttl_seconds,
             sticky_max_invocation_load=sticky_max_invocation_load,
             round_robin_state=round_robin_state,
@@ -88,13 +107,20 @@ def choose_invocation_worker(
     job: dict,
     *,
     recent_invocations: dict[str, dict] | None,
-    affinity_ttl_seconds: float,
-    sticky_max_invocation_load: int,
-    round_robin_state: dict[str, int] | None,
-    now: float | None,
+    local_invocation_loads: dict[str, list[float]] | None = None,
+    local_load_ttl_seconds: float = 10.0,
+    affinity_ttl_seconds: float = 10.0,
+    sticky_max_invocation_load: int = 2,
+    round_robin_state: dict[str, int] | None = None,
+    now: float | None = None,
 ) -> dict | None:
     now = time.monotonic() if now is None else now
     recent_invocations = recent_invocations or {}
+    prune_local_invocation_loads(
+        local_invocation_loads,
+        now=now,
+        ttl_seconds=local_load_ttl_seconds,
+    )
 
     affinity_key = invocation_affinity_key(job)
     if affinity_key:
@@ -110,7 +136,10 @@ def choose_invocation_worker(
             )
             if worker and invocation_worker_is_light_enough(
                 worker,
+                local_invocation_loads=local_invocation_loads,
+                local_load_ttl_seconds=local_load_ttl_seconds,
                 sticky_max_invocation_load=sticky_max_invocation_load,
+                now=now,
             ):
                 return worker
 
@@ -125,9 +154,38 @@ def choose_invocation_worker(
     if not candidates:
         return None
 
-    best_load = min(invocation_load(worker) for worker in candidates)
+    workers_with_capacity = [
+        worker
+        for worker in candidates
+        if invocation_load(
+            worker,
+            local_invocation_loads=local_invocation_loads,
+            local_load_ttl_seconds=local_load_ttl_seconds,
+            now=now,
+        )
+        < worker_max_invocation_concurrency(worker)
+    ]
+    candidates = workers_with_capacity or candidates
+
+    best_load = min(
+        invocation_load(
+            worker,
+            local_invocation_loads=local_invocation_loads,
+            local_load_ttl_seconds=local_load_ttl_seconds,
+            now=now,
+        )
+        for worker in candidates
+    )
     best = [
-        worker for worker in candidates if invocation_load(worker) == best_load
+        worker
+        for worker in candidates
+        if invocation_load(
+            worker,
+            local_invocation_loads=local_invocation_loads,
+            local_load_ttl_seconds=local_load_ttl_seconds,
+            now=now,
+        )
+        == best_load
     ]
     return choose_round_robin_worker(best, "invocation", round_robin_state)
 
@@ -135,16 +193,76 @@ def choose_invocation_worker(
 def invocation_worker_is_light_enough(
     worker: dict,
     *,
+    local_invocation_loads: dict[str, list[float]] | None = None,
+    local_load_ttl_seconds: float = 10.0,
     sticky_max_invocation_load: int,
+    now: float | None = None,
 ) -> bool:
     return (
         worker_active_builds(worker) == 0
-        and invocation_load(worker) <= sticky_max_invocation_load
+        and invocation_load(
+            worker,
+            local_invocation_loads=local_invocation_loads,
+            local_load_ttl_seconds=local_load_ttl_seconds,
+            now=now,
+        )
+        <= sticky_max_invocation_load
     )
 
 
-def invocation_load(worker: dict) -> int:
-    return worker_active_jobs(worker) + worker_queued_invocations(worker)
+def invocation_load(
+    worker: dict,
+    *,
+    local_invocation_loads: dict[str, list[float]] | None = None,
+    local_load_ttl_seconds: float = 10.0,
+    now: float | None = None,
+) -> int:
+    queued = worker_queued_invocations(worker)
+    local = local_invocation_load(
+        worker,
+        local_invocation_loads=local_invocation_loads,
+        local_load_ttl_seconds=local_load_ttl_seconds,
+        now=now,
+    )
+    return (
+        worker_active_jobs(worker)
+        + max(queued, local)
+    )
+
+
+def local_invocation_load(
+    worker: dict,
+    *,
+    local_invocation_loads: dict[str, list[float]] | None,
+    local_load_ttl_seconds: float,
+    now: float | None,
+) -> int:
+    if local_invocation_loads is None:
+        return 0
+    now = time.monotonic() if now is None else now
+    prune_local_invocation_loads(
+        local_invocation_loads,
+        now=now,
+        ttl_seconds=local_load_ttl_seconds,
+    )
+    return len(local_invocation_loads.get(worker.get("name"), []))
+
+
+def prune_local_invocation_loads(
+    local_invocation_loads: dict[str, list[float]] | None,
+    *,
+    now: float,
+    ttl_seconds: float,
+) -> None:
+    if local_invocation_loads is None:
+        return
+    cutoff = now - ttl_seconds
+    for worker_name in list(local_invocation_loads):
+        local_invocation_loads[worker_name] = [
+            value for value in local_invocation_loads[worker_name] if value >= cutoff
+        ]
+        if not local_invocation_loads[worker_name]:
+            del local_invocation_loads[worker_name]
 
 
 def choose_build_worker(
@@ -225,12 +343,22 @@ def process_job_id(
     pending_queue: str,
     pending_queues: dict[str, str] | None = None,
     recent_invocations: dict[str, dict] | None = None,
+    local_invocation_loads: dict[str, list[float]] | None = None,
+    local_load_ttl_seconds: float = 10.0,
     round_robin_state: dict[str, int] | None = None,
     affinity_ttl_seconds: float = 10.0,
     sticky_max_invocation_load: int = 2,
     requeue_delay_seconds: float = 1.0,
 ) -> bool:
     job = backend.get_job(job_id)
+    coordination_version = safe_int(job.get("coordination_version", 1), default=1)
+    if coordination_version != 1:
+        logger.warning(
+            "refusing non-V1 job on V1 scheduler path job_id=%s coordination_version=%s",
+            job_id,
+            coordination_version,
+        )
+        return False
     if job.get("status") != "queued":
         logger.info(
             "ignoring non-queued job job_id=%s status=%s",
@@ -255,6 +383,8 @@ def process_job_id(
         workers,
         job,
         recent_invocations=recent_invocations,
+        local_invocation_loads=local_invocation_loads,
+        local_load_ttl_seconds=local_load_ttl_seconds,
         affinity_ttl_seconds=affinity_ttl_seconds,
         sticky_max_invocation_load=sticky_max_invocation_load,
         round_robin_state=round_robin_state,
@@ -302,6 +432,12 @@ def process_job_id(
         job,
         worker,
         recent_invocations=recent_invocations,
+    )
+    remember_local_invocation_dispatch(
+        job,
+        worker,
+        local_invocation_loads=local_invocation_loads,
+        local_load_ttl_seconds=local_load_ttl_seconds,
     )
     return True
 
@@ -357,6 +493,26 @@ def remember_invocation_route(
         "worker_name": worker["name"],
         "last_seen": time.monotonic(),
     }
+
+
+def remember_local_invocation_dispatch(
+    job: dict,
+    worker: dict,
+    *,
+    local_invocation_loads: dict[str, list[float]] | None,
+    local_load_ttl_seconds: float,
+) -> None:
+    if local_invocation_loads is None:
+        return
+    if (job.get("payload") or {}).get("type") != "function.invoke":
+        return
+    now = time.monotonic()
+    prune_local_invocation_loads(
+        local_invocation_loads,
+        now=now,
+        ttl_seconds=local_load_ttl_seconds,
+    )
+    local_invocation_loads.setdefault(worker["name"], []).append(now)
 
 
 def recover_stale_workers(
@@ -449,6 +605,9 @@ def main() -> None:
     requeue_delay_seconds = float(os.getenv("SCHEDULER_REQUEUE_DELAY_SECONDS", "1"))
     stale_after_seconds = int(os.getenv("WORKER_STALE_AFTER_SECONDS", "30"))
     affinity_ttl_seconds = float(os.getenv("SCHEDULER_AFFINITY_TTL_SECONDS", "10"))
+    local_load_ttl_seconds = float(
+        os.getenv("SCHEDULER_LOCAL_LOAD_TTL_SECONDS", str(affinity_ttl_seconds))
+    )
     sticky_max_invocation_load = int(
         os.getenv("SCHEDULER_STICKY_MAX_INVOCATION_LOAD", "2")
     )
@@ -460,6 +619,7 @@ def main() -> None:
     backend = BackendClient(backend_base_url, worker_token)
     next_recovery_at = time.monotonic()
     recent_invocations: dict[str, dict] = {}
+    local_invocation_loads: dict[str, list[float]] = {}
     round_robin_state: dict[str, int] = {}
 
     logger.info(
@@ -499,6 +659,8 @@ def main() -> None:
                 pending_queue=source_pending_queue,
                 pending_queues=pending_queues,
                 recent_invocations=recent_invocations,
+                local_invocation_loads=local_invocation_loads,
+                local_load_ttl_seconds=local_load_ttl_seconds,
                 round_robin_state=round_robin_state,
                 affinity_ttl_seconds=affinity_ttl_seconds,
                 sticky_max_invocation_load=sticky_max_invocation_load,

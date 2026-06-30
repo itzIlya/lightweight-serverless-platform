@@ -13,6 +13,8 @@ This repository is the first implementation pass for the proposal:
 - Durable job records plus a simple scheduler service
 - Worker-specific Redis queues
 - Worker heartbeats and stale-worker recovery
+- Transactional outbox and Redis Stream V2 orchestrator pilots
+- Asynchronous PostgreSQL projection for V2 job state
 
 ## Build order
 
@@ -27,7 +29,7 @@ This repository is the first implementation pass for the proposal:
 
 - `backend/` Django control plane
 - `worker/` worker process
-- `scheduler/` simple job placement service
+- `scheduler/` V1 scheduler plus shadow and production V2 orchestrators
 - `docker-compose.yml` local stack
 - `ROADMAP.md` milestone guide
 
@@ -135,6 +137,18 @@ The worker atomically moves the job ID from one of those input queues to:
 
 `worker:<worker-name>:processing`
 
+The worker only performs that move when local capacity exists. Capacity is
+bounded by:
+
+- `WORKER_MAX_CONCURRENCY`: total in-flight jobs in this worker process
+- `WORKER_MAX_INVOCATION_CONCURRENCY`: in-flight invocation jobs
+- `WORKER_MAX_BUILD_CONCURRENCY`: in-flight build jobs
+
+After a job is claimed, the worker submits it to a local thread pool. The Redis
+processing-queue ACK happens only after the threaded job finishes. This keeps
+the reliability model intact: a job is not acknowledged merely because the
+worker accepted it.
+
 Then it asks the backend to claim that exact delivery. If the backend accepts
 the claim, it returns the current job payload. That payload includes:
 
@@ -143,6 +157,8 @@ the claim, it returns the current job payload. That payload includes:
 - `version`
 - `handler`
 - `image_ref`
+- `config`
+- `event`
 
 To run multiple local workers in the prototype:
 
@@ -152,8 +168,6 @@ docker compose up -d --scale worker=2
 
 Each worker uses its container hostname as its worker name unless `WORKER_NAME`
 is explicitly set.
-- `config`
-- `event`
 
 At runtime the worker:
 
@@ -202,7 +216,7 @@ Builds and invocations use separate scheduler Redis lists:
 - `scheduler-pending-invocations`
 - `scheduler-pending-builds`
 
-Those lists contain durable job IDs only. The scheduler loads the matching
+For V1 jobs, those lists contain durable job IDs only. The scheduler loads the matching
 Postgres `Job`, picks a worker, and pushes a delivery message to the matching
 worker-specific queue. The worker claims that delivery with the backend and then
 receives the stored payload. The payload `type` field lets the worker dispatch
@@ -210,9 +224,38 @@ each job to the correct executor.
 
 Every queued build or invocation also creates a durable `Job` row in Postgres.
 The scheduler queue message is the `job_id`. Redis is still the active transport,
-but the `Job` table is now the source of truth for scheduler placement and
+but the `Job` table is the V1 source of truth for scheduler placement and
 worker status reports. Worker reports update the matching durable job status to
 `running`, `succeeded`, `failed`, or `cancelled`.
+
+### V2 pilot flow
+
+V2 is selected only when a job is created. Existing jobs never switch protocol.
+Both pilot flags default to `false`:
+
+```text
+V2_BUILD_PILOT_ENABLED=true
+V2_INVOCATION_PILOT_ENABLED=true
+```
+
+For V2 jobs, PostgreSQL remains the user-facing read model while Redis is the
+coordination source of truth:
+
+1. The API commits the Job and outbox event together.
+2. The outbox relay publishes `job.created` to a Redis Stream.
+3. The orchestrator atomically assigns a worker, increments the fenced attempt,
+   and appends a worker-specific Stream delivery.
+4. The worker claims and renews its lease through the orchestrator.
+5. Orchestrator projection events update PostgreSQL asynchronously.
+6. Terminal completion is idempotent and ACKs the exact Stream delivery.
+
+V2 builds use attempt- and dispatch-specific image tags. A new image is not
+exposed on the function version until orchestrator finalization succeeds.
+Expired build attempts emit cleanup events for idempotent registry deletion.
+
+V2 invocation inputs and output uploads still pass through the protected
+backend APIs. The backend persists the result before orchestrator terminal
+completion, so a successful Redis job cannot point to a missing durable result.
 
 ### Scheduler flow
 
@@ -227,13 +270,14 @@ worker status reports. Worker reports update the matching durable job status to
    and assign a `dispatch_attempt`.
 7. The scheduler pushes `{job_id, dispatch_attempt}` to
    `worker:<worker-name>:invocations` or `worker:<worker-name>:builds`.
-8. The worker checks its invocation queue before its build queue and atomically
-   moves the delivery message to
+8. The worker checks local capacity, then checks its invocation queue before
+   its build queue and atomically moves the delivery message to
    `worker:<worker-name>:processing`.
 9. The worker claims the delivery through the backend.
 10. The backend verifies the worker and dispatch attempt, then marks the job
     `running` and returns the payload.
-11. The worker executes only after claim acceptance.
+11. The worker executes only after claim acceptance, using a bounded thread
+    pool.
 12. The worker reports lifecycle changes to the backend.
 13. After a terminal report, the worker ACKs by removing the delivery message from the
     processing queue.
@@ -241,8 +285,9 @@ worker status reports. Worker reports update the matching durable job status to
 ### Worker heartbeat and recovery
 
 Workers send heartbeats to the backend every `WORKER_HEARTBEAT_SECONDS`
-seconds. The scheduler periodically asks the backend to mark stale workers
-offline after `WORKER_STALE_AFTER_SECONDS`.
+seconds. Heartbeats include active total job, build, and invocation counts.
+The scheduler periodically asks the backend to mark stale workers offline after
+`WORKER_STALE_AFTER_SECONDS`.
 
 When a worker is stale, the scheduler scans that worker's processing queue:
 
