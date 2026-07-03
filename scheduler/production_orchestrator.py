@@ -26,6 +26,9 @@ if redis.call('EXISTS', KEYS[1]) == 0 then
 end
 local status = redis.call('HGET', KEYS[1], 'status') or ''
 if status ~= 'queued' then
+    if status == 'dispatched' or status == 'running' then
+        redis.call('HINCRBY', KEYS[4], 'duplicate_dispatches', 1)
+    end
     return {'invalid_state', status, '0', ''}
 end
 local available = tonumber(redis.call('HGET', KEYS[1], 'available_at_ms') or '0')
@@ -57,6 +60,7 @@ return {'ok', 'dispatched', tostring(attempt), stream_id}
 EMIT_PROJECTION_SCRIPT = r"""
 local existing = redis.call('HGET', KEYS[1], ARGV[1])
 if existing then
+    redis.call('ZREM', KEYS[3], ARGV[3])
     return existing
 end
 local stream_id = redis.call('XADD', KEYS[2], '*',
@@ -64,6 +68,7 @@ local stream_id = redis.call('XADD', KEYS[2], '*',
     'job_id', ARGV[3],
     'payload', ARGV[4])
 redis.call('HSET', KEYS[1], ARGV[1], stream_id)
+redis.call('ZREM', KEYS[3], ARGV[3])
 return stream_id
 """
 
@@ -80,6 +85,11 @@ class ProductionOrchestrator:
         ready_key: str = "orchestrator:v2:ready",
         lease_key: str = "orchestrator:v2:job-leases",
         orphan_stream: str = "orchestrator:v2:orphan-images",
+        finalization_stream: str = "orchestrator:v2:finalizations",
+        finalization_repair_key: str = "orchestrator:v2:repair:finalizations",
+        projection_repair_key: str = "orchestrator:v2:repair:projections",
+        active_finalizing_key: str = "orchestrator:v2:active:finalizing",
+        metrics_key: str = "orchestrator:v2:metrics",
         lease_ttl_ms: int = 30_000,
         state_prefix: str = "orchestrator:v2:job",
         worker_store=None,
@@ -92,8 +102,20 @@ class ProductionOrchestrator:
         self.ready_key = ready_key
         self.lease_key = lease_key
         self.orphan_stream = orphan_stream
+        self.finalization_stream = finalization_stream
+        self.finalization_repair_key = finalization_repair_key
+        self.projection_repair_key = projection_repair_key
+        self.active_finalizing_key = active_finalizing_key
+        self.metrics_key = metrics_key
         self.lease_ttl_ms = int(lease_ttl_ms)
-        self.state = V2JobStateStore(redis_client, key_prefix=state_prefix)
+        self.state = V2JobStateStore(
+            redis_client,
+            key_prefix=state_prefix,
+            finalization_repair_key=finalization_repair_key,
+            projection_repair_key=projection_repair_key,
+            active_finalizing_key=active_finalizing_key,
+            metrics_key=metrics_key,
+        )
         self.workers = worker_store or WorkerOperationalStateStore(redis_client)
         self.round_robin_state: dict[str, int] = {}
         self.recent_invocations: dict[str, dict] = {}
@@ -194,10 +216,11 @@ class ProductionOrchestrator:
             worker_stream = self.worker_stream(choice["name"], job["job_type"])
             response = self.redis.eval(
                 DISPATCH_TO_STREAM_SCRIPT,
-                3,
+                4,
                 self.state.key(job_id),
                 self.ready_key,
                 worker_stream,
+                self.metrics_key,
                 choice["name"],
                 job_id,
                 job["job_type"],
@@ -239,6 +262,7 @@ class ProductionOrchestrator:
                 "job_id": job_id,
                 "dispatch_attempt": result.dispatch_attempt,
                 "assigned_worker": worker_name,
+                "coordination_version": 2,
             }
         )
         if job.get("effective_image_ref"):
@@ -283,16 +307,34 @@ class ProductionOrchestrator:
         now_ms: int | None = None,
     ) -> dict:
         now_ms = current_ms(now_ms)
+        job_before = self.state.get_job(job_id)
         begun = self.state.begin_finalization(
             job_id,
             worker_name=worker_name,
             dispatch_attempt=dispatch_attempt,
             completion_id=completion_id,
             completion_payload=completion_payload,
+            terminal_status=status,
             now_ms=now_ms,
         )
-        if not begun.accepted and begun.code != "terminal":
+        if not begun.accepted and begun.code == "terminal":
+            current = self.state.get_job(job_id)
+            if current.get("completion_id") == completion_id:
+                return {
+                    **transition_payload(begun, completed=True, accepted=True),
+                    "idempotent": True,
+                }
+        if not begun.accepted:
             return transition_payload(begun, completed=False)
+        if job_before.get("job_type") == "invocation":
+            self.redis.zrem(self.lease_key, job_id)
+            self.ack_delivery(self.state.get_job(job_id))
+            self.emit_finalization(job_id)
+            return {
+                **transition_payload(begun, completed=True),
+                "accepted": True,
+                "status": V2JobStatus.FINALIZING,
+            }
         finished = self.state.finish_finalization(
             job_id,
             completion_id=completion_id,
@@ -305,6 +347,26 @@ class ProductionOrchestrator:
             self.ack_delivery(self.state.get_job(job_id))
             self.emit_projection(job_id, f"job.{status}")
         return transition_payload(finished, completed=finished.accepted)
+
+    def finalize_job(
+        self,
+        job_id: str,
+        *,
+        completion_id: str,
+        status: str,
+        artifact_commit_id: str,
+        now_ms: int | None = None,
+    ) -> dict:
+        finished = self.state.finish_finalization(
+            job_id,
+            completion_id=completion_id,
+            terminal_status=status,
+            artifact_commit_id=artifact_commit_id,
+            now_ms=current_ms(now_ms),
+        )
+        if finished.accepted:
+            self.emit_projection(job_id, f"job.{status}")
+        return transition_payload(finished, finalized=finished.accepted)
 
     def recover_expired_once(self, *, now_ms: int | None = None, limit: int = 20) -> int:
         now_ms = current_ms(now_ms)
@@ -348,6 +410,106 @@ class ProductionOrchestrator:
             recovered += 1
         return recovered
 
+    def resume_finalizations_once(self, *, limit: int = 20) -> int:
+        job_ids = self.redis.zrange(self.finalization_repair_key, 0, limit - 1)
+        repaired = 0
+        for job_id in job_ids:
+            job = self.state.get_job(job_id)
+            if job.get("status") != V2JobStatus.FINALIZING:
+                self.redis.zrem(self.finalization_repair_key, job_id)
+                continue
+            self.emit_finalization(job_id)
+            repaired += 1
+        return repaired
+
+    def republish_terminal_projections_once(self, *, limit: int = 20) -> int:
+        job_ids = self.redis.zrange(self.projection_repair_key, 0, limit - 1)
+        repaired = 0
+        for job_id in job_ids:
+            job = self.state.get_job(job_id)
+            status = job.get("status")
+            if status not in V2JobStatus.TERMINAL:
+                self.redis.zrem(self.projection_repair_key, job_id)
+                continue
+            self.emit_projection(job_id, f"job.{status}")
+            repaired += 1
+        return repaired
+
+    def startup_reconcile(self, *, limit: int = 20) -> dict[str, int]:
+        return {
+            "creation_events": self.reclaim_events_once(min_idle_ms=0, count=limit),
+            "expired_leases": self.recover_expired_once(limit=limit),
+            "finalizations": self.resume_finalizations_once(limit=limit),
+            "projections": self.republish_terminal_projections_once(limit=limit),
+        }
+
+    def force_terminal_projection(self, job_id: str) -> dict:
+        job = self.state.get_job(job_id)
+        status = job.get("status")
+        if status not in V2JobStatus.TERMINAL:
+            return {"published": False, "status": status, "code": "not_terminal"}
+        stream_id = self.redis.xadd(
+            self.projection_stream,
+            {
+                "event_type": f"job.{status}",
+                "job_id": job_id,
+                "payload": json.dumps(job, separators=(",", ":"), sort_keys=True),
+            },
+        )
+        return {"published": True, "status": status, "stream_id": text(stream_id)}
+
+    def metrics_snapshot(self, *, now_ms: int | None = None) -> dict:
+        now_ms = current_ms(now_ms)
+        counters = {
+            key: int(value)
+            for key, value in self.redis.hgetall(self.metrics_key).items()
+        }
+        oldest = self.redis.zrange(
+            self.active_finalizing_key,
+            0,
+            0,
+            withscores=True,
+        )
+        finalizing_age_ms = 0
+        if oldest:
+            finalizing_age_ms = max(now_ms - int(oldest[0][1]), 0)
+        succeeded = counters.get("terminal:succeeded", 0)
+        failed = counters.get("terminal:failed", 0)
+        terminal_total = succeeded + failed
+        return {
+            "terminal_succeeded": succeeded,
+            "terminal_failed": failed,
+            "error_rate": (failed / terminal_total) if terminal_total else 0.0,
+            "finalizing_count": self.redis.zcard(self.active_finalizing_key),
+            "oldest_finalizing_age_ms": finalizing_age_ms,
+            "duplicate_dispatches": counters.get("duplicate_dispatches", 0),
+            "duplicate_claims": counters.get("duplicate_claims", 0),
+            "duplicate_completions": counters.get("duplicate_completions", 0),
+            "duplicate_finalizations": counters.get("duplicate_finalizations", 0),
+            "recovery_count": counters.get("recoveries", 0),
+            "projection": self._stream_group_metrics(
+                self.projection_stream,
+                "postgres-projector-v2",
+            ),
+            "finalization": self._stream_group_metrics(
+                self.finalization_stream,
+                "invocation-finalizers-v2",
+            ),
+        }
+
+    def _stream_group_metrics(self, stream: str, group: str) -> dict:
+        try:
+            groups = self.redis.xinfo_groups(stream)
+        except redis.ResponseError:
+            return {"lag": 0, "pending": 0}
+        for item in groups:
+            if text(item.get("name", "")) == group:
+                return {
+                    "lag": int(item.get("lag") or 0),
+                    "pending": int(item.get("pending") or 0),
+                }
+        return {"lag": 0, "pending": 0}
+
     def emit_projection(self, job_id: str, event_type: str) -> str:
         job = self.state.get_job(job_id)
         marker = f"projection:{event_type}:{job.get('dispatch_attempt', 0)}"
@@ -355,11 +517,30 @@ class ProductionOrchestrator:
         return text(
             self.redis.eval(
                 EMIT_PROJECTION_SCRIPT,
-                2,
+                3,
                 self.state.key(job_id),
                 self.projection_stream,
+                self.projection_repair_key,
                 marker,
                 event_type,
+                job_id,
+                payload,
+            )
+        )
+
+    def emit_finalization(self, job_id: str) -> str:
+        job = self.state.get_job(job_id)
+        marker = f"finalization:{job.get('completion_id', '')}"
+        payload = json.dumps(job, separators=(",", ":"), sort_keys=True)
+        return text(
+            self.redis.eval(
+                EMIT_PROJECTION_SCRIPT,
+                3,
+                self.state.key(job_id),
+                self.finalization_stream,
+                self.finalization_repair_key,
+                marker,
+                "job.finalizing",
                 job_id,
                 payload,
             )
@@ -435,6 +616,10 @@ class OrchestratorRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/health/":
             return self.respond(200, {"status": "ok"})
+        if self.path == "/metrics/":
+            if self.headers.get("X-Internal-Token", "") != self.internal_token:
+                return self.respond(401, {"detail": "Unauthorized."})
+            return self.respond(200, self.orchestrator.metrics_snapshot())
         return self.respond(404, {"detail": "Not found."})
 
     def do_POST(self):
@@ -452,6 +637,10 @@ class OrchestratorRequestHandler(BaseHTTPRequestHandler):
                 result = self.orchestrator.renew_lease(job_id, **body)
             elif operation == "complete":
                 result = self.orchestrator.complete_job(job_id, **body)
+            elif operation == "finalize":
+                result = self.orchestrator.finalize_job(job_id, **body)
+            elif operation == "repair-projection":
+                result = self.orchestrator.force_terminal_projection(job_id)
             else:
                 return self.respond(404, {"detail": "Not found."})
         except (KeyError, TypeError, ValueError) as exc:
@@ -496,19 +685,28 @@ def main() -> None:
         lease_ttl_ms=int(os.getenv("ORCHESTRATOR_JOB_LEASE_SECONDS", "30")) * 1000,
     )
     orchestrator.ensure_event_group()
+    startup = orchestrator.startup_reconcile()
     serve_api(
         orchestrator,
         "0.0.0.0",
         int(os.getenv("ORCHESTRATOR_PORT", "8010")),
         os.getenv("WORKER_SHARED_SECRET", "change-me"),
     )
-    logger.info("production V2 orchestrator started")
+    logger.info("production V2 orchestrator started reconciliation=%s", startup)
+    reconcile_interval = float(
+        os.getenv("ORCHESTRATOR_RECONCILE_INTERVAL_SECONDS", "5")
+    )
+    next_reconcile = time.monotonic() + reconcile_interval
     while True:
         try:
             orchestrator.reclaim_events_once()
             orchestrator.consume_events_once(block_ms=100)
             orchestrator.recover_expired_once()
             orchestrator.dispatch_ready_once()
+            if time.monotonic() >= next_reconcile:
+                orchestrator.resume_finalizations_once()
+                orchestrator.republish_terminal_projections_once()
+                next_reconcile = time.monotonic() + reconcile_interval
         except Exception:
             logger.exception("production orchestrator cycle failed")
             time.sleep(1)

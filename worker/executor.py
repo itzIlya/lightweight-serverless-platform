@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 from dataclasses import dataclass, field
 import json
 import logging
@@ -40,6 +41,15 @@ class ExecutionResult:
     error_message: str = ""
     cold_start: bool = True
     timing_ms: dict[str, int] = field(default_factory=dict)
+    output_manifest: list[dict[str, Any]] = field(default_factory=list)
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(64 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def get_docker_client():
@@ -207,7 +217,7 @@ class DockerExecutor:
                     )
 
                 output_upload_started = time.monotonic()
-                self._upload_output_files(job, output_files)
+                output_manifest = self._upload_output_files(job, output_files)
                 record_step("output_upload_ms", output_upload_started)
                 status = "succeeded" if exit_code == 0 else "failed"
                 error_message = (
@@ -231,6 +241,7 @@ class DockerExecutor:
                     duration_ms=duration_ms,
                     error_message=error_message,
                     timing_ms=timing,
+                    output_manifest=output_manifest,
                 )
             finally:
                 cleanup_started = time.monotonic()
@@ -379,23 +390,49 @@ class DockerExecutor:
             )
         return prepared
 
-    def _upload_output_files(self, job: dict, output_files: list[dict[str, Any]]) -> None:
+    def _upload_output_files(
+        self,
+        job: dict,
+        output_files: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         if self.backend_client is None:
-            return
+            return []
 
         request_id = job["request_id"]
+        manifest = []
         for position, item in enumerate(output_files):
             content_type = (
                 mimetypes.guess_type(item["path"].name)[0]
                 or "application/octet-stream"
             )
-            self.backend_client.upload_invocation_output(
-                request_id,
-                original_path=item["original_path"],
-                file_path=item["path"],
-                position=position,
-                content_type=content_type,
-            )
+            checksum = file_sha256(item["path"])
+            manifest_item = {
+                "original_path": item["original_path"],
+                "size_bytes": int(item.get("size_bytes", item["path"].stat().st_size)),
+                "checksum_sha256": checksum,
+            }
+            if int(job.get("coordination_version", 1)) == 2:
+                self.backend_client.upload_staged_invocation_output(
+                    request_id,
+                    job_id=job["job_id"],
+                    dispatch_attempt=int(job["dispatch_attempt"]),
+                    completion_id=job["completion_id"],
+                    original_path=item["original_path"],
+                    checksum_sha256=checksum,
+                    file_path=item["path"],
+                    position=position,
+                    content_type=content_type,
+                )
+            else:
+                self.backend_client.upload_invocation_output(
+                    request_id,
+                    original_path=item["original_path"],
+                    file_path=item["path"],
+                    position=position,
+                    content_type=content_type,
+                )
+            manifest.append(manifest_item)
+        return manifest
 
     def _validate_declared_output_files(
         self,

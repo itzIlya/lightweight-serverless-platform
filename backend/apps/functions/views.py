@@ -490,6 +490,11 @@ def report_build(request, build_request_id):
     unauthorized = _authorize_worker(request)
     if unauthorized:
         return unauthorized
+    if not settings.V1_COORDINATION_ENDPOINTS_ENABLED:
+        return Response(
+            {"detail": "V1 build reporting has been retired."},
+            status=status.HTTP_410_GONE,
+        )
 
     serializer = BuildReportSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)

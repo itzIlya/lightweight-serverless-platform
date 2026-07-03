@@ -30,6 +30,15 @@ def _authorize_internal(request):
     return None
 
 
+def _v1_coordination_disabled():
+    if settings.V1_COORDINATION_ENDPOINTS_ENABLED:
+        return None
+    return Response(
+        {"detail": "V1 coordination endpoints have been retired."},
+        status=status.HTTP_410_GONE,
+    )
+
+
 @api_view(["GET"])
 @permission_classes([])
 def get_scheduler_job(request, job_id):
@@ -91,6 +100,9 @@ def dispatch_scheduler_job(request, job_id):
     unauthorized = _authorize_internal(request)
     if unauthorized:
         return unauthorized
+    retired = _v1_coordination_disabled()
+    if retired:
+        return retired
 
     job = get_object_or_404(Job, job_id=job_id)
     now = timezone.now()
@@ -170,6 +182,9 @@ def claim_worker_job(request, job_id):
     unauthorized = _authorize_internal(request)
     if unauthorized:
         return unauthorized
+    retired = _v1_coordination_disabled()
+    if retired:
+        return retired
 
     worker_name = request.data.get("worker_name", "")
     dispatch_attempt = request.data.get("dispatch_attempt")
@@ -234,6 +249,9 @@ def requeue_scheduler_job(request, job_id):
     unauthorized = _authorize_internal(request)
     if unauthorized:
         return unauthorized
+    retired = _v1_coordination_disabled()
+    if retired:
+        return retired
 
     worker_name = request.data.get("worker_name", "")
     reason = request.data.get("reason", "")

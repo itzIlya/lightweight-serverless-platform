@@ -686,9 +686,12 @@ def process_v2_invocation_job(
     *,
     worker_name: str,
 ) -> bool:
+    worker_started_ns = int(job.get("_v2_worker_started_ns") or time.monotonic_ns())
     job_id = job["job_id"]
     dispatch_attempt = int(job["dispatch_attempt"])
     request_id = job["request_id"]
+    completion_id = f"{job_id}:{dispatch_attempt}:invocation"
+    job["completion_id"] = completion_id
     try:
         with LeaseRenewer(
             orchestrator,
@@ -699,6 +702,12 @@ def process_v2_invocation_job(
             result = executor.run(job)
             if lease.lost.is_set():
                 return False
+    except BackendReportError:
+        logger.exception(
+            "V2 invocation staged-output upload failed; leaving job recoverable job_id=%s",
+            job_id,
+        )
+        return False
     except Exception as exc:
         if not isinstance(exc, ExecutionError):
             logger.exception("unexpected V2 invocation failure job_id=%s", job_id)
@@ -713,35 +722,48 @@ def process_v2_invocation_job(
             cold_start=True,
         )
 
-    backend.report_invocation(
-        request_id,
-        {
-            "status": result.status,
-            "result": result.result,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "exit_code": result.exit_code,
-            "cold_start": result.cold_start,
-            "error_message": result.error_message,
-            "duration_ms": result.duration_ms,
-            "finished_at": utc_now(),
-        },
-    )
     terminal_status = "succeeded" if result.status == "succeeded" else "failed"
+    completion_started = time.monotonic()
     response = orchestrator.complete_job(
         job_id,
         {
             "worker_name": worker_name,
             "dispatch_attempt": dispatch_attempt,
-            "completion_id": f"{job_id}:{dispatch_attempt}:invocation",
+            "completion_id": completion_id,
             "status": terminal_status,
-            "completion_payload": {"request_id": request_id, "status": result.status},
-            "artifact_commit_id": (
-                f"invocation-result:{request_id}"
-                if terminal_status == "succeeded"
-                else ""
-            ),
+            "completion_payload": {
+                "request_id": request_id,
+                "status": result.status,
+                "result": result.result,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "exit_code": result.exit_code,
+                "cold_start": result.cold_start,
+                "error_message": result.error_message,
+                "duration_ms": result.duration_ms,
+                "finished_at": utc_now(),
+                "output_manifest": result.output_manifest,
+            },
+            "artifact_commit_id": "",
         },
+    )
+    completion_ms = int((time.monotonic() - completion_started) * 1000)
+    timing = dict(getattr(result, "timing_ms", {}) or {})
+    timing.update(
+        {
+            "orchestrator_claim_ms": int(job.get("_v2_orchestrator_claim_ms", 0)),
+            "orchestrator_completion_ms": completion_ms,
+            "backend_running_report_ms": 0,
+            "backend_final_report_ms": 0,
+            "worker_process_total_ms": int(
+                (time.monotonic_ns() - worker_started_ns) / 1_000_000
+            ),
+        }
+    )
+    logger.info(
+        "invocation worker timing request_id=%s timings=%s",
+        request_id,
+        json.dumps(timing, sort_keys=True),
     )
     return bool(response.get("completed"))
 
@@ -1003,6 +1025,8 @@ def main() -> None:
             if v2_delivery is not None:
                 stream_id, delivery = v2_delivery
                 job_id = delivery.get("job_id", "")
+                v2_worker_started_ns = time.monotonic_ns()
+                claim_started = time.monotonic()
                 try:
                     claim = orchestrator.claim_job(
                         job_id,
@@ -1015,6 +1039,7 @@ def main() -> None:
                     logger.exception("could not claim V2 job job_id=%s", job_id)
                     time.sleep(idle_sleep_seconds)
                     continue
+                claim_ms = int((time.monotonic() - claim_started) * 1000)
                 if not claim.get("claimed"):
                     client.xack(
                         v2_invocation_stream
@@ -1025,6 +1050,8 @@ def main() -> None:
                     )
                     continue
                 job = dict(claim.get("payload") or {})
+                job["_v2_worker_started_ns"] = v2_worker_started_ns
+                job["_v2_orchestrator_claim_ms"] = claim_ms
                 job_type = job.get("type")
                 if job_type not in {"function.invoke", "function.build"}:
                     logger.error("discarding unknown claimed V2 job type=%s", job_type)

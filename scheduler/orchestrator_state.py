@@ -81,6 +81,7 @@ if worker ~= ARGV[1] or attempt ~= tonumber(ARGV[2]) then
     return {'stale', status, tostring(attempt)}
 end
 if status == 'running' then
+    redis.call('HINCRBY', KEYS[2], 'duplicate_claims', 1)
     return {'already', status, tostring(attempt)}
 end
 if status ~= 'dispatched' then
@@ -123,6 +124,9 @@ local attempt = tonumber(redis.call('HGET', KEYS[1], 'dispatch_attempt') or '0')
 if status == 'finalizing' then
     local completion = redis.call('HGET', KEYS[1], 'completion_id') or ''
     if completion == ARGV[3] then
+        redis.call('HINCRBY', KEYS[4], 'duplicate_completions', 1)
+        redis.call('ZADD', KEYS[2], ARGV[6], redis.call('HGET', KEYS[1], 'job_id'))
+        redis.call('ZADD', KEYS[3], 'NX', ARGV[6], redis.call('HGET', KEYS[1], 'job_id'))
         return {'already', status, tostring(attempt)}
     end
     return {'completion_conflict', status, tostring(attempt)}
@@ -141,8 +145,11 @@ redis.call('HSET', KEYS[1],
     'status', 'finalizing',
     'completion_id', ARGV[3],
     'completion_payload', ARGV[4],
-    'updated_at_ms', ARGV[5])
+    'completion_status', ARGV[5],
+    'updated_at_ms', ARGV[6])
 redis.call('HDEL', KEYS[1], 'lease_expires_at_ms')
+redis.call('ZADD', KEYS[2], ARGV[6], redis.call('HGET', KEYS[1], 'job_id'))
+redis.call('ZADD', KEYS[3], ARGV[6], redis.call('HGET', KEYS[1], 'job_id'))
 return {'ok', 'finalizing', tostring(attempt)}
 """
 
@@ -155,6 +162,10 @@ local status = redis.call('HGET', KEYS[1], 'status') or ''
 local attempt = tonumber(redis.call('HGET', KEYS[1], 'dispatch_attempt') or '0')
 local completion = redis.call('HGET', KEYS[1], 'completion_id') or ''
 if status == ARGV[2] and completion == ARGV[1] then
+    redis.call('ZREM', KEYS[2], redis.call('HGET', KEYS[1], 'job_id'))
+    redis.call('ZADD', KEYS[3], ARGV[4], redis.call('HGET', KEYS[1], 'job_id'))
+    redis.call('ZREM', KEYS[4], redis.call('HGET', KEYS[1], 'job_id'))
+    redis.call('HINCRBY', KEYS[5], 'duplicate_finalizations', 1)
     return {'already', status, tostring(attempt)}
 end
 if status ~= 'finalizing' then
@@ -171,6 +182,10 @@ redis.call('HSET', KEYS[1],
     'artifact_commit_id', ARGV[3],
     'finished_at_ms', ARGV[4],
     'updated_at_ms', ARGV[4])
+redis.call('ZREM', KEYS[2], redis.call('HGET', KEYS[1], 'job_id'))
+redis.call('ZADD', KEYS[3], ARGV[4], redis.call('HGET', KEYS[1], 'job_id'))
+redis.call('ZREM', KEYS[4], redis.call('HGET', KEYS[1], 'job_id'))
+redis.call('HINCRBY', KEYS[5], 'terminal:' .. ARGV[2], 1)
 return {'ok', ARGV[2], tostring(attempt)}
 """
 
@@ -188,6 +203,7 @@ if attempt ~= tonumber(ARGV[1]) then
     return {'stale', status, tostring(attempt)}
 end
 local recovery = redis.call('HINCRBY', KEYS[1], 'recovery_count', 1)
+redis.call('HINCRBY', KEYS[2], 'recoveries', 1)
 redis.call('HSET', KEYS[1],
     'status', 'queued',
     'available_at_ms', ARGV[2],
@@ -195,7 +211,7 @@ redis.call('HSET', KEYS[1],
     'updated_at_ms', ARGV[4])
 redis.call('HDEL', KEYS[1],
     'assigned_worker', 'worker_queue', 'lease_expires_at_ms',
-    'completion_id', 'completion_payload', 'artifact_commit_id')
+    'completion_id', 'completion_payload', 'completion_status', 'artifact_commit_id')
 return {'ok', 'queued', tostring(attempt), tostring(recovery)}
 """
 
@@ -228,9 +244,28 @@ return {'ok', ARGV[2], tostring(attempt)}
 class V2JobStateStore:
     """Atomic Redis state machine shared by shadow and production V2 paths."""
 
-    def __init__(self, redis_client, *, key_prefix: str = "orchestrator:v2:job"):
+    def __init__(
+        self,
+        redis_client,
+        *,
+        key_prefix: str = "orchestrator:v2:job",
+        finalization_repair_key: str | None = None,
+        projection_repair_key: str | None = None,
+        active_finalizing_key: str | None = None,
+        metrics_key: str | None = None,
+    ):
         self.redis = redis_client
         self.key_prefix = key_prefix.rstrip(":")
+        self.finalization_repair_key = finalization_repair_key or (
+            f"{self.key_prefix}:repair:finalizations"
+        )
+        self.projection_repair_key = projection_repair_key or (
+            f"{self.key_prefix}:repair:projections"
+        )
+        self.active_finalizing_key = active_finalizing_key or (
+            f"{self.key_prefix}:active:finalizing"
+        )
+        self.metrics_key = metrics_key or f"{self.key_prefix}:metrics"
 
     def key(self, job_id: str) -> str:
         return f"{self.key_prefix}:{job_id}"
@@ -278,9 +313,9 @@ class V2JobStateStore:
         lease_expires_at_ms: int,
         now_ms: int | None = None,
     ) -> TransitionResult:
-        return self._run(
+        return self._run_with_keys(
             CLAIM_SCRIPT,
-            job_id,
+            [self.key(job_id), self.metrics_key],
             worker_name,
             dispatch_attempt,
             lease_expires_at_ms,
@@ -313,15 +348,22 @@ class V2JobStateStore:
         dispatch_attempt: int,
         completion_id: str,
         completion_payload: dict,
+        terminal_status: str = "",
         now_ms: int | None = None,
     ) -> TransitionResult:
-        return self._run(
+        return self._run_with_keys(
             BEGIN_FINALIZATION_SCRIPT,
-            job_id,
+            [
+                self.key(job_id),
+                self.finalization_repair_key,
+                self.active_finalizing_key,
+                self.metrics_key,
+            ],
             worker_name,
             dispatch_attempt,
             completion_id,
             json.dumps(completion_payload, separators=(",", ":"), sort_keys=True),
+            terminal_status,
             _now_ms(now_ms),
         )
 
@@ -336,9 +378,15 @@ class V2JobStateStore:
     ) -> TransitionResult:
         if terminal_status not in {V2JobStatus.SUCCEEDED, V2JobStatus.FAILED}:
             raise ValueError("Finalization must end as succeeded or failed.")
-        return self._run(
+        return self._run_with_keys(
             FINISH_FINALIZATION_SCRIPT,
-            job_id,
+            [
+                self.key(job_id),
+                self.finalization_repair_key,
+                self.projection_repair_key,
+                self.active_finalizing_key,
+                self.metrics_key,
+            ],
             completion_id,
             terminal_status,
             artifact_commit_id,
@@ -354,9 +402,9 @@ class V2JobStateStore:
         reason: str,
         now_ms: int | None = None,
     ) -> TransitionResult:
-        return self._run(
+        return self._run_with_keys(
             REQUEUE_SCRIPT,
-            job_id,
+            [self.key(job_id), self.metrics_key],
             dispatch_attempt,
             available_at_ms,
             reason,
@@ -440,7 +488,10 @@ class V2JobStateStore:
         )
 
     def _run(self, script: str, job_id: str, *args) -> TransitionResult:
-        response = self.redis.eval(script, 1, self.key(job_id), *args)
+        return self._run_with_keys(script, [self.key(job_id)], *args)
+
+    def _run_with_keys(self, script: str, keys: list[str], *args) -> TransitionResult:
+        response = self.redis.eval(script, len(keys), *keys, *args)
         values = [_text(value) for value in response]
         code = values[0]
         status = values[1] if len(values) > 1 else ""

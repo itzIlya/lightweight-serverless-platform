@@ -70,6 +70,7 @@ class Job(models.Model):
         indexes = [
             models.Index(fields=["status", "available_at"]),
             models.Index(fields=["type", "status"]),
+            models.Index(fields=["coordination_version", "status", "updated_at"]),
         ]
 
     def __str__(self) -> str:

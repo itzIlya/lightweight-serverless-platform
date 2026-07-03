@@ -236,7 +236,19 @@ Both pilot flags default to `false`:
 ```text
 V2_BUILD_PILOT_ENABLED=true
 V2_INVOCATION_PILOT_ENABLED=true
+V2_BUILD_ROLLOUT_PERCENT=5
+V2_INVOCATION_ROLLOUT_PERCENT=5
+V2_BUILD_CANARY_FUNCTION_IDS=12,18
+V2_INVOCATION_CANARY_FUNCTION_IDS=12,18
+V2_CUTOVER_STAGE=internal
+V1_JOB_CREATION_ENABLED=true
+V1_COORDINATION_ENDPOINTS_ENABLED=true
 ```
+
+The pilot boolean is the kill switch. With it enabled, explicit canary
+functions route to V2 first and remaining jobs use a deterministic percentage
+bucket. Selection happens once when the Job is created, so changing or
+disabling rollout settings never changes an in-flight job.
 
 For V2 jobs, PostgreSQL remains the user-facing read model while Redis is the
 coordination source of truth:
@@ -247,15 +259,55 @@ coordination source of truth:
    and appends a worker-specific Stream delivery.
 4. The worker claims and renews its lease through the orchestrator.
 5. Orchestrator projection events update PostgreSQL asynchronously.
-6. Terminal completion is idempotent and ACKs the exact Stream delivery.
+6. Build completion remains immediate after artifact validation. Invocation
+   completion durably changes Redis from `running` to `finalizing`, ACKs the
+   worker delivery, and emits one finalization event.
+7. The invocation finalizer verifies and commits staged result metadata and
+   output checksums through the backend, then supplies the artifact commit ID
+   to the orchestrator.
+8. Only the orchestrator's terminal event publishes the result and committed
+   outputs through the PostgreSQL read model.
 
 V2 builds use attempt- and dispatch-specific image tags. A new image is not
 exposed on the function version until orchestrator finalization succeeds.
 Expired build attempts emit cleanup events for idempotent registry deletion.
 
-V2 invocation inputs and output uploads still pass through the protected
-backend APIs. The backend persists the result before orchestrator terminal
-completion, so a successful Redis job cannot point to a missing durable result.
+V2 invocation inputs and output uploads still pass through protected backend
+APIs. Output files, result JSON, and logs are tied to the fenced dispatch
+attempt and remain invisible while staged or while the job is `finalizing`.
+The finalizer retries backend commit and orchestrator finalization
+idempotently. Staged data left by a dead worker expires after 24 hours and is
+removed by the staged-artifact cleaner.
+
+V2 reconciliation does not scan the Redis keyspace. Atomic transitions add
+only unfinished finalizations and terminal projections to bounded repair
+indexes. The orchestrator checks at most 20 indexed jobs every five seconds.
+A separate safety auditor checks at most 100 indexed PostgreSQL candidates
+every five minutes, loads Redis state in one pipeline, and contacts the
+orchestrator only when it finds a mismatch.
+
+The cutover stages are `internal`, `builds`, `private`, `token`, `public`, and
+`all`. A stage only makes that traffic eligible; the per-type percentage still
+controls how much eligible traffic enters V2. Set both percentages to `100` at
+the `all` stage before disabling V1 creation.
+
+Operational V2 metrics are available only inside the Compose network at
+`GET http://orchestrator:8010/metrics/` with `X-Internal-Token`. The snapshot
+contains terminal error rate, oldest finalizing age, duplicate dispatch/claim/
+completion counters, recovery count, and projector/finalizer lag.
+
+V1 retirement is guarded and remains disabled by default:
+
+```text
+python manage.py v1_retirement_status
+V1_JOB_CREATION_ENABLED=false
+V1_COORDINATION_ENDPOINTS_ENABLED=false
+python manage.py retire_v1_queues --confirm RETIRE_V1
+```
+
+Run those switches in that order only after the full V2 stage has completed a
+sustained soak. Queue retirement refuses to run while any V1 job or known V1
+Redis List remains active.
 
 ### Scheduler flow
 

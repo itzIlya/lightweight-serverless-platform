@@ -1,3 +1,4 @@
+import logging
 import socket
 import time
 
@@ -12,6 +13,7 @@ class Command(BaseCommand):
     help = "Project V2 orchestrator events into PostgreSQL read models."
 
     def handle(self, *args, **options):
+        logging.getLogger("orchestrator-projector").setLevel(logging.INFO)
         client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
         projector = OrchestratorProjector(client, consumer=socket.gethostname())
         projector.ensure_group()

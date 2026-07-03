@@ -87,6 +87,21 @@ class V2ProjectorTests(TestCase):
         self.assertEqual(self.version.image_ref, final_image)
         self.assertEqual(job.status, JobStatus.SUCCEEDED)
 
+    @override_settings(
+        V2_BUILD_PILOT_ENABLED=True,
+        V2_BUILD_ROLLOUT_PERCENT=0,
+        V2_BUILD_CANARY_FUNCTION_IDS="",
+    )
+    @patch("redis.Redis.from_url")
+    def test_partial_rollout_v1_build_keeps_v1_image_tag(self, redis_from_url):
+        attempt = create_build_attempt(self.version)
+        enqueue_build_attempt(attempt)
+        job = Job.objects.get(build_attempt=attempt)
+
+        self.assertEqual(job.coordination_version, CoordinationVersion.V1)
+        self.assertNotIn(f"-a{attempt.attempt_number}-", job.payload["image_ref"])
+        redis_from_url.assert_called_once()
+
     @override_settings(V2_INVOCATION_PILOT_ENABLED=True)
     @patch("redis.Redis.from_url")
     def test_v2_invocation_running_state_is_projected_asynchronously(self, redis_from_url):

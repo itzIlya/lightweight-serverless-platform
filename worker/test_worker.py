@@ -91,7 +91,7 @@ class BuildWorkerTests(unittest.TestCase):
         self.assertEqual(completion["status"], "succeeded")
         self.assertEqual(completion["artifact_commit_id"], job["image_ref"])
 
-    def test_v2_invocation_persists_result_before_orchestrator_completion(self):
+    def test_v2_invocation_hands_staged_completion_to_orchestrator(self):
         backend = Mock()
         executor = Mock()
         executor.run.return_value = ExecutionResult(
@@ -103,6 +103,13 @@ class BuildWorkerTests(unittest.TestCase):
             duration_ms=5,
             error_message="",
             cold_start=True,
+            output_manifest=[
+                {
+                    "original_path": "report.txt",
+                    "size_bytes": 4,
+                    "checksum_sha256": "abc123",
+                }
+            ],
         )
         orchestrator = Mock()
         orchestrator.complete_job.return_value = {"completed": True}
@@ -122,12 +129,43 @@ class BuildWorkerTests(unittest.TestCase):
         )
 
         self.assertTrue(completed)
-        backend.report_invocation.assert_called_once()
+        backend.report_invocation.assert_not_called()
         self.assertEqual(
-            backend.report_invocation.call_args.args[1]["status"],
+            orchestrator.complete_job.call_args.args[1]["status"],
             "succeeded",
         )
         orchestrator.complete_job.assert_called_once()
+        completion = orchestrator.complete_job.call_args.args[1]
+        self.assertEqual(completion["completion_payload"]["result"], {"ok": True})
+        self.assertEqual(
+            completion["completion_payload"]["output_manifest"][0]["original_path"],
+            "report.txt",
+        )
+        self.assertEqual(job["completion_id"], "job-1:1:invocation")
+
+    def test_v2_staged_upload_failure_withholds_completion(self):
+        backend = Mock()
+        executor = Mock()
+        executor.run.side_effect = BackendReportError("backend unavailable")
+        orchestrator = Mock()
+        job = {
+            "type": "function.invoke",
+            "job_id": "job-1",
+            "dispatch_attempt": 1,
+            "request_id": "invoke-1",
+        }
+
+        completed = process_v2_invocation_job(
+            job,
+            backend,
+            executor,
+            orchestrator,
+            worker_name="worker-a",
+        )
+
+        self.assertFalse(completed)
+        orchestrator.complete_job.assert_not_called()
+
     def test_heartbeat_updates_orchestrator_and_backend_projection(self):
         backend = Mock()
         operational_store = Mock()
@@ -827,6 +865,34 @@ class BuildWorkerTests(unittest.TestCase):
                 position=0,
                 content_type="text/plain",
             )
+
+    def test_v2_upload_stages_file_and_returns_checksum_manifest(self):
+        backend = Mock()
+        executor = DockerExecutor(docker_client=Mock(), backend_client=backend)
+
+        with tempfile.TemporaryDirectory() as root:
+            report = Path(root) / "report.txt"
+            report.write_text("report", encoding="utf-8")
+
+            manifest = executor._upload_output_files(
+                {
+                    "request_id": "request-1",
+                    "job_id": "job-1",
+                    "dispatch_attempt": 2,
+                    "completion_id": "job-1:2:invocation",
+                    "coordination_version": 2,
+                },
+                [{"original_path": "report.txt", "path": report}],
+            )
+
+            backend.upload_staged_invocation_output.assert_called_once()
+            upload = backend.upload_staged_invocation_output.call_args
+            self.assertEqual(upload.args[0], "request-1")
+            self.assertEqual(upload.kwargs["completion_id"], "job-1:2:invocation")
+            self.assertEqual(manifest[0]["original_path"], "report.txt")
+            self.assertEqual(manifest[0]["size_bytes"], 6)
+            self.assertEqual(len(manifest[0]["checksum_sha256"]), 64)
+            backend.upload_invocation_output.assert_not_called()
 
     def test_worker_output_validation_rejects_non_list_declaration(self):
         executor = DockerExecutor(docker_client=Mock())

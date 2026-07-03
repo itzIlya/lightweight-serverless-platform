@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import time
 
 import redis
 from django.db import transaction
@@ -8,9 +10,16 @@ from django.utils import timezone
 
 from apps.functions.models import BuildStatus
 from apps.functions.services import sync_version_from_attempt
-from apps.invocations.models import InvocationStatus
+from apps.invocations.models import (
+    InvocationStagedCompletion,
+    InvocationStatus,
+    StagedCompletionStatus,
+)
 
 from .models import CoordinationVersion, Job, JobStatus
+
+
+logger = logging.getLogger("orchestrator-projector")
 
 
 def apply_orchestrator_projection(fields: dict) -> bool:
@@ -56,7 +65,7 @@ def apply_orchestrator_projection(fields: dict) -> bool:
         if job.build_attempt_id:
             project_build(job, event_type, state)
         elif job.invocation_id:
-            project_invocation(job, event_type)
+            project_invocation(job, event_type, state)
     return True
 
 
@@ -104,7 +113,7 @@ def project_build(job: Job, event_type: str, state: dict) -> None:
         sync_version_from_attempt(version, attempt)
 
 
-def project_invocation(job: Job, event_type: str) -> None:
+def project_invocation(job: Job, event_type: str, state: dict) -> None:
     invocation = job.invocation
     if event_type == "job.running":
         invocation.status = InvocationStatus.RUNNING
@@ -119,6 +128,42 @@ def project_invocation(job: Job, event_type: str) -> None:
         invocation.finished_at = timezone.now()
         invocation.error_message = "Invocation exceeded V2 recovery attempts."
         invocation.save(update_fields=["status", "finished_at", "error_message"])
+    elif event_type in {"job.succeeded", "job.failed"}:
+        completion = InvocationStagedCompletion.objects.filter(
+            completion_id=state.get("completion_id", ""),
+            invocation=invocation,
+            status=StagedCompletionStatus.COMMITTED,
+        ).first()
+        if completion is None:
+            raise ValueError("Terminal projection requires a committed staged completion.")
+        if str(completion.artifact_commit_id) != str(state.get("artifact_commit_id", "")):
+            raise ValueError("Artifact commit ID does not match orchestrator state.")
+        invocation.status = (
+            InvocationStatus.SUCCEEDED
+            if event_type == "job.succeeded"
+            else InvocationStatus.FAILED
+        )
+        invocation.result = completion.result
+        invocation.stdout = completion.stdout
+        invocation.stderr = completion.stderr
+        invocation.exit_code = completion.exit_code
+        invocation.cold_start = completion.cold_start
+        invocation.error_message = completion.error_message
+        invocation.duration_ms = completion.duration_ms
+        invocation.finished_at = timezone.now()
+        invocation.save(
+            update_fields=[
+                "status",
+                "result",
+                "stdout",
+                "stderr",
+                "exit_code",
+                "cold_start",
+                "error_message",
+                "duration_ms",
+                "finished_at",
+            ]
+        )
 
 
 class OrchestratorProjector:
@@ -168,7 +213,25 @@ class OrchestratorProjector:
         processed = 0
         for _, messages in batches:
             for stream_id, fields in messages:
+                apply_started = time.monotonic()
                 apply_orchestrator_projection(fields)
                 self.redis.xack(self.stream, self.group, stream_id)
+                state = json.loads(fields.get("payload") or "{}")
+                request_id = (state.get("payload") or {}).get("request_id", "")
+                if request_id:
+                    logger.info(
+                        "invocation projector timing request_id=%s event_type=%s "
+                        "timings=%s",
+                        request_id,
+                        fields.get("event_type", ""),
+                        json.dumps(
+                            {
+                                "postgres_projection_ms": int(
+                                    (time.monotonic() - apply_started) * 1000
+                                )
+                            },
+                            sort_keys=True,
+                        ),
+                    )
                 processed += 1
         return processed

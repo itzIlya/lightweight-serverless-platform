@@ -343,8 +343,20 @@ def release_build_lease(
     )
 
 
-def build_function_job(attempt: BuildAttempt) -> dict:
+def build_function_job(
+    attempt: BuildAttempt,
+    *,
+    coordination_version: int | None = None,
+) -> dict:
+    from apps.jobs.models import CoordinationVersion, JobType
+    from apps.jobs.services import coordination_version_for_job
+
     version = attempt.function_version
+    coordination_version = coordination_version or coordination_version_for_job(
+        JobType.BUILD,
+        attempt.request_id,
+        function_id=version.function_id,
+    )
     return {
         "type": "function.build",
         "build_request_id": str(attempt.request_id),
@@ -358,7 +370,7 @@ def build_function_job(attempt: BuildAttempt) -> dict:
         "handler": version.handler,
         "image_ref": (
             make_attempt_image_ref(attempt)
-            if settings.V2_BUILD_PILOT_ENABLED
+            if coordination_version == CoordinationVersion.V2
             else make_image_ref(version)
         ),
         "queued_at": attempt.queued_at.isoformat(),
@@ -367,10 +379,23 @@ def build_function_job(attempt: BuildAttempt) -> dict:
 
 def enqueue_build_attempt(attempt: BuildAttempt) -> dict:
     import redis
-    from apps.jobs.services import create_build_job_record
+    from apps.jobs.models import JobType
+    from apps.jobs.services import (
+        coordination_version_for_job,
+        create_build_job_record,
+    )
 
-    payload = build_function_job(attempt)
-    job = create_build_job_record(attempt, payload)
+    coordination_version = coordination_version_for_job(
+        JobType.BUILD,
+        attempt.request_id,
+        function_id=attempt.function_version.function_id,
+    )
+    payload = build_function_job(attempt, coordination_version=coordination_version)
+    job = create_build_job_record(
+        attempt,
+        payload,
+        coordination_version=coordination_version,
+    )
     if job.coordination_version == 1:
         client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
         client.rpush(settings.SCHEDULER_BUILD_QUEUE_NAME, str(job.job_id))

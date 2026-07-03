@@ -1,6 +1,6 @@
 # Project Status Report
 
-Date: 2026-06-30
+Date: 2026-07-01
 
 Source basis:
 - `ROADMAP.md`
@@ -24,6 +24,9 @@ The platform currently includes:
   projection
 - Pilot V2 build and invocation authority using Redis Streams and orchestrator
   leases
+- Staged V2 invocation completions with checksummed, attempt-fenced output
+  artifacts and terminal visibility rules
+- Retryable invocation finalizer and expired-stage cleanup services
 - Asynchronous PostgreSQL projection of V2 dispatch, running, recovery, and
   terminal state
 - Simple scheduler service for worker placement
@@ -241,7 +244,8 @@ capability-aware routing, and multi-worker failure tests.
 
 ### Orchestrator V2 Migration Foundation
 
-Status: Steps 1-9 implemented; V2 pilots available but disabled by default
+Status: Steps 1-10 and 12-13 implemented; Step 14 controls ready but retirement
+not activated; Step 11 status-read cutover remains
 
 Implemented:
 - Frozen and documented V1 coordination contract
@@ -281,10 +285,46 @@ Implemented:
 - V2 recovery ceiling and dead-letter projection
 - Creation-time build and invocation pilot flags, both defaulting to off
 - Two successful live V2 builds and one successful live V2 invocation
+- Attempt-fenced staged invocation output upload with SHA-256 manifests
+- Staged result, stdout, stderr, timing, and output metadata hidden from all
+  user APIs until terminal projection
+- Idempotent backend artifact commit with stable `artifact_commit_id`
+- Invocation completion transfer from worker delivery to a retryable Redis
+  finalization Stream
+- Finalizer service that commits backend artifacts before asking the
+  orchestrator for a terminal transition
+- Terminal projector verification of completion ID and artifact commit ID
+- 24-hour cleanup for abandoned staged artifacts
+- A successful live Step 10 V2 invocation through worker, finalizer,
+  orchestrator, and PostgreSQL projection
+- Atomic Redis repair indexes for pre-publication finalization and terminal
+  projection crash windows
+- Bounded startup reconciliation for expired leases, abandoned creation
+  events, finalizing jobs, and terminal projections
+- Pending-entry recovery for restarted finalizer and projector consumers
+- Five-minute, 100-row cross-store audit with one pipelined Redis read and
+  network repair only on detected mismatches
+- Indexed PostgreSQL V2 reconciliation queries
+- Deterministic percentage rollout and explicit function canaries for builds
+  and invocations
+- Pilot booleans retained as immediate kill switches for new traffic
+- Live Redis AOF restart and mixed V1/V2 canary verification
+- Ordered V2 eligibility stages for internal, build, private, token, public,
+  and all-new-job traffic
+- Protected Redis-native monitoring for error rate, finalizing age, duplicates,
+  recoveries, projection lag, and finalization lag
+- V1 creation and coordination endpoint retirement switches, enabled for
+  compatibility by default
+- Non-destructive V1 drain readiness command using grouped SQL and one Redis
+  pipeline over known queues
+- Guarded V1 Redis List retirement command requiring a drained state and
+  explicit confirmation
+- Live internal-stage V2 canary with clean terminal and lag metrics
 
 Not implemented yet:
-- Staged output upload and finalizer services
-- Full invocation artifact staging independent of the backend
+- Step 11 Redis-first API status reads and terminal fallback semantics
+- A sustained full-V2 soak period before actually disabling V1
+- One compatibility release before deleting V1 implementation code
 - Broad canary load, network-partition, and process-kill experiments
 
 All production execution remains on coordination V1.
@@ -367,6 +407,8 @@ Protected internal worker endpoints:
 - `GET /api/internal/invocations/{request_id}/inputs/`
 - `GET /api/internal/invocations/{request_id}/inputs/{file_id}/download/`
 - `POST /api/internal/invocations/{request_id}/outputs/`
+- `POST /api/internal/invocations/{request_id}/staged-outputs/`
+- `POST /api/internal/invocations/{request_id}/staged-completions/{completion_id}/commit/`
 - `PATCH /api/internal/invocations/{request_id}/report/`
 
 ## Verified State
@@ -379,9 +421,10 @@ Latest verification:
 - Migrations applied successfully for `jobs.0002_recovery_dead_letter_fields`
 - Migrations applied successfully for `jobs.0003_job_coordination_version` and
   `jobs.0004_outboxevent`
-- Backend Docker test suite passed: `67` tests
-- Worker Docker test suite passed: `56` tests
-- Scheduler/orchestrator test suite passed: `52` tests
+- Migration applied successfully for `invocations.0004_staged_completions`
+- Backend Docker test suite passed: `89` tests
+- Worker Docker test suite passed: `58` tests
+- Scheduler/orchestrator test suite passed: `63` tests
 - Compile check passed for backend, worker, and scheduler
 - Migration drift check passed: `No changes detected`
 - User journey smoke test passed with tmpfs-backed exported output file
@@ -395,10 +438,22 @@ Latest verification:
   `docs/real_workload_test_report.md`
 - Invocation latency profiling documented in
   `docs/invocation_latency_profile_report.md`
+- Real V1/V2 invocation comparison documented in
+  `docs/invocation_v1_v2_comparison_report.md` with raw measurements in
+  `docs/invocation_v1_v2_comparison_2026-07-02.json`: all 44 measured
+  invocations succeeded and returned matching results; V2 reduced the
+  12-request burst wall time by 28.9% and left finalization/projection lag at
+  zero
 - Orchestrator steps 5-7 verification documented in
   `docs/orchestrator_migration_steps_5_7_test_report.md`
 - V2 build and invocation pilot verification documented in
   `docs/orchestrator_migration_steps_8_9_test_report.md`
+- V2 staged completion verification documented in
+  `docs/orchestrator_migration_step_10_test_report.md`
+- V2 reconciliation and gradual-cutover verification documented in
+  `docs/orchestrator_migration_steps_12_13_test_report.md`
+- Ordered cutover and V1 retirement verification documented in
+  `docs/orchestrator_migration_steps_13_14_test_report.md`
 
 The backend test suite now covers:
 - JWT registration, login, refresh support, and `/api/auth/me/`
@@ -441,6 +496,18 @@ The backend test suite now covers:
 - Build worker crash recovery and orphan-image cleanup
 - Dispatch, delivery, claim, and running-transition stale-attempt fencing
 - Asynchronous PostgreSQL projection and image visibility ordering
+- Staged-output checksum and exact-manifest validation
+- Hidden staged/committed artifacts before terminal projection
+- Worker-death-after-upload behavior and staged artifact expiry
+- Invocation completion/finalization lost-response idempotency
+- Finalizer retry behavior after backend or orchestrator failure
+- Orchestrator repair after crashes before finalization/projection publication
+- Finalizer and projector pending-entry reclaim after restart
+- Bounded cross-store mismatch repair and empty-audit query count
+- Deterministic rollout, function canaries, and pilot kill switches
+- Ordered access-tier cutover and incomplete-cutover V1 fallback rejection
+- Redis-native monitoring counters and finalizing-age preservation
+- V1 drain readiness and HTTP 410 retirement guards
 
 ## Important Current Limitations
 
@@ -457,8 +524,9 @@ The backend test suite now covers:
 - Durable jobs exist, but Redis is still the active queue transport.
 - V2 build and invocation pilots are implemented, but both pilot flags default
   to false. Normal API-created jobs therefore remain V1 until explicitly enabled.
-- V2 invocation inputs, output uploads, and durable result persistence still use
-  the backend. The orchestrator fences terminal completion only after that write.
+- V2 invocation inputs and durable artifact storage still use the backend, but
+  staged artifacts remain hidden until the orchestrator receives a matching
+  artifact commit and emits terminal state.
 - Scheduler placement is queue-aware and build-aware, but not yet capability-aware by
   runtime, memory, CPU, cached image, or warm-container availability.
 - Only Python image builds are currently implemented.

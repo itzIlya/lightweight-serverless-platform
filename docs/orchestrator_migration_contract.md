@@ -100,8 +100,63 @@ the orchestrator has finalized success with that image as the artifact commit.
 Expired build attempts emit orphan-image events; the cleanup consumer resolves
 the registry manifest digest and deletes it idempotently.
 
-V2 invocation inputs and output uploads still use protected backend endpoints.
-The orchestrator owns dispatch, claim, leases, running state, and terminal
-fencing. Running state reaches PostgreSQL asynchronously through the projector.
-The backend result write happens before orchestrator completion, preserving the
-artifact-before-terminal invariant.
+V2 invocation inputs and staged output uploads still use protected backend
+endpoints. The orchestrator owns dispatch, claim, leases, running state,
+completion acceptance, and terminal fencing. Invocation completion first moves
+Redis to `finalizing` and ACKs the worker delivery after the completion payload
+is durable. A separate finalizer commits the staged result, logs, manifest, and
+checksummed files in the backend, then returns the artifact commit ID to the
+orchestrator. Only the resulting terminal projection publishes those artifacts
+to users. Staged artifacts from abandoned attempts remain hidden and expire
+after 24 hours.
+
+## Steps 12-13 Reconciliation And Cutover
+
+Finalization and terminal transitions atomically add their job ID to a Redis
+repair sorted set. Publishing the corresponding Stream event atomically removes
+that marker. On startup and every five seconds, the orchestrator processes at
+most 20 marked jobs; it never scans the job keyspace. Expired leases and
+abandoned creation Stream entries retain their existing bounded recovery paths.
+
+The projector and finalizer keep failed work in Redis Stream consumer groups
+and reclaim pending entries after restart. The staged-artifact cleaner removes
+expired uncommitted files. A PostgreSQL safety auditor runs at most once every
+five minutes, examines at most 100 indexed candidates, reads Redis state in one
+pipeline, and performs network repair only for an actual mismatch.
+
+Gradual cutover is selected only at Job creation:
+
+- Pilot boolean `false`: all new jobs use V1 immediately.
+- Pilot boolean `true`, percentage `0`: only listed function canaries use V2.
+- Percentage `1..100`: non-canary jobs use a deterministic hash bucket.
+- Existing jobs remain pinned to their stored `coordination_version`.
+
+Rollback is therefore a configuration change for new traffic, not a mutation
+of in-flight jobs.
+
+The ordered stage values are:
+
+1. `internal`: explicit function-ID canaries only.
+2. `builds`: build jobs become eligible.
+3. `private`: private owner invocations become eligible.
+4. `token`: token-protected invocations become eligible.
+5. `public`: public invocations become eligible.
+6. `all`: final stage; use 100 percent for both job types.
+
+The protected orchestrator metrics endpoint derives counters inside existing
+Lua transitions and reads small Redis hashes, sorted sets, and Stream group
+metadata only on request. It performs no PostgreSQL query or job scan.
+
+## V1 Retirement Contract
+
+V1 retirement is not activated merely because the drain check is currently
+clean. After a sustained full-V2 soak:
+
+1. Set `V1_JOB_CREATION_ENABLED=false`.
+2. Run `v1_retirement_status` until every V1 Job is terminal and every known V1
+   Redis List is empty.
+3. Set `V1_COORDINATION_ENDPOINTS_ENABLED=false`; V1 dispatch, claim, requeue,
+   and worker report endpoints then return HTTP 410.
+4. Keep the V1 compatibility implementation for one release.
+5. Run `retire_v1_queues --confirm RETIRE_V1` to remove only the known drained
+   Lists. The command refuses to run before the drain condition is true.

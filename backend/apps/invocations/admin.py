@@ -1,6 +1,11 @@
 from django.contrib import admin
 
-from .models import Invocation, InvocationInputFile, InvocationOutputFile
+from .models import (
+    Invocation,
+    InvocationInputFile,
+    InvocationOutputFile,
+    InvocationStagedCompletion,
+)
 
 
 @admin.register(Invocation)
@@ -29,8 +34,23 @@ class InvocationOutputFileAdmin(admin.ModelAdmin):
         "invocation",
         "position",
         "original_path",
+        "status",
+        "staged_completion",
         "content_type",
         "size_bytes",
         "created_at",
     )
     search_fields = ("invocation__request_id", "original_path", "content_type")
+
+
+@admin.register(InvocationStagedCompletion)
+class InvocationStagedCompletionAdmin(admin.ModelAdmin):
+    list_display = (
+        "completion_id",
+        "invocation",
+        "dispatch_attempt",
+        "status",
+        "artifact_commit_id",
+        "expires_at",
+    )
+    list_filter = ("status", "terminal_status")

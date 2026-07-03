@@ -32,6 +32,9 @@ class OrchestratorClient:
     def complete_job(self, job_id: str, payload: dict) -> dict:
         return self._post(f"/v2/jobs/{job_id}/complete", payload)
 
+    def finalize_job(self, job_id: str, payload: dict) -> dict:
+        return self._post(f"/v2/jobs/{job_id}/finalize", payload)
+
     def _post(self, path: str, payload: dict) -> dict:
         body = json.dumps(payload).encode("utf-8")
         last_error = None

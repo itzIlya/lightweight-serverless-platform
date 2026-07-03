@@ -1,8 +1,10 @@
 import uuid
 import hashlib
 import secrets
+from datetime import timedelta
 
 from django.db import models
+from django.utils import timezone
 from django.utils.text import get_valid_filename
 
 from apps.functions.models import FunctionVersion
@@ -93,10 +95,66 @@ class InvocationInputFile(models.Model):
 
 def invocation_output_upload_to(instance, filename: str) -> str:
     safe_name = get_valid_filename(filename) or "output"
+    completion = getattr(instance, "staged_completion", None)
+    stage = (
+        get_valid_filename(completion.completion_id).replace(":", "-")
+        if completion
+        else "committed"
+    )
     return (
-        f"invocation_outputs/{instance.invocation.request_id}/"
+        f"invocation_outputs/{instance.invocation.request_id}/{stage}/"
         f"{instance.position:03d}-{safe_name}"
     )
+
+
+class StagedCompletionStatus(models.TextChoices):
+    STAGED = "staged", "Staged"
+    COMMITTED = "committed", "Committed"
+    EXPIRED = "expired", "Expired"
+
+
+def staged_completion_expiry():
+    return timezone.now() + timedelta(hours=24)
+
+
+class InvocationStagedCompletion(models.Model):
+    invocation = models.ForeignKey(
+        Invocation,
+        on_delete=models.CASCADE,
+        related_name="staged_completions",
+    )
+    job_id = models.UUIDField(db_index=True)
+    dispatch_attempt = models.PositiveIntegerField()
+    completion_id = models.CharField(max_length=200, unique=True)
+    status = models.CharField(
+        max_length=20,
+        choices=StagedCompletionStatus.choices,
+        default=StagedCompletionStatus.STAGED,
+        db_index=True,
+    )
+    terminal_status = models.CharField(max_length=20, blank=True)
+    result = models.JSONField(default=dict, blank=True)
+    stdout = models.TextField(blank=True)
+    stderr = models.TextField(blank=True)
+    exit_code = models.IntegerField(null=True, blank=True)
+    cold_start = models.BooleanField(default=False)
+    error_message = models.TextField(blank=True)
+    duration_ms = models.PositiveIntegerField(null=True, blank=True)
+    output_manifest = models.JSONField(default=list, blank=True)
+    artifact_commit_id = models.UUIDField(null=True, blank=True, unique=True)
+    expires_at = models.DateTimeField(default=staged_completion_expiry, db_index=True)
+    committed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["job_id", "dispatch_attempt"],
+                name="unique_invocation_staged_job_attempt",
+            )
+        ]
 
 
 class InvocationOutputFile(models.Model):
@@ -105,7 +163,21 @@ class InvocationOutputFile(models.Model):
         on_delete=models.CASCADE,
         related_name="output_files",
     )
-    file = models.FileField(upload_to=invocation_output_upload_to)
+    staged_completion = models.ForeignKey(
+        InvocationStagedCompletion,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="output_files",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=StagedCompletionStatus.choices,
+        default=StagedCompletionStatus.COMMITTED,
+        db_index=True,
+    )
+    checksum_sha256 = models.CharField(max_length=64, blank=True)
+    file = models.FileField(upload_to=invocation_output_upload_to, max_length=500)
     original_path = models.CharField(max_length=500)
     safe_name = models.CharField(max_length=255)
     content_type = models.CharField(max_length=255, blank=True)
@@ -117,8 +189,8 @@ class InvocationOutputFile(models.Model):
         ordering = ["position", "created_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=["invocation", "original_path"],
-                name="unique_invocation_output_path",
+                fields=["staged_completion", "original_path"],
+                name="unique_staged_completion_output_path",
             )
         ]
 

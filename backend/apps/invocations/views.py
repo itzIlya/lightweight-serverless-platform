@@ -13,13 +13,23 @@ from apps.accounts.services import is_platform_admin
 from apps.jobs.models import Job, JobStatus
 from apps.jobs.services import mark_invocation_jobs_from_status
 
-from .models import Invocation, InvocationOutputFile, hash_invocation_read_token
+from .models import (
+    Invocation,
+    InvocationOutputFile,
+    InvocationStatus,
+    StagedCompletionStatus,
+    hash_invocation_read_token,
+)
 from .serializers import (
     InvocationOutputFileSerializer,
     InvocationReportSerializer,
     InvocationSerializer,
 )
-from .services import store_invocation_output_file
+from .services import (
+    commit_staged_invocation_completion,
+    store_invocation_output_file,
+    store_staged_invocation_output_file,
+)
 
 
 class InvocationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
@@ -59,7 +69,10 @@ class InvocationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
         invocation = self.get_object()
         _authorize_invocation_read(request, invocation)
         return Response(
-            InvocationOutputFileSerializer(invocation.output_files.all(), many=True).data
+            InvocationOutputFileSerializer(
+                visible_invocation_outputs(invocation),
+                many=True,
+            ).data
         )
 
     @action(
@@ -74,7 +87,10 @@ class InvocationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
             InvocationOutputFile,
             id=file_id,
             invocation=invocation,
+            status=StagedCompletionStatus.COMMITTED,
         )
+        if invocation.status not in terminal_invocation_statuses():
+            raise PermissionDenied("Invocation outputs are not published yet.")
         return FileResponse(
             output_file.file.open("rb"),
             as_attachment=True,
@@ -110,6 +126,21 @@ def _authorize_invocation_read(request, invocation: Invocation) -> None:
         raise PermissionDenied("Invalid invocation read token.")
 
 
+def terminal_invocation_statuses():
+    return {
+        InvocationStatus.SUCCEEDED,
+        InvocationStatus.FAILED,
+        InvocationStatus.TIMEOUT,
+        InvocationStatus.CANCELLED,
+    }
+
+
+def visible_invocation_outputs(invocation):
+    if invocation.status not in terminal_invocation_statuses():
+        return invocation.output_files.none()
+    return invocation.output_files.filter(status=StagedCompletionStatus.COMMITTED)
+
+
 @api_view(["PATCH"])
 @permission_classes([])
 def report_invocation(request, request_id):
@@ -118,6 +149,11 @@ def report_invocation(request, request_id):
         return Response(
             {"detail": "Unauthorized."},
             status=status.HTTP_401_UNAUTHORIZED,
+        )
+    if not settings.V1_COORDINATION_ENDPOINTS_ENABLED:
+        return Response(
+            {"detail": "V1 invocation reporting has been retired."},
+            status=status.HTTP_410_GONE,
         )
 
     invocation = get_object_or_404(
@@ -191,6 +227,73 @@ def upload_invocation_output(request, request_id):
     return Response(
         InvocationOutputFileSerializer(output_file).data,
         status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([])
+@parser_classes([MultiPartParser, FormParser])
+def stage_invocation_output(request, request_id):
+    token = request.headers.get("X-Internal-Token", "")
+    if token != settings.WORKER_SHARED_SECRET:
+        return Response({"detail": "Unauthorized."}, status=status.HTTP_401_UNAUTHORIZED)
+    invocation = get_object_or_404(
+        Invocation.objects.select_related("function_version"),
+        request_id=request_id,
+    )
+    uploaded_file = request.FILES.get("file")
+    if uploaded_file is None:
+        raise ValidationError({"file": "This field is required."})
+    try:
+        output = store_staged_invocation_output_file(
+            invocation=invocation,
+            job_id=request.data.get("job_id"),
+            dispatch_attempt=int(request.data.get("dispatch_attempt", 0)),
+            completion_id=request.data.get("completion_id", ""),
+            uploaded_file=uploaded_file,
+            original_path=request.data.get("original_path", ""),
+            checksum_sha256=request.data.get("checksum_sha256", ""),
+            position=int(request.data.get("position", 0)),
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValidationError({"output": str(exc)}) from exc
+    return Response(
+        {
+            "id": output.id,
+            "original_path": output.original_path,
+            "size_bytes": output.size_bytes,
+            "checksum_sha256": output.checksum_sha256,
+            "status": output.status,
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([])
+def commit_staged_invocation(request, request_id, completion_id):
+    token = request.headers.get("X-Internal-Token", "")
+    if token != settings.WORKER_SHARED_SECRET:
+        return Response({"detail": "Unauthorized."}, status=status.HTTP_401_UNAUTHORIZED)
+    invocation = get_object_or_404(Invocation, request_id=request_id)
+    try:
+        completion = commit_staged_invocation_completion(
+            invocation=invocation,
+            job_id=request.data.get("job_id"),
+            dispatch_attempt=int(request.data.get("dispatch_attempt", 0)),
+            completion_id=completion_id,
+            terminal_status=request.data.get("terminal_status", ""),
+            completion_payload=request.data.get("completion_payload") or {},
+            output_manifest=request.data.get("output_manifest") or [],
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValidationError({"completion": str(exc)}) from exc
+    return Response(
+        {
+            "completion_id": completion.completion_id,
+            "artifact_commit_id": str(completion.artifact_commit_id),
+            "status": completion.status,
+        }
     )
 
 

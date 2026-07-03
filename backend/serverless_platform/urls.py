@@ -18,6 +18,8 @@ from apps.functions.views import (
 from apps.invocations.views import (
     InvocationViewSet,
     report_invocation,
+    stage_invocation_output,
+    commit_staged_invocation,
     upload_invocation_output,
 )
 from apps.jobs.views import (
@@ -126,6 +128,16 @@ urlpatterns = [
         "api/internal/invocations/<uuid:request_id>/outputs/",
         upload_invocation_output,
         name="upload-invocation-output",
+    ),
+    path(
+        "api/internal/invocations/<uuid:request_id>/staged-outputs/",
+        stage_invocation_output,
+        name="stage-invocation-output",
+    ),
+    path(
+        "api/internal/invocations/<uuid:request_id>/staged-completions/<str:completion_id>/commit/",
+        commit_staged_invocation,
+        name="commit-staged-invocation",
     ),
     path("api/auth/", include("apps.accounts.urls")),
     path("api/", include(router.urls)),

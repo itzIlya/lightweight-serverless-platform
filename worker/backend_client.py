@@ -42,6 +42,47 @@ class BackendClient:
             content_type=content_type,
         )
 
+    def upload_staged_invocation_output(
+        self,
+        request_id: str,
+        *,
+        job_id: str,
+        dispatch_attempt: int,
+        completion_id: str,
+        original_path: str,
+        checksum_sha256: str,
+        file_path: Path,
+        position: int,
+        content_type: str = "application/octet-stream",
+    ) -> dict:
+        url = f"{self.base_url}/api/internal/invocations/{request_id}/staged-outputs/"
+        return self._post_multipart_file(
+            url,
+            fields={
+                "job_id": job_id,
+                "dispatch_attempt": str(dispatch_attempt),
+                "completion_id": completion_id,
+                "original_path": original_path,
+                "checksum_sha256": checksum_sha256,
+                "position": str(position),
+            },
+            file_field="file",
+            file_path=file_path,
+            content_type=content_type,
+        )
+
+    def commit_staged_invocation(
+        self,
+        request_id: str,
+        completion_id: str,
+        payload: dict,
+    ) -> dict:
+        url = (
+            f"{self.base_url}/api/internal/invocations/{request_id}/"
+            f"staged-completions/{completion_id}/commit/"
+        )
+        return self._post_json(url, payload)
+
     def list_invocation_inputs(self, request_id: str) -> dict:
         url = f"{self.base_url}/api/internal/invocations/{request_id}/inputs/"
         return self._get_json(url)

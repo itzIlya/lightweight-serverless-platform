@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 from django.conf import settings
 from django.db import transaction
 
@@ -8,6 +10,16 @@ from apps.invocations.models import InvocationStatus
 from apps.workers.models import WorkerStatus
 
 from .models import CoordinationVersion, Job, JobStatus, JobType, OutboxEvent
+
+
+CUTOVER_STAGES = {
+    "internal": 1,
+    "builds": 2,
+    "private": 3,
+    "token": 4,
+    "public": 5,
+    "all": 6,
+}
 
 
 def max_recovery_attempts_for_type(job_type: str) -> int:
@@ -41,7 +53,17 @@ def _recovery_backoff_values(job_type: str) -> list[int]:
     return values
 
 
-def create_build_job_record(build_attempt, payload: dict) -> Job:
+def create_build_job_record(
+    build_attempt,
+    payload: dict,
+    *,
+    coordination_version: int | None = None,
+) -> Job:
+    coordination_version = coordination_version or coordination_version_for_job(
+        JobType.BUILD,
+        build_attempt.request_id,
+        function_id=build_attempt.function_version.function_id,
+    )
     with transaction.atomic():
         job = Job.objects.create(
             type=JobType.BUILD,
@@ -51,16 +73,23 @@ def create_build_job_record(build_attempt, payload: dict) -> Job:
             build_attempt=build_attempt,
             available_at=build_attempt.queued_at,
             max_recovery_attempts=max_recovery_attempts_for_type(JobType.BUILD),
-            coordination_version=(
-                CoordinationVersion.V2
-                if settings.V2_BUILD_PILOT_ENABLED
-                else CoordinationVersion.V1
-            ),
+            coordination_version=coordination_version,
         )
         return _finish_job_creation(job, payload)
 
 
-def create_invocation_job_record(invocation, payload: dict) -> Job:
+def create_invocation_job_record(
+    invocation,
+    payload: dict,
+    *,
+    coordination_version: int | None = None,
+) -> Job:
+    coordination_version = coordination_version or coordination_version_for_job(
+        JobType.INVOCATION,
+        invocation.request_id,
+        function_id=invocation.function_version.function_id,
+        invoke_access=invocation.function_version.function.invoke_access,
+    )
     with transaction.atomic():
         job = Job.objects.create(
             type=JobType.INVOCATION,
@@ -70,11 +99,7 @@ def create_invocation_job_record(invocation, payload: dict) -> Job:
             invocation=invocation,
             available_at=invocation.queued_at,
             max_recovery_attempts=max_recovery_attempts_for_type(JobType.INVOCATION),
-            coordination_version=(
-                CoordinationVersion.V2
-                if settings.V2_INVOCATION_PILOT_ENABLED
-                else CoordinationVersion.V1
-            ),
+            coordination_version=coordination_version,
         )
         return _finish_job_creation(job, payload)
 
@@ -100,6 +125,63 @@ def _finish_job_creation(job: Job, payload: dict) -> Job:
         },
     )
     return job
+
+
+def coordination_version_for_job(
+    job_type: str,
+    routing_key,
+    *,
+    function_id: int | None = None,
+    invoke_access: str | None = None,
+) -> int:
+    if job_type == JobType.BUILD:
+        enabled = settings.V2_BUILD_PILOT_ENABLED
+        percentage = settings.V2_BUILD_ROLLOUT_PERCENT
+        canaries = settings.V2_BUILD_CANARY_FUNCTION_IDS
+    else:
+        enabled = settings.V2_INVOCATION_PILOT_ENABLED
+        percentage = settings.V2_INVOCATION_ROLLOUT_PERCENT
+        canaries = settings.V2_INVOCATION_CANARY_FUNCTION_IDS
+    selected = CoordinationVersion.V1
+    stage = CUTOVER_STAGES.get(settings.V2_CUTOVER_STAGE, 0)
+    is_canary = (
+        function_id is not None and int(function_id) in parse_integer_set(canaries)
+    )
+    if enabled and is_canary and stage >= CUTOVER_STAGES["internal"]:
+        selected = CoordinationVersion.V2
+    elif enabled and cutover_stage_allows(stage, job_type, invoke_access):
+        digest = hashlib.sha256(
+            f"{job_type}:{routing_key}".encode("utf-8")
+        ).digest()
+        bucket = int.from_bytes(digest[:8], "big") % 100
+        if bucket < max(0, min(100, int(percentage))):
+            selected = CoordinationVersion.V2
+    if selected == CoordinationVersion.V1 and not settings.V1_JOB_CREATION_ENABLED:
+        raise RuntimeError(
+            "V1 job creation is disabled and this job is not eligible for V2."
+        )
+    return selected
+
+
+def cutover_stage_allows(stage: int, job_type: str, invoke_access: str | None) -> bool:
+    if job_type == JobType.BUILD:
+        return stage >= CUTOVER_STAGES["builds"]
+    required = {
+        "private": CUTOVER_STAGES["private"],
+        "token": CUTOVER_STAGES["token"],
+        "public": CUTOVER_STAGES["public"],
+    }.get(str(invoke_access or "private"), CUTOVER_STAGES["all"])
+    return stage >= required
+
+
+def parse_integer_set(value) -> set[int]:
+    parsed = set()
+    for item in str(value or "").split(","):
+        try:
+            parsed.add(int(item.strip()))
+        except (TypeError, ValueError):
+            continue
+    return parsed
 
 
 def mark_build_jobs_from_status(build_attempt, build_status: str) -> int:

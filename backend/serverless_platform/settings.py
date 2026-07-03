@@ -90,6 +90,10 @@ MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+ORCHESTRATOR_BASE_URL = os.getenv(
+    "ORCHESTRATOR_BASE_URL",
+    "http://orchestrator:8010",
+)
 ORCHESTRATOR_EVENT_STREAM = os.getenv(
     "ORCHESTRATOR_EVENT_STREAM",
     "orchestrator:events",
@@ -102,6 +106,28 @@ V2_BUILD_PILOT_ENABLED = os.getenv("V2_BUILD_PILOT_ENABLED", "false").lower() in
 V2_INVOCATION_PILOT_ENABLED = os.getenv(
     "V2_INVOCATION_PILOT_ENABLED",
     "false",
+).lower() in {"1", "true", "yes"}
+V2_BUILD_ROLLOUT_PERCENT = max(
+    0,
+    min(100, int(os.getenv("V2_BUILD_ROLLOUT_PERCENT", "100"))),
+)
+V2_INVOCATION_ROLLOUT_PERCENT = max(
+    0,
+    min(100, int(os.getenv("V2_INVOCATION_ROLLOUT_PERCENT", "100"))),
+)
+V2_BUILD_CANARY_FUNCTION_IDS = os.getenv("V2_BUILD_CANARY_FUNCTION_IDS", "")
+V2_INVOCATION_CANARY_FUNCTION_IDS = os.getenv(
+    "V2_INVOCATION_CANARY_FUNCTION_IDS",
+    "",
+)
+V2_CUTOVER_STAGE = os.getenv("V2_CUTOVER_STAGE", "all").strip().lower()
+V1_JOB_CREATION_ENABLED = os.getenv(
+    "V1_JOB_CREATION_ENABLED",
+    "true",
+).lower() in {"1", "true", "yes"}
+V1_COORDINATION_ENDPOINTS_ENABLED = os.getenv(
+    "V1_COORDINATION_ENDPOINTS_ENABLED",
+    "true",
 ).lower() in {"1", "true", "yes"}
 JOB_QUEUE_NAME = os.getenv(
     "JOB_QUEUE_NAME",

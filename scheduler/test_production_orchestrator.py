@@ -33,6 +33,11 @@ class ProductionOrchestratorTests(unittest.TestCase):
         self.ready_key = f"test:v2:ready:{self.unique}"
         self.lease_key = f"test:v2:leases:{self.unique}"
         self.orphan_stream = f"test:v2:orphans:{self.unique}"
+        self.finalization_stream = f"test:v2:finalizations:{self.unique}"
+        self.finalization_repair_key = f"test:v2:repair:finalizations:{self.unique}"
+        self.projection_repair_key = f"test:v2:repair:projections:{self.unique}"
+        self.active_finalizing_key = f"test:v2:active:finalizing:{self.unique}"
+        self.metrics_key = f"test:v2:metrics:{self.unique}"
         self.state_prefix = f"test:v2:job:{self.unique}"
         self.worker_prefix = f"test:v2:worker:{self.unique}"
         self.worker_lease_key = f"test:v2:worker-leases:{self.unique}"
@@ -50,6 +55,11 @@ class ProductionOrchestratorTests(unittest.TestCase):
             ready_key=self.ready_key,
             lease_key=self.lease_key,
             orphan_stream=self.orphan_stream,
+            finalization_stream=self.finalization_stream,
+            finalization_repair_key=self.finalization_repair_key,
+            projection_repair_key=self.projection_repair_key,
+            active_finalizing_key=self.active_finalizing_key,
+            metrics_key=self.metrics_key,
             lease_ttl_ms=100,
             state_prefix=self.state_prefix,
             worker_store=self.worker_store,
@@ -78,6 +88,11 @@ class ProductionOrchestratorTests(unittest.TestCase):
             self.ready_key,
             self.lease_key,
             self.orphan_stream,
+            self.finalization_stream,
+            self.finalization_repair_key,
+            self.projection_repair_key,
+            self.active_finalizing_key,
+            self.metrics_key,
             self.worker_lease_key,
             self.orchestrator.worker_stream("worker-a", "build"),
             self.orchestrator.worker_stream("worker-a", "invocation"),
@@ -127,6 +142,19 @@ class ProductionOrchestratorTests(unittest.TestCase):
         self.assertEqual(len(messages), 1)
         self.assertEqual(messages[0][1]["job_id"], self.job_id)
         self.assertEqual(messages[0][1]["dispatch_attempt"], "1")
+
+    def test_duplicate_dispatch_is_rejected_and_counted(self):
+        self.create_and_dispatch("invocation")
+        self.redis.zadd(self.ready_key, {self.job_id: 1000})
+
+        dispatched = self.orchestrator.dispatch_ready_once(now_ms=1010)
+        metrics = self.orchestrator.metrics_snapshot(now_ms=1010)
+
+        self.assertEqual(dispatched, 0)
+        self.assertEqual(metrics["duplicate_dispatches"], 1)
+        self.assertEqual(
+            self.orchestrator.state.get_job(self.job_id)["dispatch_attempt"], 1
+        )
 
     def test_duplicate_claim_and_completion_are_idempotent(self):
         self.create_and_dispatch()
@@ -241,6 +269,245 @@ class ProductionOrchestratorTests(unittest.TestCase):
         self.assertFalse(stale_claim["claimed"])
         self.assertEqual(stale_claim["code"], "stale")
         self.assertTrue(fresh_claim["claimed"])
+
+    def test_invocation_completion_is_staged_then_finalized_once(self):
+        self.create_and_dispatch("invocation")
+        self.orchestrator.claim_job(
+            self.job_id,
+            worker_name="worker-a",
+            dispatch_attempt=1,
+            now_ms=1010,
+        )
+        completion = {
+            "worker_name": "worker-a",
+            "dispatch_attempt": 1,
+            "completion_id": f"{self.job_id}:1:invocation",
+            "status": "succeeded",
+            "completion_payload": {
+                "request_id": "request-1",
+                "result": {"ok": True},
+                "output_manifest": [],
+            },
+            "artifact_commit_id": "",
+        }
+
+        first = self.orchestrator.complete_job(
+            self.job_id, **completion, now_ms=1020
+        )
+        retry = self.orchestrator.complete_job(
+            self.job_id, **completion, now_ms=1030
+        )
+        before = self.orchestrator.state.get_job(self.job_id)
+        finalizations = self.redis.xrange(self.finalization_stream)
+        terminal_before = [
+            message
+            for message in self.redis.xrange(self.projection_stream)
+            if message[1]["event_type"] == "job.succeeded"
+        ]
+
+        finalized = self.orchestrator.finalize_job(
+            self.job_id,
+            completion_id=completion["completion_id"],
+            status="succeeded",
+            artifact_commit_id="artifact-commit-1",
+            now_ms=1040,
+        )
+        final_retry = self.orchestrator.finalize_job(
+            self.job_id,
+            completion_id=completion["completion_id"],
+            status="succeeded",
+            artifact_commit_id="artifact-commit-1",
+            now_ms=1050,
+        )
+        terminal_after = [
+            message
+            for message in self.redis.xrange(self.projection_stream)
+            if message[1]["event_type"] == "job.succeeded"
+        ]
+
+        self.assertTrue(first["completed"])
+        self.assertTrue(retry["completed"])
+        self.assertTrue(retry["idempotent"])
+        self.assertEqual(before["status"], "finalizing")
+        self.assertEqual(len(finalizations), 1)
+        self.assertEqual(terminal_before, [])
+        self.assertTrue(finalized["finalized"])
+        self.assertTrue(final_retry["finalized"])
+        self.assertEqual(
+            self.orchestrator.state.get_job(self.job_id)["status"], "succeeded"
+        )
+        self.assertEqual(len(terminal_after), 1)
+
+    def test_stale_invocation_completion_cannot_enter_finalization(self):
+        self.create_and_dispatch("invocation")
+        self.orchestrator.claim_job(
+            self.job_id,
+            worker_name="worker-a",
+            dispatch_attempt=1,
+            now_ms=1010,
+        )
+        self.orchestrator.recover_expired_once(now_ms=1110)
+        self.orchestrator.dispatch_ready_once(now_ms=1120)
+
+        stale = self.orchestrator.complete_job(
+            self.job_id,
+            worker_name="worker-a",
+            dispatch_attempt=1,
+            completion_id=f"{self.job_id}:1:invocation",
+            status="succeeded",
+            completion_payload={"request_id": "request-1", "result": {}},
+            artifact_commit_id="",
+            now_ms=1130,
+        )
+
+        self.assertFalse(stale["completed"])
+        self.assertEqual(self.redis.xlen(self.finalization_stream), 0)
+        self.assertEqual(
+            self.orchestrator.state.get_job(self.job_id)["dispatch_attempt"], 2
+        )
+
+    def test_reconciliation_resumes_finalization_after_pre_publish_crash(self):
+        self.create_and_dispatch("invocation")
+        self.orchestrator.claim_job(
+            self.job_id,
+            worker_name="worker-a",
+            dispatch_attempt=1,
+            now_ms=1010,
+        )
+        begun = self.orchestrator.state.begin_finalization(
+            self.job_id,
+            worker_name="worker-a",
+            dispatch_attempt=1,
+            completion_id=f"{self.job_id}:1:invocation",
+            completion_payload={"request_id": "request-1", "result": {}},
+            terminal_status="succeeded",
+            now_ms=1020,
+        )
+
+        self.assertTrue(begun.accepted)
+        self.assertEqual(self.redis.xlen(self.finalization_stream), 0)
+        self.assertEqual(
+            self.redis.zscore(self.finalization_repair_key, self.job_id), 1020
+        )
+
+        repaired = self.orchestrator.resume_finalizations_once()
+
+        self.assertEqual(repaired, 1)
+        self.assertEqual(self.redis.xlen(self.finalization_stream), 1)
+        self.assertIsNone(
+            self.redis.zscore(self.finalization_repair_key, self.job_id)
+        )
+
+    def test_reconciliation_republishes_terminal_after_pre_publish_crash(self):
+        self.create_and_dispatch("build")
+        claim = self.orchestrator.claim_job(
+            self.job_id,
+            worker_name="worker-a",
+            dispatch_attempt=1,
+            now_ms=1010,
+        )
+        completion_id = f"{self.job_id}:1:build"
+        self.orchestrator.state.begin_finalization(
+            self.job_id,
+            worker_name="worker-a",
+            dispatch_attempt=1,
+            completion_id=completion_id,
+            completion_payload={"image_ref": claim["payload"]["image_ref"]},
+            terminal_status="succeeded",
+            now_ms=1020,
+        )
+        finished = self.orchestrator.state.finish_finalization(
+            self.job_id,
+            completion_id=completion_id,
+            terminal_status="succeeded",
+            artifact_commit_id=claim["payload"]["image_ref"],
+            now_ms=1030,
+        )
+
+        self.assertTrue(finished.accepted)
+        self.assertEqual(self.redis.xlen(self.projection_stream), 2)
+        self.assertEqual(
+            self.redis.zscore(self.projection_repair_key, self.job_id), 1030
+        )
+
+        repaired = self.orchestrator.republish_terminal_projections_once()
+        succeeded = [
+            fields
+            for _, fields in self.redis.xrange(self.projection_stream)
+            if fields["event_type"] == "job.succeeded"
+        ]
+
+        self.assertEqual(repaired, 1)
+        self.assertEqual(len(succeeded), 1)
+        self.assertIsNone(self.redis.zscore(self.projection_repair_key, self.job_id))
+
+    def test_force_projection_is_terminal_only_and_intentionally_repeatable(self):
+        self.create_and_dispatch("build")
+        active = self.orchestrator.force_terminal_projection(self.job_id)
+        self.orchestrator.claim_job(
+            self.job_id,
+            worker_name="worker-a",
+            dispatch_attempt=1,
+            now_ms=1010,
+        )
+        completion = {
+            "worker_name": "worker-a",
+            "dispatch_attempt": 1,
+            "completion_id": f"{self.job_id}:1:build",
+            "status": "failed",
+            "completion_payload": {"build_log": "failed"},
+            "artifact_commit_id": "",
+        }
+        self.orchestrator.complete_job(self.job_id, **completion, now_ms=1020)
+        before = self.redis.xlen(self.projection_stream)
+        forced = self.orchestrator.force_terminal_projection(self.job_id)
+
+        self.assertFalse(active["published"])
+        self.assertTrue(forced["published"])
+        self.assertEqual(self.redis.xlen(self.projection_stream), before + 1)
+
+    def test_metrics_track_exceptional_events_without_state_scans(self):
+        self.create_and_dispatch("invocation")
+        self.orchestrator.claim_job(
+            self.job_id,
+            worker_name="worker-a",
+            dispatch_attempt=1,
+            now_ms=1010,
+        )
+        self.orchestrator.claim_job(
+            self.job_id,
+            worker_name="worker-a",
+            dispatch_attempt=1,
+            now_ms=1011,
+        )
+        completion = {
+            "worker_name": "worker-a",
+            "dispatch_attempt": 1,
+            "completion_id": f"{self.job_id}:1:invocation",
+            "status": "failed",
+            "completion_payload": {"request_id": "request-1", "result": {}},
+            "artifact_commit_id": "",
+        }
+        self.orchestrator.complete_job(self.job_id, **completion, now_ms=1020)
+        self.orchestrator.complete_job(self.job_id, **completion, now_ms=1021)
+
+        active = self.orchestrator.metrics_snapshot(now_ms=2020)
+        self.orchestrator.finalize_job(
+            self.job_id,
+            completion_id=completion["completion_id"],
+            status="failed",
+            artifact_commit_id="artifact-1",
+            now_ms=2030,
+        )
+        terminal = self.orchestrator.metrics_snapshot(now_ms=2040)
+
+        self.assertEqual(active["duplicate_claims"], 1)
+        self.assertEqual(active["duplicate_completions"], 1)
+        self.assertEqual(active["finalizing_count"], 1)
+        self.assertEqual(active["oldest_finalizing_age_ms"], 1000)
+        self.assertEqual(terminal["finalizing_count"], 0)
+        self.assertEqual(terminal["terminal_failed"], 1)
+        self.assertEqual(terminal["error_rate"], 1.0)
 
     def test_delivery_crash_before_claim_is_recovered_and_fenced(self):
         self.create_and_dispatch("invocation")

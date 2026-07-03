@@ -4,6 +4,7 @@ from .models import (
     Invocation,
     InvocationInputFile,
     InvocationOutputFile,
+    StagedCompletionStatus,
     InvocationStatus,
 )
 
@@ -20,7 +21,17 @@ class InvocationSerializer(serializers.ModelSerializer):
         return InvocationInputFileSerializer(obj.input_files.all(), many=True).data
 
     def get_output_files(self, obj):
-        return InvocationOutputFileSerializer(obj.output_files.all(), many=True).data
+        if obj.status not in {
+            InvocationStatus.SUCCEEDED,
+            InvocationStatus.FAILED,
+            InvocationStatus.TIMEOUT,
+            InvocationStatus.CANCELLED,
+        }:
+            return []
+        return InvocationOutputFileSerializer(
+            obj.output_files.filter(status=StagedCompletionStatus.COMMITTED),
+            many=True,
+        ).data
 
 
 class InvocationInputFileSerializer(serializers.ModelSerializer):
@@ -46,6 +57,7 @@ class InvocationOutputFileSerializer(serializers.ModelSerializer):
             "safe_name",
             "content_type",
             "size_bytes",
+            "checksum_sha256",
             "position",
             "created_at",
         ]
