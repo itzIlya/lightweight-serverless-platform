@@ -6,6 +6,7 @@ This repository is the first implementation pass for the proposal:
 ## Current direction
 
 - Django control plane
+- Separate Django userservice for account data and JWT issuing
 - PostgreSQL for persistent metadata
 - Redis for queueing and coordination
 - Docker-based execution on worker nodes
@@ -28,6 +29,7 @@ This repository is the first implementation pass for the proposal:
 ## Local layout
 
 - `backend/` Django control plane
+- `userservice/` Django identity service
 - `worker/` worker process
 - `scheduler/` V1 scheduler plus shadow and production V2 orchestrators
 - `docker-compose.yml` local stack
@@ -36,13 +38,24 @@ This repository is the first implementation pass for the proposal:
 ## Current API surface
 
 - `GET /health/`
-- `POST /api/auth/register/`
-- `POST /api/auth/token/`
-- `POST /api/auth/token/refresh/`
-- `GET /api/auth/me/`
+- `GET http://localhost:8100/health/`
+- `POST http://localhost:8100/api/auth/register/`
+- `POST http://localhost:8100/api/auth/token/`
+- `POST http://localhost:8100/api/auth/token/refresh/`
+- `GET http://localhost:8100/api/auth/me/`
+- `GET http://localhost:8100/api/auth/public-key/`
+- `GET http://localhost:8100/api/auth/jwks/`
 - `GET /api/functions/`
 - `POST /api/functions/`
 - `GET /api/functions/{id}/`
+- `GET /api/functions/{id}/build-status/`
+- `GET /api/functions/{id}/tokens/`
+- `POST /api/functions/{id}/tokens/`
+- `GET /api/functions/{id}/tokens/{token_id}/`
+- `PATCH /api/functions/{id}/tokens/{token_id}/`
+- `DELETE /api/functions/{id}/tokens/{token_id}/`
+- `POST /api/functions/{id}/tokens/{token_id}/revoke/`
+- `POST /api/functions/{id}/tokens/{token_id}/rotate/`
 - `GET /api/functions/{id}/versions/`
 - `POST /api/functions/{id}/versions/`
 - `POST /api/versions/{id}/build/`
@@ -55,15 +68,24 @@ This repository is the first implementation pass for the proposal:
 - `GET /api/build-attempts/{id}/`
 - `GET /api/invocations/`
 - `GET /api/invocations/{id}/`
+- `GET /api/invocations/{id}/outputs/`
+- `GET /api/invocations/{id}/outputs/{file_id}/download/`
+- `GET /api/invocations/{id}/download/`
 - `GET /api/workers/`
 - `GET /api/workers/{id}/`
 
-Most platform-management endpoints require:
+Most platform-management endpoints require a userservice-issued JWT:
 
 `Authorization: Bearer <jwt-access-token>`
 
-Worker-node endpoints are admin-only. Worker internal endpoints use
-`X-Internal-Token` instead of user JWTs.
+The serverless backend validates userservice JWTs locally using the userservice
+JWKS endpoint. During the migration it also accepts the previous local backend
+JWTs so existing tests and development data continue to work.
+
+Worker-node endpoints are admin-only. Worker and service internal endpoints use
+`X-Internal-Token` instead of user JWTs. The userservice can ask the backend to
+clear its cached userservice public keys through
+`POST /api/internal/auth/userservice-jwks-cache/clear/`.
 
 Function invocation access is separate from JWT management auth:
 
@@ -72,6 +94,13 @@ Function invocation access is separate from JWT management auth:
 - `public`: callers can invoke without JWT or an invocation token.
 
 Invocation tokens are opaque function-scoped secrets, not JWTs.
+
+Owners and admins manage invocation tokens through the nested function token
+endpoints. Creating or rotating a token returns the raw secret once as
+`raw_token`; list, detail, and update responses only expose metadata such as
+name, prefix, expiry, revoked state, and last-used time. Tokens can be renamed,
+expired, deactivated, soft-revoked, or rotated without changing the user's JWT
+login token.
 
 ## Function bundle format
 

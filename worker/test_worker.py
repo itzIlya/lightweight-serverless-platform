@@ -1,8 +1,10 @@
+import io
 from pathlib import Path
+import tarfile
 import tempfile
 import sys
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from requests.exceptions import ReadTimeout
 
@@ -11,10 +13,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backend_client import BackendReportError
 from builder import BuildCancelled, BuildError, BuildResult
 from executor import DockerExecutor, ExecutionError, ExecutionResult
+from warm_pool import WarmContainerKey, WarmContainerPool
 from worker import (
     WorkerActivity,
     acknowledge_processing_job,
     claim_job_for_execution,
+    classify_invocation_failure,
     job_report_metadata,
     move_job_to_processing,
     move_next_job_to_processing,
@@ -27,10 +31,43 @@ from worker import (
     run_claimed_job,
     worker_processing_queue_name,
     heartbeat_loop,
+    warm_pool_heartbeat_metadata,
 )
 
 
+class FakeExecResult:
+    def __init__(self, exit_code=0, output=(b"", b"")):
+        self.exit_code = exit_code
+        self.output = output
+
+
 class BuildWorkerTests(unittest.TestCase):
+    def test_classifies_nonzero_exit_as_function_failure(self):
+        result = ExecutionResult(
+            status="failed",
+            result={},
+            stdout="",
+            stderr="",
+            exit_code=1,
+            duration_ms=10,
+            error_message="Container exited with a non-zero status.",
+        )
+
+        self.assertEqual(classify_invocation_failure(result), "function")
+
+    def test_classifies_missing_exit_code_as_platform_failure(self):
+        result = ExecutionResult(
+            status="failed",
+            result={},
+            stdout="",
+            stderr="",
+            exit_code=None,
+            duration_ms=10,
+            error_message="docker daemon unavailable",
+        )
+
+        self.assertEqual(classify_invocation_failure(result), "platform")
+
     def test_v2_stream_delivery_reads_worker_consumer_group(self):
         redis_client = Mock()
         redis_client.xreadgroup.return_value = [
@@ -192,6 +229,7 @@ class BuildWorkerTests(unittest.TestCase):
                 "name": "worker-a",
                 "hostname": "worker-a.local",
                 "max_concurrency": 4,
+                "status": "online",
                 "active_jobs": 1,
                 "active_builds": 0,
                 "active_invocations": 1,
@@ -200,10 +238,78 @@ class BuildWorkerTests(unittest.TestCase):
         backend.heartbeat_worker.assert_called_once_with(
             {
                 "name": "worker-a",
+                "status": "online",
                 "active_jobs": 1,
                 "active_builds": 0,
                 "active_invocations": 1,
+                "metadata": {},
             }
+        )
+
+    def test_heartbeat_includes_live_warm_inventory(self):
+        backend = Mock()
+        operational_store = Mock()
+        stop_event = Mock()
+        stop_event.wait.side_effect = [False, True]
+        warm_inventory = {
+            "enabled": True,
+            "containers": [
+                {
+                    "function_version_id": "10",
+                    "image_ref": "image:v1",
+                    "handler": "handler.main",
+                    "memory_mb": 128,
+                    "output_tmpfs_size_bytes": 10 * 1024 * 1024,
+                    "idle_count": 1,
+                    "busy_count": 0,
+                }
+            ],
+        }
+
+        heartbeat_loop(
+            backend,
+            worker_name="worker-a",
+            interval_seconds=0,
+            stop_event=stop_event,
+            operational_store=operational_store,
+            operational_payload={"metadata": {"legacy_queue_name": "worker-a:jobs"}},
+            warm_inventory_provider=lambda: warm_inventory,
+        )
+
+        self.assertEqual(
+            operational_store.record_heartbeat.call_args.args[0]["metadata"],
+            {
+                "legacy_queue_name": "worker-a:jobs",
+                "warm_pool": warm_inventory,
+            },
+        )
+        self.assertEqual(
+            backend.heartbeat_worker.call_args.args[0]["metadata"],
+            {"warm_pool": warm_inventory},
+        )
+
+    def test_heartbeat_reports_draining_status(self):
+        backend = Mock()
+        operational_store = Mock()
+        stop_event = Mock()
+        stop_event.wait.side_effect = [False, True]
+
+        heartbeat_loop(
+            backend,
+            worker_name="worker-a",
+            interval_seconds=0,
+            stop_event=stop_event,
+            operational_store=operational_store,
+            status_provider=lambda: "draining",
+        )
+
+        self.assertEqual(
+            operational_store.record_heartbeat.call_args.args[0]["status"],
+            "draining",
+        )
+        self.assertEqual(
+            backend.heartbeat_worker.call_args.args[0]["status"],
+            "draining",
         )
 
     def test_orchestrator_heartbeat_failure_does_not_skip_backend_projection(self):
@@ -894,6 +1000,245 @@ class BuildWorkerTests(unittest.TestCase):
             self.assertEqual(len(manifest[0]["checksum_sha256"]), 64)
             backend.upload_invocation_output.assert_not_called()
 
+    def test_direct_upload_environment_uses_scoped_token_and_raw_endpoint(self):
+        backend = Mock()
+        backend.token = "change-me"
+        with patch.dict(
+            "os.environ",
+            {
+                "WORKER_RUNNER_DIRECT_OUTPUT_UPLOAD_ENABLED": "true",
+                "BACKEND_BASE_URL": "http://backend:8000",
+            },
+        ):
+            executor = DockerExecutor(docker_client=Mock(), backend_client=backend)
+
+        job = {
+            "request_id": "request-1",
+            "job_id": "job-1",
+            "dispatch_attempt": 2,
+            "completion_id": "job-1:2:invocation",
+            "coordination_version": 2,
+            "declared_output_files": ["report.txt"],
+            "invocation_output_max_files": 1,
+            "invocation_output_max_file_size_mb": 1,
+            "invocation_output_max_total_size_mb": 1,
+        }
+
+        environment = executor._runner_environment(
+            job,
+            {"ok": True},
+            [],
+            direct_output_upload=True,
+        )
+
+        self.assertEqual(environment["FUNCTION_OUTPUT_DIRECT_UPLOAD_ENABLED"], "1")
+        self.assertEqual(
+            environment["FUNCTION_OUTPUT_UPLOAD_URL"],
+            "http://backend:8000/api/internal/invocations/request-1/runner-staged-outputs/",
+        )
+        self.assertEqual(environment["FUNCTION_OUTPUT_UPLOAD_JOB_ID"], "job-1")
+        self.assertEqual(environment["FUNCTION_OUTPUT_UPLOAD_DISPATCH_ATTEMPT"], "2")
+        self.assertEqual(
+            environment["FUNCTION_OUTPUT_UPLOAD_COMPLETION_ID"],
+            "job-1:2:invocation",
+        )
+        self.assertIn(".", environment["FUNCTION_OUTPUT_UPLOAD_TOKEN"])
+
+    def test_direct_upload_cold_path_skips_docker_output_export(self):
+        backend = Mock()
+        backend.token = "change-me"
+        backend.list_invocation_inputs.return_value = []
+        docker_client = Mock()
+        volume = Mock()
+        volume.name = "volume-1"
+        container = Mock()
+        container.wait.return_value = {"StatusCode": 0}
+        container.logs.side_effect = [
+            (
+                b'__FUNCTION_RESULT__={"ok": true}\n'
+                b'__FUNCTION_OUTPUT_MANIFEST__=[{"original_path": "report.txt", "size_bytes": 6, "checksum_sha256": ""}]\n'
+                b'__FUNCTION_TIMING__={"runner_output_upload_ms": 12}\n'
+            ),
+            b"",
+        ]
+        docker_client.volumes.create.return_value = volume
+        docker_client.containers.create.return_value = container
+
+        with patch.dict(
+            "os.environ",
+            {
+                "WORKER_RUNNER_DIRECT_OUTPUT_UPLOAD_ENABLED": "true",
+                "BACKEND_BASE_URL": "http://backend:8000",
+                "FUNCTION_CONTAINER_NETWORK": "serverless-platform_default",
+            },
+        ):
+            executor = DockerExecutor(
+                docker_client=docker_client,
+                backend_client=backend,
+                warm_enabled=False,
+            )
+        executor._copy_directory_into_container = Mock()
+        executor._copy_directory_from_container = Mock()
+        executor._remove_container = Mock()
+        executor._remove_volume = Mock()
+
+        result = executor.run(
+            {
+                "request_id": "request-1",
+                "job_id": "job-1",
+                "dispatch_attempt": 2,
+                "completion_id": "job-1:2:invocation",
+                "coordination_version": 2,
+                "image_ref": "localhost:5000/functions/example:v1",
+                "declared_output_files": ["report.txt"],
+                "invocation_output_max_files": 1,
+                "invocation_output_max_file_size_mb": 1,
+                "invocation_output_max_total_size_mb": 1,
+            }
+        )
+
+        self.assertEqual(result.status, "succeeded")
+        self.assertEqual(result.result, {"ok": True})
+        self.assertEqual(
+            result.output_manifest,
+            [
+                {
+                    "original_path": "report.txt",
+                    "size_bytes": 6,
+                    "checksum_sha256": "",
+                }
+            ],
+        )
+        self.assertEqual(result.timing_ms["docker_export_copy_ms"], 0)
+        self.assertEqual(result.timing_ms["runner_output_upload_ms"], 12)
+        executor._copy_directory_from_container.assert_not_called()
+        backend.upload_staged_invocation_output.assert_not_called()
+        create_kwargs = docker_client.containers.create.call_args.kwargs
+        self.assertFalse(create_kwargs["network_disabled"])
+        self.assertEqual(create_kwargs["network"], "serverless-platform_default")
+        self.assertEqual(create_kwargs["command"], ["-c", "python /runner.py"])
+
+    def test_resident_warm_container_publishes_control_port(self):
+        docker_client = Mock()
+        volume = Mock()
+        volume.name = "warm-volume"
+        container = Mock()
+        container.attrs = {
+            "NetworkSettings": {
+                "Ports": {"8765/tcp": [{"HostPort": "49153"}]},
+            },
+        }
+        docker_client.volumes.create.return_value = volume
+        docker_client.containers.create.return_value = container
+
+        with patch.dict(
+            "os.environ",
+            {
+                "WORKER_WARM_RESIDENT_RUNNER_ENABLED": "true",
+                "FUNCTION_CONTAINER_NETWORK": "serverless-platform_default",
+            },
+        ):
+            executor = DockerExecutor(
+                docker_client=docker_client,
+                warm_enabled=True,
+            )
+        executor._wait_for_resident_warm_runner = Mock()
+
+        key = WarmContainerKey(
+            function_version_id="10",
+            image_ref="image:v1",
+            handler="handler.main",
+            memory_mb=128,
+            output_tmpfs_size_bytes=10 * 1024 * 1024,
+        )
+        record = executor._create_warm_container(
+            key=key,
+            image_ref="image:v1",
+            memory_mb=128,
+            output_tmpfs_size_bytes=10 * 1024 * 1024,
+            request_id="request-1",
+            direct_output_upload=False,
+        )
+
+        create_kwargs = docker_client.containers.create.call_args.kwargs
+        self.assertEqual(create_kwargs["entrypoint"], ["python"])
+        self.assertEqual(create_kwargs["command"], ["/runner.py", "--serve"])
+        self.assertEqual(
+            create_kwargs["ports"],
+            {"8765/tcp": ("127.0.0.1", None)},
+        )
+        self.assertFalse(create_kwargs["network_disabled"])
+        self.assertEqual(create_kwargs["network"], "serverless-platform_default")
+        self.assertEqual(record.metadata["control_url"], "http://127.0.0.1:49153")
+        executor._wait_for_resident_warm_runner.assert_called_once_with(
+            "http://127.0.0.1:49153",
+            timeout_seconds=5,
+        )
+
+    def test_resident_warm_runner_skips_docker_exec_runner(self):
+        docker_client = Mock()
+        volume = Mock()
+        volume.name = "warm-volume"
+        container = Mock()
+        container.attrs = {
+            "NetworkSettings": {
+                "Ports": {"8765/tcp": [{"HostPort": "49153"}]},
+            },
+        }
+        docker_client.volumes.create.return_value = volume
+        docker_client.containers.create.return_value = container
+        backend = Mock()
+        backend.list_invocation_inputs.return_value = []
+
+        with patch.dict(
+            "os.environ",
+            {"WORKER_WARM_RESIDENT_RUNNER_ENABLED": "true"},
+        ):
+            executor = DockerExecutor(
+                docker_client=docker_client,
+                backend_client=backend,
+                warm_enabled=True,
+            )
+        executor._wait_for_resident_warm_runner = Mock()
+        executor._prepare_resident_warm_runner = Mock()
+        executor._invoke_resident_warm_runner = Mock(
+            return_value=(
+                0,
+                (
+                    '__FUNCTION_RESULT__={"ok": true}\n'
+                    '__FUNCTION_TIMING__={"runner_resident_reused": 1}\n'
+                ),
+                "",
+            )
+        )
+        executor._exec_runner_in_warm_container = Mock()
+        executor._cleanup_warm_sandbox = Mock()
+        executor._copy_directory_into_container = Mock()
+        executor._copy_tmpfs_directory_from_container = Mock()
+
+        result = executor.run(
+            {
+                "request_id": "request-1",
+                "function_version_id": 10,
+                "image_ref": "image:v1",
+                "handler": "handler.main",
+                "config": {"memory_mb": 128, "timeout_seconds": 5},
+                "event": {"value": 1},
+                "declared_output_files": [],
+                "invocation_output_max_total_size_mb": 10,
+            }
+        )
+
+        self.assertEqual(result.status, "succeeded")
+        self.assertEqual(result.result, {"ok": True})
+        self.assertEqual(result.timing_ms["runner_resident_reused"], 1)
+        self.assertEqual(result.timing_ms["docker_export_copy_ms"], 0)
+        executor._prepare_resident_warm_runner.assert_called_once()
+        executor._invoke_resident_warm_runner.assert_called_once()
+        executor._exec_runner_in_warm_container.assert_not_called()
+        executor._cleanup_warm_sandbox.assert_not_called()
+        executor._copy_tmpfs_directory_from_container.assert_not_called()
+
     def test_worker_output_validation_rejects_non_list_declaration(self):
         executor = DockerExecutor(docker_client=Mock())
 
@@ -1027,8 +1372,50 @@ class BuildWorkerTests(unittest.TestCase):
                 nested_output_dir,
             )
 
-    def test_worker_output_validation_skips_upload_when_invalid(self):
+    def test_effective_output_dir_uses_sandbox_output_archive_layout(self):
         executor = DockerExecutor(docker_client=Mock())
+
+        with tempfile.TemporaryDirectory() as root:
+            output_dir = Path(root) / "output"
+            nested_output_dir = output_dir / "sandbox" / "output"
+            nested_output_dir.mkdir(parents=True)
+
+            self.assertEqual(
+                executor._effective_output_dir(output_dir),
+                nested_output_dir,
+            )
+
+    def test_copy_tmpfs_directory_from_container_streams_files_with_exec_tar(self):
+        executor = DockerExecutor(docker_client=Mock())
+        archive_buffer = io.BytesIO()
+        with tarfile.open(fileobj=archive_buffer, mode="w") as archive:
+            body = b"hello"
+            info = tarfile.TarInfo("report.txt")
+            info.size = len(body)
+            archive.addfile(info, io.BytesIO(body))
+
+        container = Mock()
+        container.exec_run.return_value = FakeExecResult(
+            exit_code=0,
+            output=(archive_buffer.getvalue(), b""),
+        )
+
+        with tempfile.TemporaryDirectory() as root:
+            output_dir = Path(root) / "output"
+            executor._copy_tmpfs_directory_from_container(
+                container,
+                "/sandbox/output",
+                output_dir,
+            )
+
+            self.assertEqual(
+                (output_dir / "report.txt").read_text(encoding="utf-8"),
+                "hello",
+            )
+            container.exec_run.assert_called_once()
+
+    def test_worker_output_validation_skips_upload_when_invalid(self):
+        executor = DockerExecutor(docker_client=Mock(), warm_enabled=False)
         executor._copy_directory_into_container = Mock()
         executor._copy_directory_from_container = Mock()
         executor._remove_container = Mock()
@@ -1065,7 +1452,7 @@ class BuildWorkerTests(unittest.TestCase):
         executor.backend_client.upload_invocation_output.assert_not_called()
 
     def test_executor_fails_invocation_when_output_export_fails(self):
-        executor = DockerExecutor(docker_client=Mock())
+        executor = DockerExecutor(docker_client=Mock(), warm_enabled=False)
         executor._copy_directory_into_container = Mock()
         executor._copy_directory_from_container = Mock()
         executor._remove_container = Mock()
@@ -1103,8 +1490,51 @@ class BuildWorkerTests(unittest.TestCase):
         self.assertIn("copy failed", result.error_message)
         executor.backend_client.upload_invocation_output.assert_not_called()
 
+    def test_cold_executor_skips_output_export_when_no_outputs_declared(self):
+        executor = DockerExecutor(
+            docker_client=Mock(),
+            backend_client=Mock(),
+            warm_enabled=False,
+        )
+        executor.backend_client.list_invocation_inputs.return_value = []
+        executor._copy_directory_into_container = Mock()
+        executor._copy_directory_from_container = Mock()
+        executor._remove_container = Mock()
+        executor._remove_volume = Mock()
+        container = Mock()
+        container.wait.return_value = {"StatusCode": 0}
+        container.logs.side_effect = [b'__FUNCTION_RESULT__={"ok": true}\n', b""]
+        volume = Mock()
+        volume.name = "volume-1"
+        executor.docker_client.volumes.create.return_value = volume
+        executor.docker_client.containers.create.return_value = container
+
+        result = executor.run(
+            {
+                "request_id": "request-1",
+                "image_ref": "localhost:5000/functions/example:v1",
+                "declared_output_files": [],
+                "invocation_output_max_total_size_mb": 10,
+            }
+        )
+
+        self.assertEqual(result.status, "succeeded")
+        self.assertEqual(result.result, {"ok": True})
+        self.assertEqual(result.output_manifest, [])
+        self.assertEqual(result.timing_ms["docker_export_copy_ms"], 0)
+        self.assertEqual(result.timing_ms["output_validation_ms"], 0)
+        self.assertEqual(result.timing_ms["output_upload_ms"], 0)
+        executor._copy_directory_from_container.assert_not_called()
+        create_kwargs = executor.docker_client.containers.create.call_args.kwargs
+        self.assertEqual(create_kwargs["entrypoint"], ["sh"])
+        self.assertEqual(create_kwargs["command"], ["-c", "python /runner.py"])
+
     def test_executor_mounts_output_as_size_limited_tmpfs(self):
-        executor = DockerExecutor(docker_client=Mock(), backend_client=Mock())
+        executor = DockerExecutor(
+            docker_client=Mock(),
+            backend_client=Mock(),
+            warm_enabled=False,
+        )
         executor.backend_client.list_invocation_inputs.return_value = []
         executor._copy_directory_into_container = Mock()
         executor._copy_directory_from_container = Mock()
@@ -1135,9 +1565,51 @@ class BuildWorkerTests(unittest.TestCase):
         self.assertEqual(create_kwargs["entrypoint"], ["sh"])
         self.assertEqual(create_kwargs["command"][0], "-c")
         self.assertIn("python /runner.py", create_kwargs["command"][1])
+        self.assertNotIn("/sandbox/export/output", create_kwargs["command"][1])
+        self.assertNotIn("cp -a /sandbox/output/.", create_kwargs["command"][1])
+        self.assertNotIn("sleep", create_kwargs["command"][1])
+
+    def test_executor_keeps_output_export_when_outputs_are_declared(self):
+        executor = DockerExecutor(
+            docker_client=Mock(),
+            backend_client=Mock(),
+            warm_enabled=False,
+        )
+        executor.backend_client.list_invocation_inputs.return_value = []
+        executor._copy_directory_into_container = Mock()
+        executor._copy_directory_from_container = Mock()
+        executor._remove_container = Mock()
+        executor._remove_volume = Mock()
+        container = Mock()
+        container.wait.return_value = {"StatusCode": 0}
+        container.logs.side_effect = [b'__FUNCTION_RESULT__={"ok": true}\n', b""]
+        volume = Mock()
+        volume.name = "volume-1"
+        executor.docker_client.volumes.create.return_value = volume
+        executor.docker_client.containers.create.return_value = container
+
+        def copy_export(container, source_path, destination_dir):
+            output_dir = destination_dir / "export" / "output"
+            output_dir.mkdir(parents=True)
+            (output_dir / "report.txt").write_text("report", encoding="utf-8")
+
+        executor._copy_directory_from_container.side_effect = copy_export
+
+        executor.run(
+            {
+                "request_id": "request-1",
+                "image_ref": "localhost:5000/functions/example:v1",
+                "declared_output_files": ["report.txt"],
+                "invocation_output_max_files": 1,
+                "invocation_output_max_file_size_mb": 1,
+                "invocation_output_max_total_size_mb": 10,
+            }
+        )
+
+        create_kwargs = executor.docker_client.containers.create.call_args.kwargs
         self.assertIn("/sandbox/export/output", create_kwargs["command"][1])
         self.assertIn("cp -a /sandbox/output/.", create_kwargs["command"][1])
-        self.assertNotIn("sleep", create_kwargs["command"][1])
+        executor._copy_directory_from_container.assert_called_once()
 
     def test_output_tmpfs_size_has_one_megabyte_floor(self):
         executor = DockerExecutor(docker_client=Mock())
@@ -1148,6 +1620,365 @@ class BuildWorkerTests(unittest.TestCase):
             ),
             1024 * 1024,
         )
+
+    def test_warm_pool_reuses_same_function_version_container(self):
+        docker_client = Mock()
+        volume = Mock()
+        volume.name = "warm-volume"
+        container = Mock()
+        container.exec_run.return_value = FakeExecResult()
+        docker_client.volumes.create.return_value = volume
+        docker_client.containers.create.return_value = container
+        executor = DockerExecutor(
+            docker_client=docker_client,
+            warm_enabled=True,
+        )
+        executor._copy_directory_into_container = Mock()
+        executor._copy_directory_from_container = Mock()
+        executor._copy_tmpfs_directory_from_container = Mock()
+        executor._exec_runner_in_warm_container = Mock(
+            return_value=(0, '__FUNCTION_RESULT__={"ok": true}\n', "")
+        )
+
+        job = {
+            "request_id": "request-1",
+            "function_version_id": 10,
+            "image_ref": "localhost:5000/functions/example:v1",
+            "handler": "handler.main",
+            "config": {"memory_mb": 128, "timeout_seconds": 5},
+            "event": {"value": 1},
+            "declared_output_files": [],
+        }
+
+        first = executor.run(job)
+        second = executor.run({**job, "request_id": "request-2"})
+
+        self.assertTrue(first.cold_start)
+        self.assertFalse(second.cold_start)
+        self.assertEqual(first.status, "succeeded")
+        self.assertEqual(second.status, "succeeded")
+        self.assertEqual(docker_client.containers.create.call_count, 1)
+        executor._copy_tmpfs_directory_from_container.assert_not_called()
+        container.remove.assert_not_called()
+
+    def test_warm_pool_inventory_groups_idle_and_busy_by_key(self):
+        key = WarmContainerKey(
+            function_version_id="10",
+            image_ref="image:v1",
+            handler="handler.main",
+            memory_mb=128,
+            output_tmpfs_size_bytes=10 * 1024 * 1024,
+        )
+        pool = WarmContainerPool(
+            max_containers=2,
+            max_per_key=2,
+            idle_ttl_seconds=60,
+            max_age_seconds=0,
+            max_uses=0,
+        )
+        idle = pool.add_busy(key=key, container=Mock(), volume=Mock())
+        pool.add_busy(key=key, container=Mock(), volume=Mock())
+        pool.release(idle, reusable=True)
+
+        self.assertEqual(
+            pool.inventory(),
+            [
+                {
+                    "function_version_id": "10",
+                    "image_ref": "image:v1",
+                    "handler": "handler.main",
+                    "memory_mb": 128,
+                    "output_tmpfs_size_bytes": 10 * 1024 * 1024,
+                    "idle_count": 1,
+                    "busy_count": 1,
+                    "use_count": 1,
+                    "hit_count": 0,
+                }
+            ],
+        )
+
+    def test_warm_pool_heartbeat_metadata_reports_disabled_executor(self):
+        executor = DockerExecutor(docker_client=Mock(), warm_enabled=False)
+
+        self.assertEqual(
+            warm_pool_heartbeat_metadata(executor),
+            {
+                "enabled": False,
+                "containers": [],
+            },
+        )
+
+    def test_warm_pool_does_not_reuse_different_function_version(self):
+        docker_client = Mock()
+        volumes = [Mock(), Mock()]
+        containers = [Mock(), Mock()]
+        for index, volume in enumerate(volumes):
+            volume.name = f"warm-volume-{index}"
+        for container in containers:
+            container.exec_run.return_value = FakeExecResult()
+        docker_client.volumes.create.side_effect = volumes
+        docker_client.containers.create.side_effect = containers
+        executor = DockerExecutor(
+            docker_client=docker_client,
+            warm_enabled=True,
+        )
+        executor._copy_directory_into_container = Mock()
+        executor._copy_directory_from_container = Mock()
+        executor._exec_runner_in_warm_container = Mock(
+            return_value=(0, '__FUNCTION_RESULT__={"ok": true}\n', "")
+        )
+
+        base_job = {
+            "request_id": "request-1",
+            "image_ref": "localhost:5000/functions/example:v1",
+            "handler": "handler.main",
+            "config": {"memory_mb": 128, "timeout_seconds": 5},
+            "event": {},
+            "declared_output_files": [],
+        }
+
+        first = executor.run({**base_job, "function_version_id": 10})
+        second = executor.run(
+            {**base_job, "request_id": "request-2", "function_version_id": 11}
+        )
+
+        self.assertTrue(first.cold_start)
+        self.assertTrue(second.cold_start)
+        self.assertEqual(docker_client.containers.create.call_count, 2)
+
+    def test_warm_container_failed_invocation_is_destroyed(self):
+        docker_client = Mock()
+        volumes = [Mock(), Mock()]
+        containers = [Mock(), Mock()]
+        for index, volume in enumerate(volumes):
+            volume.name = f"warm-volume-{index}"
+        for container in containers:
+            container.exec_run.return_value = FakeExecResult()
+        docker_client.volumes.create.side_effect = volumes
+        docker_client.containers.create.side_effect = containers
+        executor = DockerExecutor(
+            docker_client=docker_client,
+            warm_enabled=True,
+        )
+        executor._copy_directory_into_container = Mock()
+        executor._copy_directory_from_container = Mock()
+        executor._exec_runner_in_warm_container = Mock(
+            side_effect=[
+                (1, '__FUNCTION_RESULT__={"ok": false}\n', ""),
+                (0, '__FUNCTION_RESULT__={"ok": true}\n', ""),
+            ]
+        )
+
+        job = {
+            "request_id": "request-1",
+            "function_version_id": 10,
+            "image_ref": "localhost:5000/functions/example:v1",
+            "handler": "handler.main",
+            "config": {"memory_mb": 128, "timeout_seconds": 5},
+            "event": {},
+            "declared_output_files": [],
+        }
+
+        first = executor.run(job)
+        second = executor.run({**job, "request_id": "request-2"})
+
+        self.assertEqual(first.status, "failed")
+        self.assertTrue(second.cold_start)
+        containers[0].remove.assert_called_once_with(force=True)
+        self.assertEqual(docker_client.containers.create.call_count, 2)
+
+    def test_warm_pool_evicts_idle_container_after_ttl(self):
+        now = [100.0]
+        pool = WarmContainerPool(
+            max_containers=2,
+            max_per_key=1,
+            idle_ttl_seconds=10,
+            max_age_seconds=100,
+            max_uses=100,
+            now=lambda: now[0],
+        )
+        key = WarmContainerKey(
+            function_version_id="10",
+            image_ref="image",
+            handler="handler.main",
+            memory_mb=128,
+            output_tmpfs_size_bytes=1024 * 1024,
+        )
+        container = Mock()
+        volume = Mock()
+        record = pool.add_busy(key=key, container=container, volume=volume)
+
+        pool.release(record, reusable=True)
+        now[0] = 111.0
+        self.assertIsNone(pool.acquire(key))
+
+        container.remove.assert_called_once_with(force=True)
+        volume.remove.assert_called_once_with(force=True)
+
+    def test_warm_pool_evicts_least_recently_used_when_full(self):
+        now = [100.0]
+        pool = WarmContainerPool(
+            max_containers=1,
+            max_per_key=1,
+            idle_ttl_seconds=100,
+            max_age_seconds=100,
+            max_uses=100,
+            now=lambda: now[0],
+        )
+        first_key = WarmContainerKey("1", "image-1", "handler.main", 128, 1024 * 1024)
+        second_key = WarmContainerKey("2", "image-2", "handler.main", 128, 1024 * 1024)
+        first_container = Mock()
+        second_container = Mock()
+        first = pool.add_busy(key=first_key, container=first_container)
+        pool.release(first, reusable=True)
+        now[0] = 101.0
+        second = pool.add_busy(key=second_key, container=second_container)
+        pool.release(second, reusable=True)
+
+        self.assertIsNone(pool.acquire(first_key))
+        self.assertIsNotNone(pool.acquire(second_key))
+        first_container.remove.assert_called_once_with(force=True)
+        second_container.remove.assert_not_called()
+
+    def test_warm_pool_preserves_hot_container_under_container_pressure(self):
+        now = [100.0]
+        pool = WarmContainerPool(
+            max_containers=2,
+            max_per_key=2,
+            idle_ttl_seconds=100,
+            max_age_seconds=100,
+            max_uses=100,
+            now=lambda: now[0],
+        )
+        hot_key = WarmContainerKey("hot", "image-hot", "handler.main", 128, 1024 * 1024)
+        cold_key = WarmContainerKey("cold", "image-cold", "handler.main", 128, 1024 * 1024)
+        new_key = WarmContainerKey("new", "image-new", "handler.main", 128, 1024 * 1024)
+        hot_container = Mock()
+        cold_container = Mock()
+        new_container = Mock()
+
+        hot = pool.add_busy(key=hot_key, container=hot_container)
+        pool.release(hot, reusable=True)
+        now[0] = 101.0
+        hot_reuse = pool.acquire(hot_key)
+        pool.release(hot_reuse, reusable=True)
+        now[0] = 102.0
+        cold = pool.add_busy(key=cold_key, container=cold_container)
+        pool.release(cold, reusable=True)
+        now[0] = 103.0
+        new = pool.add_busy(key=new_key, container=new_container)
+        pool.release(new, reusable=True)
+
+        self.assertIsNotNone(pool.acquire(hot_key))
+        self.assertIsNone(pool.acquire(cold_key))
+        self.assertIsNotNone(pool.acquire(new_key))
+        self.assertEqual(cold.eviction_reason, "pool_container_pressure")
+        self.assertEqual(pool.eviction_log[-1]["reason"], "pool_container_pressure")
+        hot_container.remove.assert_not_called()
+        cold_container.remove.assert_called_once_with(force=True)
+
+    def test_warm_pool_memory_pressure_evicts_large_cold_container_first(self):
+        now = [100.0]
+        pool = WarmContainerPool(
+            max_containers=4,
+            max_per_key=4,
+            idle_ttl_seconds=100,
+            max_age_seconds=100,
+            max_uses=100,
+            max_memory_mb=300,
+            now=lambda: now[0],
+        )
+        hot_small_key = WarmContainerKey(
+            "hot-small",
+            "image-hot-small",
+            "handler.main",
+            128,
+            1024 * 1024,
+        )
+        cold_large_key = WarmContainerKey(
+            "cold-large",
+            "image-cold-large",
+            "handler.main",
+            256,
+            1024 * 1024,
+        )
+        new_small_key = WarmContainerKey(
+            "new-small",
+            "image-new-small",
+            "handler.main",
+            128,
+            1024 * 1024,
+        )
+        hot_container = Mock()
+        cold_container = Mock()
+
+        hot = pool.add_busy(key=hot_small_key, container=hot_container)
+        pool.release(hot, reusable=True)
+        now[0] = 101.0
+        hot_reuse = pool.acquire(hot_small_key)
+        pool.release(hot_reuse, reusable=True)
+        now[0] = 102.0
+        cold = pool.add_busy(key=cold_large_key, container=cold_container)
+        pool.release(cold, reusable=True)
+        now[0] = 103.0
+        new = pool.add_busy(key=new_small_key, container=Mock())
+        pool.release(new, reusable=True)
+
+        self.assertIsNotNone(pool.acquire(hot_small_key))
+        self.assertIsNone(pool.acquire(cold_large_key))
+        self.assertIsNotNone(pool.acquire(new_small_key))
+        self.assertEqual(cold.eviction_reason, "pool_memory_pressure")
+        cold_container.remove.assert_called_once_with(force=True)
+        hot_container.remove.assert_not_called()
+
+    def test_warm_pool_per_function_limit_evicts_low_value_same_key_container(self):
+        now = [100.0]
+        pool = WarmContainerPool(
+            max_containers=4,
+            max_per_key=1,
+            idle_ttl_seconds=100,
+            max_age_seconds=100,
+            max_uses=100,
+            now=lambda: now[0],
+        )
+        key = WarmContainerKey("same", "image", "handler.main", 128, 1024 * 1024)
+        hot_container = Mock()
+        cold_container = Mock()
+
+        hot = pool.add_busy(key=key, container=hot_container)
+        pool.release(hot, reusable=True)
+        now[0] = 101.0
+        hot_reuse = pool.acquire(key)
+        pool.release(hot_reuse, reusable=True)
+        now[0] = 102.0
+        cold = pool.add_busy(key=key, container=cold_container)
+        pool.release(cold, reusable=True)
+
+        self.assertIsNotNone(pool.acquire(key))
+        self.assertEqual(cold.eviction_reason, "function_over_limit")
+        cold_container.remove.assert_called_once_with(force=True)
+        hot_container.remove.assert_not_called()
+
+    def test_warm_pool_records_retirement_eviction_reasons(self):
+        now = [100.0]
+        pool = WarmContainerPool(
+            max_containers=2,
+            max_per_key=1,
+            idle_ttl_seconds=10,
+            max_age_seconds=100,
+            max_uses=100,
+            now=lambda: now[0],
+        )
+        key = WarmContainerKey("10", "image", "handler.main", 128, 1024 * 1024)
+        container = Mock()
+        record = pool.add_busy(key=key, container=container)
+
+        pool.release(record, reusable=True)
+        now[0] = 111.0
+        pool.evict_expired()
+
+        self.assertEqual(record.eviction_reason, "idle_ttl")
+        self.assertEqual(pool.eviction_log[-1]["reason"], "idle_ttl")
 
     def test_wait_for_exit_returns_container_exit_code(self):
         executor = DockerExecutor(docker_client=Mock())

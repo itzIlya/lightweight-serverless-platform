@@ -1,0 +1,2329 @@
+{
+  "created_at": "2026-07-19T19:04:24.351010+00:00",
+  "base_url": "http://localhost:8000",
+  "functions": {
+    "hot": {
+      "function_id": 46,
+      "version_id": 53,
+      "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1"
+    },
+    "cold": {
+      "function_id": 47,
+      "version_id": 54,
+      "image_ref": "localhost:5000/functions/warm-bench-cold-da9dfeaa:v54-v1"
+    }
+  },
+  "scenarios": [
+    {
+      "name": "hot_sequential",
+      "count": 6,
+      "concurrency": 1,
+      "sleep_seconds": 0,
+      "wall_ms": 12264,
+      "invocations": [
+        {
+          "id": 478,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "0175ed18-7f38-41a0-b04f-e356d6d4b71e",
+          "status": "succeeded",
+          "event": {
+            "index": 0,
+            "scenario": "hot_sequential",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 0,
+            "label": "hot",
+            "request_id": "0175ed18-7f38-41a0-b04f-e356d6d4b71e",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"hot\", \"index\": 0, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"0175ed18-7f38-41a0-b04f-e356d6d4b71e\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 1, \"runner_module_imports_ms\": 456, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 457}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:03:36.741129Z",
+          "started_at": "2026-07-19T19:03:37.057067Z",
+          "finished_at": "2026-07-19T19:03:39.164056Z",
+          "duration_ms": 1828,
+          "function_version": 53,
+          "client_submit_ms": 93,
+          "client_poll_ms": 2578,
+          "scenario": "hot_sequential",
+          "index": 0,
+          "worker_timing": {
+            "backend_final_report_ms": 111,
+            "backend_running_report_ms": 82,
+            "docker_export_copy_ms": 64,
+            "docker_input_copy_ms": 37,
+            "executor_duration_ms": 1828,
+            "executor_wall_with_cleanup_ms": 2019,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 1,
+            "runner_module_imports_ms": 456,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 457,
+            "sandbox_prepare_ms": 52,
+            "warm_container_create_ms": 829,
+            "warm_pool_release_ms": 2,
+            "warm_runner_exec_ms": 677,
+            "warm_sandbox_cleanup_after_ms": 187,
+            "warm_sandbox_cleanup_before_ms": 163,
+            "worker_process_total_ms": 2218,
+            "worker_container": "worker-3"
+          },
+          "job": {
+            "invocation_id": 478,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 0,
+                "scenario": "hot_sequential",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "c54b4a65-68b7-4a01-b416-fff85fcd9c25",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "queued_at": "2026-07-19T19:03:36.741129+00:00",
+              "request_id": "0175ed18-7f38-41a0-b04f-e356d6d4b71e",
+              "function_id": 46,
+              "function_slug": "warm-bench-hot-9275b598",
+              "invocation_id": 478,
+              "assigned_worker": "9cdc9eaa1090",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:9cdc9eaa1090:invocations",
+              "function_version_id": 53,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "9cdc9eaa1090"
+        },
+        {
+          "id": 479,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "04aff2ca-dc6d-447f-9f80-e690c2a6f2fa",
+          "status": "succeeded",
+          "event": {
+            "index": 1,
+            "scenario": "hot_sequential",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 1,
+            "label": "hot",
+            "request_id": "04aff2ca-dc6d-447f-9f80-e690c2a6f2fa",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"hot\", \"index\": 1, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"04aff2ca-dc6d-447f-9f80-e690c2a6f2fa\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 0, \"runner_module_imports_ms\": 486, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 487}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": false,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:03:39.451704Z",
+          "started_at": "2026-07-19T19:03:39.951489Z",
+          "finished_at": "2026-07-19T19:03:41.330604Z",
+          "duration_ms": 1136,
+          "function_version": 53,
+          "client_submit_ms": 139,
+          "client_poll_ms": 1938,
+          "scenario": "hot_sequential",
+          "index": 1,
+          "worker_timing": {
+            "backend_final_report_ms": 116,
+            "backend_running_report_ms": 99,
+            "docker_export_copy_ms": 49,
+            "docker_input_copy_ms": 29,
+            "executor_duration_ms": 1136,
+            "executor_wall_with_cleanup_ms": 1277,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 0,
+            "runner_module_imports_ms": 486,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 487,
+            "sandbox_prepare_ms": 53,
+            "warm_container_reused": 1,
+            "warm_pool_release_ms": 0,
+            "warm_runner_exec_ms": 809,
+            "warm_sandbox_cleanup_after_ms": 140,
+            "warm_sandbox_cleanup_before_ms": 191,
+            "worker_process_total_ms": 1495,
+            "worker_container": "worker-3"
+          },
+          "job": {
+            "invocation_id": 479,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 1,
+                "scenario": "hot_sequential",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "30d248cc-bfdc-40ec-83a2-d465bf056805",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "queued_at": "2026-07-19T19:03:39.451704+00:00",
+              "request_id": "04aff2ca-dc6d-447f-9f80-e690c2a6f2fa",
+              "function_id": 46,
+              "function_slug": "warm-bench-hot-9275b598",
+              "invocation_id": 479,
+              "assigned_worker": "9cdc9eaa1090",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:9cdc9eaa1090:invocations",
+              "function_version_id": 53,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "9cdc9eaa1090"
+        },
+        {
+          "id": 480,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "8bfc81ea-4c2c-4b99-a4cf-08f50bbfd210",
+          "status": "succeeded",
+          "event": {
+            "index": 2,
+            "scenario": "hot_sequential",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 2,
+            "label": "hot",
+            "request_id": "8bfc81ea-4c2c-4b99-a4cf-08f50bbfd210",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"hot\", \"index\": 2, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"8bfc81ea-4c2c-4b99-a4cf-08f50bbfd210\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 1, \"runner_module_imports_ms\": 257, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 259}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:03:41.539188Z",
+          "started_at": "2026-07-19T19:03:42.016211Z",
+          "finished_at": "2026-07-19T19:03:43.351020Z",
+          "duration_ms": 1170,
+          "function_version": 53,
+          "client_submit_ms": 186,
+          "client_poll_ms": 1968,
+          "scenario": "hot_sequential",
+          "index": 2,
+          "worker_timing": {
+            "backend_final_report_ms": 84,
+            "backend_running_report_ms": 68,
+            "docker_export_copy_ms": 47,
+            "docker_input_copy_ms": 24,
+            "executor_duration_ms": 1170,
+            "executor_wall_with_cleanup_ms": 1262,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 1,
+            "runner_module_imports_ms": 257,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 259,
+            "sandbox_prepare_ms": 62,
+            "warm_container_create_ms": 412,
+            "warm_pool_release_ms": 0,
+            "warm_runner_exec_ms": 469,
+            "warm_sandbox_cleanup_after_ms": 90,
+            "warm_sandbox_cleanup_before_ms": 151,
+            "worker_process_total_ms": 1419,
+            "worker_container": "worker-2"
+          },
+          "job": {
+            "invocation_id": 480,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 2,
+                "scenario": "hot_sequential",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "14387544-84be-447f-9ef1-f94a7b1e8cc4",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "queued_at": "2026-07-19T19:03:41.539188+00:00",
+              "request_id": "8bfc81ea-4c2c-4b99-a4cf-08f50bbfd210",
+              "function_id": 46,
+              "function_slug": "warm-bench-hot-9275b598",
+              "invocation_id": 480,
+              "assigned_worker": "d5a083814c4f",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:d5a083814c4f:invocations",
+              "function_version_id": 53,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "d5a083814c4f"
+        },
+        {
+          "id": 481,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "63b66c08-1547-4319-8e5b-65ed1c6ebcb4",
+          "status": "succeeded",
+          "event": {
+            "index": 3,
+            "scenario": "hot_sequential",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 3,
+            "label": "hot",
+            "request_id": "63b66c08-1547-4319-8e5b-65ed1c6ebcb4",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"hot\", \"index\": 3, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"63b66c08-1547-4319-8e5b-65ed1c6ebcb4\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 0, \"runner_module_imports_ms\": 400, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 401}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": false,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:03:43.680202Z",
+          "started_at": "2026-07-19T19:03:43.971383Z",
+          "finished_at": "2026-07-19T19:03:45.212178Z",
+          "duration_ms": 934,
+          "function_version": 53,
+          "client_submit_ms": 125,
+          "client_poll_ms": 1875,
+          "scenario": "hot_sequential",
+          "index": 3,
+          "worker_timing": {
+            "backend_final_report_ms": 115,
+            "backend_running_report_ms": 65,
+            "docker_export_copy_ms": 67,
+            "docker_input_copy_ms": 31,
+            "executor_duration_ms": 934,
+            "executor_wall_with_cleanup_ms": 1165,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 0,
+            "runner_module_imports_ms": 400,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 401,
+            "sandbox_prepare_ms": 45,
+            "warm_container_reused": 1,
+            "warm_pool_release_ms": 0,
+            "warm_runner_exec_ms": 650,
+            "warm_sandbox_cleanup_after_ms": 230,
+            "warm_sandbox_cleanup_before_ms": 137,
+            "worker_process_total_ms": 1356,
+            "worker_container": "worker-2"
+          },
+          "job": {
+            "invocation_id": 481,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 3,
+                "scenario": "hot_sequential",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "4a264e55-f2b6-4d8b-b92a-40cbb1a0684a",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "queued_at": "2026-07-19T19:03:43.680202+00:00",
+              "request_id": "63b66c08-1547-4319-8e5b-65ed1c6ebcb4",
+              "function_id": 46,
+              "function_slug": "warm-bench-hot-9275b598",
+              "invocation_id": 481,
+              "assigned_worker": "d5a083814c4f",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:d5a083814c4f:invocations",
+              "function_version_id": 53,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "d5a083814c4f"
+        },
+        {
+          "id": 482,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "0d5bb43a-f256-4c4d-a1eb-51104cf49394",
+          "status": "succeeded",
+          "event": {
+            "index": 4,
+            "scenario": "hot_sequential",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 4,
+            "label": "hot",
+            "request_id": "0d5bb43a-f256-4c4d-a1eb-51104cf49394",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"hot\", \"index\": 4, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"0d5bb43a-f256-4c4d-a1eb-51104cf49394\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 0, \"runner_module_imports_ms\": 457, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 459}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": false,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:03:45.666986Z",
+          "started_at": "2026-07-19T19:03:46.205948Z",
+          "finished_at": "2026-07-19T19:03:47.356090Z",
+          "duration_ms": 965,
+          "function_version": 53,
+          "client_submit_ms": 109,
+          "client_poll_ms": 1938,
+          "scenario": "hot_sequential",
+          "index": 4,
+          "worker_timing": {
+            "backend_final_report_ms": 66,
+            "backend_running_report_ms": 78,
+            "docker_export_copy_ms": 16,
+            "docker_input_copy_ms": 57,
+            "executor_duration_ms": 965,
+            "executor_wall_with_cleanup_ms": 1071,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 0,
+            "runner_module_imports_ms": 457,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 459,
+            "sandbox_prepare_ms": 58,
+            "warm_container_reused": 1,
+            "warm_pool_release_ms": 0,
+            "warm_runner_exec_ms": 638,
+            "warm_sandbox_cleanup_after_ms": 104,
+            "warm_sandbox_cleanup_before_ms": 192,
+            "worker_process_total_ms": 1217,
+            "worker_container": "worker-2"
+          },
+          "job": {
+            "invocation_id": 482,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 4,
+                "scenario": "hot_sequential",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "5f884a76-a250-471b-93fe-803089b9dea3",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "queued_at": "2026-07-19T19:03:45.666986+00:00",
+              "request_id": "0d5bb43a-f256-4c4d-a1eb-51104cf49394",
+              "function_id": 46,
+              "function_slug": "warm-bench-hot-9275b598",
+              "invocation_id": 482,
+              "assigned_worker": "d5a083814c4f",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:d5a083814c4f:invocations",
+              "function_version_id": 53,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "d5a083814c4f"
+        },
+        {
+          "id": 483,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "415820aa-64aa-45ff-b24c-c9cf0755e28a",
+          "status": "succeeded",
+          "event": {
+            "index": 5,
+            "scenario": "hot_sequential",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 5,
+            "label": "hot",
+            "request_id": "415820aa-64aa-45ff-b24c-c9cf0755e28a",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"hot\", \"index\": 5, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"415820aa-64aa-45ff-b24c-c9cf0755e28a\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 0, \"runner_module_imports_ms\": 386, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 387}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": false,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:03:47.692671Z",
+          "started_at": "2026-07-19T19:03:48.003515Z",
+          "finished_at": "2026-07-19T19:03:48.892421Z",
+          "duration_ms": 746,
+          "function_version": 53,
+          "client_submit_ms": 77,
+          "client_poll_ms": 1234,
+          "scenario": "hot_sequential",
+          "index": 5,
+          "worker_timing": {
+            "backend_final_report_ms": 70,
+            "backend_running_report_ms": 42,
+            "docker_export_copy_ms": 16,
+            "docker_input_copy_ms": 13,
+            "executor_duration_ms": 746,
+            "executor_wall_with_cleanup_ms": 845,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 0,
+            "runner_module_imports_ms": 386,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 387,
+            "sandbox_prepare_ms": 30,
+            "warm_container_reused": 1,
+            "warm_pool_release_ms": 1,
+            "warm_runner_exec_ms": 589,
+            "warm_sandbox_cleanup_after_ms": 96,
+            "warm_sandbox_cleanup_before_ms": 95,
+            "worker_process_total_ms": 959,
+            "worker_container": "worker-3"
+          },
+          "job": {
+            "invocation_id": 483,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 5,
+                "scenario": "hot_sequential",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "1899358d-a7ad-4378-905c-cd9be2243afd",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "queued_at": "2026-07-19T19:03:47.692671+00:00",
+              "request_id": "415820aa-64aa-45ff-b24c-c9cf0755e28a",
+              "function_id": 46,
+              "function_slug": "warm-bench-hot-9275b598",
+              "invocation_id": 483,
+              "assigned_worker": "9cdc9eaa1090",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:9cdc9eaa1090:invocations",
+              "function_version_id": 53,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "9cdc9eaa1090"
+        }
+      ]
+    },
+    {
+      "name": "cold_pressure",
+      "count": 3,
+      "concurrency": 1,
+      "sleep_seconds": 0,
+      "wall_ms": 7953,
+      "invocations": [
+        {
+          "id": 484,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "37ddd959-1aac-435a-a8e3-7b0b5d947764",
+          "status": "succeeded",
+          "event": {
+            "index": 0,
+            "scenario": "cold_pressure",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 0,
+            "label": "cold",
+            "request_id": "37ddd959-1aac-435a-a8e3-7b0b5d947764",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"cold\", \"index\": 0, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"37ddd959-1aac-435a-a8e3-7b0b5d947764\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 1, \"runner_module_imports_ms\": 537, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 539}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:03:49.028295Z",
+          "started_at": "2026-07-19T19:03:49.416009Z",
+          "finished_at": "2026-07-19T19:03:51.733460Z",
+          "duration_ms": 1857,
+          "function_version": 54,
+          "client_submit_ms": 125,
+          "client_poll_ms": 3203,
+          "scenario": "cold_pressure",
+          "index": 0,
+          "worker_timing": {
+            "backend_final_report_ms": 78,
+            "backend_running_report_ms": 137,
+            "docker_export_copy_ms": 37,
+            "docker_input_copy_ms": 19,
+            "executor_duration_ms": 1857,
+            "executor_wall_with_cleanup_ms": 2178,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 1,
+            "runner_module_imports_ms": 537,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 539,
+            "sandbox_prepare_ms": 73,
+            "warm_container_create_ms": 705,
+            "warm_pool_release_ms": 0,
+            "warm_runner_exec_ms": 748,
+            "warm_sandbox_cleanup_after_ms": 319,
+            "warm_sandbox_cleanup_before_ms": 271,
+            "worker_process_total_ms": 2396,
+            "worker_container": "worker-3"
+          },
+          "job": {
+            "invocation_id": 484,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 0,
+                "scenario": "cold_pressure",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "94c4cc7b-369d-4de1-9b65-ab0277b7efd0",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-cold-da9dfeaa:v54-v1",
+              "queued_at": "2026-07-19T19:03:49.028295+00:00",
+              "request_id": "37ddd959-1aac-435a-a8e3-7b0b5d947764",
+              "function_id": 47,
+              "function_slug": "warm-bench-cold-da9dfeaa",
+              "invocation_id": 484,
+              "assigned_worker": "9cdc9eaa1090",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:9cdc9eaa1090:invocations",
+              "function_version_id": 54,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "9cdc9eaa1090"
+        },
+        {
+          "id": 485,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "9a39fccf-35c4-4f0b-b647-d825977d88ef",
+          "status": "succeeded",
+          "event": {
+            "index": 1,
+            "scenario": "cold_pressure",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 1,
+            "label": "cold",
+            "request_id": "9a39fccf-35c4-4f0b-b647-d825977d88ef",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"cold\", \"index\": 1, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"9a39fccf-35c4-4f0b-b647-d825977d88ef\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 0, \"runner_module_imports_ms\": 521, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 523}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": false,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:03:52.372856Z",
+          "started_at": "2026-07-19T19:03:52.823485Z",
+          "finished_at": "2026-07-19T19:03:54.058147Z",
+          "duration_ms": 1008,
+          "function_version": 54,
+          "client_submit_ms": 125,
+          "client_poll_ms": 1890,
+          "scenario": "cold_pressure",
+          "index": 1,
+          "worker_timing": {
+            "backend_final_report_ms": 63,
+            "backend_running_report_ms": 104,
+            "docker_export_copy_ms": 27,
+            "docker_input_copy_ms": 18,
+            "executor_duration_ms": 1008,
+            "executor_wall_with_cleanup_ms": 1128,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 0,
+            "runner_module_imports_ms": 521,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 523,
+            "sandbox_prepare_ms": 53,
+            "warm_container_reused": 1,
+            "warm_pool_release_ms": 0,
+            "warm_runner_exec_ms": 728,
+            "warm_sandbox_cleanup_after_ms": 120,
+            "warm_sandbox_cleanup_before_ms": 178,
+            "worker_process_total_ms": 1298,
+            "worker_container": "worker-3"
+          },
+          "job": {
+            "invocation_id": 485,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 1,
+                "scenario": "cold_pressure",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "5da417c3-0f32-4505-bc86-0da46979c39d",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-cold-da9dfeaa:v54-v1",
+              "queued_at": "2026-07-19T19:03:52.372856+00:00",
+              "request_id": "9a39fccf-35c4-4f0b-b647-d825977d88ef",
+              "function_id": 47,
+              "function_slug": "warm-bench-cold-da9dfeaa",
+              "invocation_id": 485,
+              "assigned_worker": "9cdc9eaa1090",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:9cdc9eaa1090:invocations",
+              "function_version_id": 54,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "9cdc9eaa1090"
+        },
+        {
+          "id": 486,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "bef67d7b-a81a-4e09-9802-6d640d59278f",
+          "status": "succeeded",
+          "event": {
+            "index": 2,
+            "scenario": "cold_pressure",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 2,
+            "label": "cold",
+            "request_id": "bef67d7b-a81a-4e09-9802-6d640d59278f",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"cold\", \"index\": 2, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"bef67d7b-a81a-4e09-9802-6d640d59278f\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 1, \"runner_module_imports_ms\": 391, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 393}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:03:54.393899Z",
+          "started_at": "2026-07-19T19:03:54.790692Z",
+          "finished_at": "2026-07-19T19:03:56.809915Z",
+          "duration_ms": 1756,
+          "function_version": 54,
+          "client_submit_ms": 125,
+          "client_poll_ms": 2484,
+          "scenario": "cold_pressure",
+          "index": 2,
+          "worker_timing": {
+            "backend_final_report_ms": 84,
+            "backend_running_report_ms": 65,
+            "docker_export_copy_ms": 18,
+            "docker_input_copy_ms": 38,
+            "executor_duration_ms": 1756,
+            "executor_wall_with_cleanup_ms": 1946,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 1,
+            "runner_module_imports_ms": 391,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 393,
+            "sandbox_prepare_ms": 79,
+            "warm_container_create_ms": 616,
+            "warm_pool_release_ms": 0,
+            "warm_runner_exec_ms": 689,
+            "warm_sandbox_cleanup_after_ms": 188,
+            "warm_sandbox_cleanup_before_ms": 311,
+            "worker_process_total_ms": 2103,
+            "worker_container": "worker-2"
+          },
+          "job": {
+            "invocation_id": 486,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 2,
+                "scenario": "cold_pressure",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "8d7ddd6a-92d9-4565-b225-61a39f2ae2af",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-cold-da9dfeaa:v54-v1",
+              "queued_at": "2026-07-19T19:03:54.393899+00:00",
+              "request_id": "bef67d7b-a81a-4e09-9802-6d640d59278f",
+              "function_id": 47,
+              "function_slug": "warm-bench-cold-da9dfeaa",
+              "invocation_id": 486,
+              "assigned_worker": "d5a083814c4f",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:d5a083814c4f:invocations",
+              "function_version_id": 54,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "d5a083814c4f"
+        }
+      ]
+    },
+    {
+      "name": "hot_after_pressure",
+      "count": 4,
+      "concurrency": 1,
+      "sleep_seconds": 0,
+      "wall_ms": 7765,
+      "invocations": [
+        {
+          "id": 487,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "be295910-6d5c-4420-9eb5-8b89ee366067",
+          "status": "succeeded",
+          "event": {
+            "index": 0,
+            "scenario": "hot_after_pressure",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 0,
+            "label": "hot",
+            "request_id": "be295910-6d5c-4420-9eb5-8b89ee366067",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"hot\", \"index\": 0, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"be295910-6d5c-4420-9eb5-8b89ee366067\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 0, \"runner_module_imports_ms\": 428, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 429}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": false,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:03:56.959700Z",
+          "started_at": "2026-07-19T19:03:57.362653Z",
+          "finished_at": "2026-07-19T19:03:58.529065Z",
+          "duration_ms": 900,
+          "function_version": 53,
+          "client_submit_ms": 78,
+          "client_poll_ms": 1843,
+          "scenario": "hot_after_pressure",
+          "index": 0,
+          "worker_timing": {
+            "backend_final_report_ms": 89,
+            "backend_running_report_ms": 130,
+            "docker_export_copy_ms": 39,
+            "docker_input_copy_ms": 17,
+            "executor_duration_ms": 900,
+            "executor_wall_with_cleanup_ms": 1034,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 0,
+            "runner_module_imports_ms": 428,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 429,
+            "sandbox_prepare_ms": 62,
+            "warm_container_reused": 1,
+            "warm_pool_release_ms": 0,
+            "warm_runner_exec_ms": 629,
+            "warm_sandbox_cleanup_after_ms": 133,
+            "warm_sandbox_cleanup_before_ms": 150,
+            "worker_process_total_ms": 1255,
+            "worker_container": "worker-2"
+          },
+          "job": {
+            "invocation_id": 487,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 0,
+                "scenario": "hot_after_pressure",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "972afe6a-1427-4086-8b66-bba3471d23b6",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "queued_at": "2026-07-19T19:03:56.959700+00:00",
+              "request_id": "be295910-6d5c-4420-9eb5-8b89ee366067",
+              "function_id": 46,
+              "function_slug": "warm-bench-hot-9275b598",
+              "invocation_id": 487,
+              "assigned_worker": "d5a083814c4f",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:d5a083814c4f:invocations",
+              "function_version_id": 53,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "d5a083814c4f"
+        },
+        {
+          "id": 488,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "2094893e-9222-46dd-b302-5baf1f3f99dc",
+          "status": "succeeded",
+          "event": {
+            "index": 1,
+            "scenario": "hot_after_pressure",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 1,
+            "label": "hot",
+            "request_id": "2094893e-9222-46dd-b302-5baf1f3f99dc",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"hot\", \"index\": 1, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"2094893e-9222-46dd-b302-5baf1f3f99dc\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 0, \"runner_module_imports_ms\": 367, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 368}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": false,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:03:58.925120Z",
+          "started_at": "2026-07-19T19:03:59.320745Z",
+          "finished_at": "2026-07-19T19:04:00.614173Z",
+          "duration_ms": 1049,
+          "function_version": 53,
+          "client_submit_ms": 140,
+          "client_poll_ms": 1891,
+          "scenario": "hot_after_pressure",
+          "index": 1,
+          "worker_timing": {
+            "backend_final_report_ms": 91,
+            "backend_running_report_ms": 123,
+            "docker_export_copy_ms": 16,
+            "docker_input_copy_ms": 26,
+            "executor_duration_ms": 1049,
+            "executor_wall_with_cleanup_ms": 1168,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 0,
+            "runner_module_imports_ms": 367,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 368,
+            "sandbox_prepare_ms": 109,
+            "warm_container_reused": 1,
+            "warm_pool_release_ms": 0,
+            "warm_runner_exec_ms": 593,
+            "warm_sandbox_cleanup_after_ms": 118,
+            "warm_sandbox_cleanup_before_ms": 297,
+            "worker_process_total_ms": 1385,
+            "worker_container": "worker-3"
+          },
+          "job": {
+            "invocation_id": 488,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 1,
+                "scenario": "hot_after_pressure",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "fc87ce53-1d4d-40e9-a0fc-070cc65c0e2a",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "queued_at": "2026-07-19T19:03:58.925120+00:00",
+              "request_id": "2094893e-9222-46dd-b302-5baf1f3f99dc",
+              "function_id": 46,
+              "function_slug": "warm-bench-hot-9275b598",
+              "invocation_id": 488,
+              "assigned_worker": "9cdc9eaa1090",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:9cdc9eaa1090:invocations",
+              "function_version_id": 53,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "9cdc9eaa1090"
+        },
+        {
+          "id": 489,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "a96109d2-52e3-4f6e-a105-457a5de78c02",
+          "status": "succeeded",
+          "event": {
+            "index": 2,
+            "scenario": "hot_after_pressure",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 2,
+            "label": "hot",
+            "request_id": "a96109d2-52e3-4f6e-a105-457a5de78c02",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"hot\", \"index\": 2, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"a96109d2-52e3-4f6e-a105-457a5de78c02\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 0, \"runner_module_imports_ms\": 283, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 285}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": false,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:04:00.906252Z",
+          "started_at": "2026-07-19T19:04:01.164218Z",
+          "finished_at": "2026-07-19T19:04:02.159998Z",
+          "duration_ms": 786,
+          "function_version": 53,
+          "client_submit_ms": 78,
+          "client_poll_ms": 1811,
+          "scenario": "hot_after_pressure",
+          "index": 2,
+          "worker_timing": {
+            "backend_final_report_ms": 86,
+            "backend_running_report_ms": 80,
+            "docker_export_copy_ms": 17,
+            "docker_input_copy_ms": 28,
+            "executor_duration_ms": 786,
+            "executor_wall_with_cleanup_ms": 913,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 0,
+            "runner_module_imports_ms": 283,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 285,
+            "sandbox_prepare_ms": 61,
+            "warm_container_reused": 1,
+            "warm_pool_release_ms": 0,
+            "warm_runner_exec_ms": 529,
+            "warm_sandbox_cleanup_after_ms": 126,
+            "warm_sandbox_cleanup_before_ms": 148,
+            "worker_process_total_ms": 1082,
+            "worker_container": "worker-3"
+          },
+          "job": {
+            "invocation_id": 489,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 2,
+                "scenario": "hot_after_pressure",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "a500dd1c-7223-4675-ad34-35b26cc1dc51",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "queued_at": "2026-07-19T19:04:00.906252+00:00",
+              "request_id": "a96109d2-52e3-4f6e-a105-457a5de78c02",
+              "function_id": 46,
+              "function_slug": "warm-bench-hot-9275b598",
+              "invocation_id": 489,
+              "assigned_worker": "9cdc9eaa1090",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:9cdc9eaa1090:invocations",
+              "function_version_id": 53,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "9cdc9eaa1090"
+        },
+        {
+          "id": 490,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "bbe246bb-d067-456f-99c7-68969161614b",
+          "status": "succeeded",
+          "event": {
+            "index": 3,
+            "scenario": "hot_after_pressure",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 3,
+            "label": "hot",
+            "request_id": "bbe246bb-d067-456f-99c7-68969161614b",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"hot\", \"index\": 3, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"bbe246bb-d067-456f-99c7-68969161614b\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 0, \"runner_module_imports_ms\": 428, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 429}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": false,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:04:02.806081Z",
+          "started_at": "2026-07-19T19:04:03.273574Z",
+          "finished_at": "2026-07-19T19:04:04.398048Z",
+          "duration_ms": 903,
+          "function_version": 53,
+          "client_submit_ms": 78,
+          "client_poll_ms": 1843,
+          "scenario": "hot_after_pressure",
+          "index": 3,
+          "worker_timing": {
+            "backend_final_report_ms": 127,
+            "backend_running_report_ms": 73,
+            "docker_export_copy_ms": 45,
+            "docker_input_copy_ms": 17,
+            "executor_duration_ms": 903,
+            "executor_wall_with_cleanup_ms": 1049,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 0,
+            "runner_module_imports_ms": 428,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 429,
+            "sandbox_prepare_ms": 45,
+            "warm_container_reused": 1,
+            "warm_pool_release_ms": 0,
+            "warm_runner_exec_ms": 666,
+            "warm_sandbox_cleanup_after_ms": 145,
+            "warm_sandbox_cleanup_before_ms": 126,
+            "worker_process_total_ms": 1251,
+            "worker_container": "worker-3"
+          },
+          "job": {
+            "invocation_id": 490,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 3,
+                "scenario": "hot_after_pressure",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "e23b3b8a-61d0-4e69-b09f-b3c7c00e4c43",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "queued_at": "2026-07-19T19:04:02.806081+00:00",
+              "request_id": "bbe246bb-d067-456f-99c7-68969161614b",
+              "function_id": 46,
+              "function_slug": "warm-bench-hot-9275b598",
+              "invocation_id": 490,
+              "assigned_worker": "9cdc9eaa1090",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:9cdc9eaa1090:invocations",
+              "function_version_id": 53,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "9cdc9eaa1090"
+        }
+      ]
+    },
+    {
+      "name": "hot_burst",
+      "count": 6,
+      "concurrency": 3,
+      "sleep_seconds": 0,
+      "wall_ms": 11344,
+      "invocations": [
+        {
+          "id": 491,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "90c5dbeb-f586-4140-8c51-9ee2d68538de",
+          "status": "succeeded",
+          "event": {
+            "index": 0,
+            "scenario": "hot_burst",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 0,
+            "label": "hot",
+            "request_id": "90c5dbeb-f586-4140-8c51-9ee2d68538de",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"hot\", \"index\": 0, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"90c5dbeb-f586-4140-8c51-9ee2d68538de\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 1, \"runner_module_imports_ms\": 903, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 906}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": false,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:04:04.757921Z",
+          "started_at": "2026-07-19T19:04:05.334215Z",
+          "finished_at": "2026-07-19T19:04:10.700557Z",
+          "duration_ms": 1664,
+          "function_version": 53,
+          "client_submit_ms": 108,
+          "client_poll_ms": 6687,
+          "scenario": "hot_burst",
+          "index": 0,
+          "worker_timing": {
+            "backend_final_report_ms": 540,
+            "backend_running_report_ms": 52,
+            "docker_export_copy_ms": 92,
+            "docker_input_copy_ms": 22,
+            "executor_duration_ms": 1664,
+            "executor_wall_with_cleanup_ms": 5311,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 1,
+            "runner_module_imports_ms": 903,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 906,
+            "sandbox_prepare_ms": 73,
+            "warm_container_reused": 1,
+            "warm_pool_release_ms": 2749,
+            "warm_runner_exec_ms": 1298,
+            "warm_sandbox_cleanup_after_ms": 894,
+            "warm_sandbox_cleanup_before_ms": 175,
+            "worker_process_total_ms": 5906,
+            "worker_container": "worker-2"
+          },
+          "job": {
+            "invocation_id": 491,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 0,
+                "scenario": "hot_burst",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "23891f81-6559-4ab6-a6bc-f23888b7d740",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "queued_at": "2026-07-19T19:04:04.757921+00:00",
+              "request_id": "90c5dbeb-f586-4140-8c51-9ee2d68538de",
+              "function_id": 46,
+              "function_slug": "warm-bench-hot-9275b598",
+              "invocation_id": 491,
+              "assigned_worker": "d5a083814c4f",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:d5a083814c4f:invocations",
+              "function_version_id": 53,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "d5a083814c4f"
+        },
+        {
+          "id": 492,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "b507a2a6-7a3a-4765-9fd4-8b79c0d43b63",
+          "status": "succeeded",
+          "event": {
+            "index": 1,
+            "scenario": "hot_burst",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 1,
+            "label": "hot",
+            "request_id": "b507a2a6-7a3a-4765-9fd4-8b79c0d43b63",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"hot\", \"index\": 1, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"b507a2a6-7a3a-4765-9fd4-8b79c0d43b63\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 1, \"runner_module_imports_ms\": 1950, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 1952}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:04:04.766436Z",
+          "started_at": "2026-07-19T19:04:05.434180Z",
+          "finished_at": "2026-07-19T19:04:13.346389Z",
+          "duration_ms": 6100,
+          "function_version": 53,
+          "client_submit_ms": 108,
+          "client_poll_ms": 9250,
+          "scenario": "hot_burst",
+          "index": 1,
+          "worker_timing": {
+            "backend_final_report_ms": 387,
+            "backend_running_report_ms": 107,
+            "docker_export_copy_ms": 153,
+            "docker_input_copy_ms": 225,
+            "executor_duration_ms": 6100,
+            "executor_wall_with_cleanup_ms": 7801,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 1,
+            "runner_module_imports_ms": 1950,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 1952,
+            "sandbox_prepare_ms": 199,
+            "warm_container_create_ms": 1677,
+            "warm_pool_release_ms": 1057,
+            "warm_runner_exec_ms": 3101,
+            "warm_sandbox_cleanup_after_ms": 618,
+            "warm_sandbox_cleanup_before_ms": 741,
+            "worker_process_total_ms": 8299,
+            "worker_container": "worker-2"
+          },
+          "job": {
+            "invocation_id": 492,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 1,
+                "scenario": "hot_burst",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "6b16ca66-72b2-4e5c-a6e6-e8b732d816ca",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "queued_at": "2026-07-19T19:04:04.766436+00:00",
+              "request_id": "b507a2a6-7a3a-4765-9fd4-8b79c0d43b63",
+              "function_id": 46,
+              "function_slug": "warm-bench-hot-9275b598",
+              "invocation_id": 492,
+              "assigned_worker": "d5a083814c4f",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:d5a083814c4f:invocations",
+              "function_version_id": 53,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "d5a083814c4f"
+        },
+        {
+          "id": 493,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "132666b6-f687-424c-85e6-72f0f697fd1e",
+          "status": "succeeded",
+          "event": {
+            "index": 2,
+            "scenario": "hot_burst",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 2,
+            "label": "hot",
+            "request_id": "132666b6-f687-424c-85e6-72f0f697fd1e",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"hot\", \"index\": 2, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"132666b6-f687-424c-85e6-72f0f697fd1e\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 3, \"runner_module_imports_ms\": 1223, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 1227}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:04:04.860220Z",
+          "started_at": "2026-07-19T19:04:05.528097Z",
+          "finished_at": "2026-07-19T19:04:13.753412Z",
+          "duration_ms": 6263,
+          "function_version": 53,
+          "client_submit_ms": 218,
+          "client_poll_ms": 9500,
+          "scenario": "hot_burst",
+          "index": 2,
+          "worker_timing": {
+            "backend_final_report_ms": 307,
+            "backend_running_report_ms": 134,
+            "docker_export_copy_ms": 101,
+            "docker_input_copy_ms": 350,
+            "executor_duration_ms": 6263,
+            "executor_wall_with_cleanup_ms": 8086,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 3,
+            "runner_module_imports_ms": 1223,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 1227,
+            "sandbox_prepare_ms": 203,
+            "warm_container_create_ms": 2225,
+            "warm_pool_release_ms": 919,
+            "warm_runner_exec_ms": 2311,
+            "warm_sandbox_cleanup_after_ms": 903,
+            "warm_sandbox_cleanup_before_ms": 1069,
+            "worker_process_total_ms": 8532,
+            "worker_container": "worker-2"
+          },
+          "job": {
+            "invocation_id": 493,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 2,
+                "scenario": "hot_burst",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "64802397-edb1-47f8-881b-8fc8e384dcfe",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "queued_at": "2026-07-19T19:04:04.860220+00:00",
+              "request_id": "132666b6-f687-424c-85e6-72f0f697fd1e",
+              "function_id": 46,
+              "function_slug": "warm-bench-hot-9275b598",
+              "invocation_id": 493,
+              "assigned_worker": "d5a083814c4f",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:d5a083814c4f:invocations",
+              "function_version_id": 53,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "d5a083814c4f"
+        },
+        {
+          "id": 494,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "ace18740-b871-462a-9bab-aa53b27ee31a",
+          "status": "succeeded",
+          "event": {
+            "index": 3,
+            "scenario": "hot_burst",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 3,
+            "label": "hot",
+            "request_id": "ace18740-b871-462a-9bab-aa53b27ee31a",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"hot\", \"index\": 3, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"ace18740-b871-462a-9bab-aa53b27ee31a\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 1, \"runner_module_imports_ms\": 1119, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 1120}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:04:04.917838Z",
+          "started_at": "2026-07-19T19:04:05.694147Z",
+          "finished_at": "2026-07-19T19:04:12.765131Z",
+          "duration_ms": 6184,
+          "function_version": 53,
+          "client_submit_ms": 156,
+          "client_poll_ms": 2015,
+          "scenario": "hot_burst",
+          "index": 3,
+          "worker_timing": {
+            "backend_final_report_ms": 258,
+            "backend_running_report_ms": 208,
+            "docker_export_copy_ms": 128,
+            "docker_input_copy_ms": 376,
+            "executor_duration_ms": 6184,
+            "executor_wall_with_cleanup_ms": 6848,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 1,
+            "runner_module_imports_ms": 1119,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 1120,
+            "sandbox_prepare_ms": 284,
+            "warm_container_create_ms": 2725,
+            "warm_pool_release_ms": 0,
+            "warm_runner_exec_ms": 1893,
+            "warm_sandbox_cleanup_after_ms": 663,
+            "warm_sandbox_cleanup_before_ms": 762,
+            "worker_process_total_ms": 7329,
+            "worker_container": "worker-2"
+          },
+          "job": {
+            "invocation_id": 494,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 3,
+                "scenario": "hot_burst",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "996dd892-3d36-429a-8545-4c10c0caa4a1",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "queued_at": "2026-07-19T19:04:04.917838+00:00",
+              "request_id": "ace18740-b871-462a-9bab-aa53b27ee31a",
+              "function_id": 46,
+              "function_slug": "warm-bench-hot-9275b598",
+              "invocation_id": 494,
+              "assigned_worker": "d5a083814c4f",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:d5a083814c4f:invocations",
+              "function_version_id": 53,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "d5a083814c4f"
+        },
+        {
+          "id": 495,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "cddd3d8a-6704-46ae-928f-5b2a895e9994",
+          "status": "succeeded",
+          "event": {
+            "index": 4,
+            "scenario": "hot_burst",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 4,
+            "label": "hot",
+            "request_id": "cddd3d8a-6704-46ae-928f-5b2a895e9994",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"hot\", \"index\": 4, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"cddd3d8a-6704-46ae-928f-5b2a895e9994\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 1, \"runner_module_imports_ms\": 1448, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 1451}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": false,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:04:04.961340Z",
+          "started_at": "2026-07-19T19:04:06.231636Z",
+          "finished_at": "2026-07-19T19:04:10.890172Z",
+          "duration_ms": 3695,
+          "function_version": 53,
+          "client_submit_ms": 203,
+          "client_poll_ms": 219,
+          "scenario": "hot_burst",
+          "index": 4,
+          "worker_timing": {
+            "backend_final_report_ms": 570,
+            "backend_running_report_ms": 226,
+            "docker_export_copy_ms": 169,
+            "docker_input_copy_ms": 178,
+            "executor_duration_ms": 3695,
+            "executor_wall_with_cleanup_ms": 4430,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 3,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 1,
+            "runner_module_imports_ms": 1448,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 1451,
+            "sandbox_prepare_ms": 208,
+            "warm_container_reused": 1,
+            "warm_pool_release_ms": 0,
+            "warm_runner_exec_ms": 2583,
+            "warm_sandbox_cleanup_after_ms": 734,
+            "warm_sandbox_cleanup_before_ms": 550,
+            "worker_process_total_ms": 5229,
+            "worker_container": "worker-3"
+          },
+          "job": {
+            "invocation_id": 495,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 4,
+                "scenario": "hot_burst",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "b830a76d-183c-4da4-83a8-d558938642a6",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "queued_at": "2026-07-19T19:04:04.961340+00:00",
+              "request_id": "cddd3d8a-6704-46ae-928f-5b2a895e9994",
+              "function_id": 46,
+              "function_slug": "warm-bench-hot-9275b598",
+              "invocation_id": 495,
+              "assigned_worker": "9cdc9eaa1090",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:9cdc9eaa1090:invocations",
+              "function_version_id": 53,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "9cdc9eaa1090"
+        },
+        {
+          "id": 496,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "6444ff8e-2768-4b45-9517-63414127ee13",
+          "status": "succeeded",
+          "event": {
+            "index": 5,
+            "scenario": "hot_burst",
+            "sleep_seconds": 0
+          },
+          "result": {
+            "index": 5,
+            "label": "hot",
+            "request_id": "6444ff8e-2768-4b45-9517-63414127ee13",
+            "sleep_seconds": 0.0,
+            "elapsed_seconds": 0.0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"label\": \"hot\", \"index\": 5, \"sleep_seconds\": 0.0, \"elapsed_seconds\": 0.0, \"request_id\": \"6444ff8e-2768-4b45-9517-63414127ee13\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 2, \"runner_module_imports_ms\": 458, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 461}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T19:04:05.058866Z",
+          "started_at": "2026-07-19T19:04:11.888074Z",
+          "finished_at": "2026-07-19T19:04:15.879452Z",
+          "duration_ms": 3064,
+          "function_version": 53,
+          "client_submit_ms": 187,
+          "client_poll_ms": 2000,
+          "scenario": "hot_burst",
+          "index": 5,
+          "worker_timing": {
+            "backend_final_report_ms": 127,
+            "backend_running_report_ms": 515,
+            "docker_export_copy_ms": 51,
+            "docker_input_copy_ms": 35,
+            "executor_duration_ms": 3064,
+            "executor_wall_with_cleanup_ms": 3474,
+            "output_upload_ms": 0,
+            "output_validation_ms": 0,
+            "result_read_ms": 0,
+            "runner_environment_read_ms": 0,
+            "runner_event_load_ms": 0,
+            "runner_handler_execution_ms": 0,
+            "runner_handler_import_ms": 2,
+            "runner_module_imports_ms": 458,
+            "runner_result_serialize_ms": 0,
+            "runner_result_write_ms": 0,
+            "runner_setup_ms": 0,
+            "runner_total_ms": 461,
+            "sandbox_prepare_ms": 135,
+            "warm_container_create_ms": 1808,
+            "warm_pool_release_ms": 271,
+            "warm_runner_exec_ms": 758,
+            "warm_sandbox_cleanup_after_ms": 138,
+            "warm_sandbox_cleanup_before_ms": 271,
+            "worker_process_total_ms": 4119,
+            "worker_container": "worker-2"
+          },
+          "job": {
+            "invocation_id": 496,
+            "status": "succeeded",
+            "payload": {
+              "type": "function.invoke",
+              "event": {
+                "index": 5,
+                "scenario": "hot_burst",
+                "sleep_seconds": 0
+              },
+              "config": {
+                "memory_mb": 128,
+                "timeout_seconds": 20
+              },
+              "job_id": "bb28838a-83dd-48df-98f3-3d4200552fd0",
+              "handler": "handler.main",
+              "runtime": "python3.13",
+              "version": "v1",
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "queued_at": "2026-07-19T19:04:05.058866+00:00",
+              "request_id": "6444ff8e-2768-4b45-9517-63414127ee13",
+              "function_id": 46,
+              "function_slug": "warm-bench-hot-9275b598",
+              "invocation_id": 496,
+              "assigned_worker": "d5a083814c4f",
+              "dispatch_attempt": 1,
+              "worker_queue_name": "worker:d5a083814c4f:invocations",
+              "function_version_id": 53,
+              "declared_output_files": [],
+              "invocation_output_max_files": 5,
+              "invocation_output_max_file_size_mb": 10,
+              "invocation_output_max_total_size_mb": 10
+            },
+            "coordination_version": 1,
+            "dispatch_attempts": 1
+          },
+          "assigned_worker": "d5a083814c4f"
+        }
+      ]
+    }
+  ],
+  "scenario_summary": {
+    "hot_sequential": {
+      "count": 6,
+      "statuses": [
+        "succeeded"
+      ],
+      "wall_ms": 12264,
+      "duration_ms": {
+        "min": 746,
+        "median": 1050,
+        "p90": 1170,
+        "max": 1828
+      },
+      "worker_process_total_ms": {
+        "min": 959,
+        "median": 1387,
+        "p90": 1495,
+        "max": 2218
+      },
+      "executor_duration_ms": {
+        "min": 746,
+        "median": 1050,
+        "p90": 1170,
+        "max": 1828
+      },
+      "warm_reuses": 4,
+      "cold_starts": 2,
+      "worker_counts": {
+        "9cdc9eaa1090": 3,
+        "d5a083814c4f": 3
+      }
+    },
+    "cold_pressure": {
+      "count": 3,
+      "statuses": [
+        "succeeded"
+      ],
+      "wall_ms": 7953,
+      "duration_ms": {
+        "min": 1008,
+        "median": 1756,
+        "p90": 1857,
+        "max": 1857
+      },
+      "worker_process_total_ms": {
+        "min": 1298,
+        "median": 2103,
+        "p90": 2396,
+        "max": 2396
+      },
+      "executor_duration_ms": {
+        "min": 1008,
+        "median": 1756,
+        "p90": 1857,
+        "max": 1857
+      },
+      "warm_reuses": 1,
+      "cold_starts": 2,
+      "worker_counts": {
+        "9cdc9eaa1090": 2,
+        "d5a083814c4f": 1
+      }
+    },
+    "hot_after_pressure": {
+      "count": 4,
+      "statuses": [
+        "succeeded"
+      ],
+      "wall_ms": 7765,
+      "duration_ms": {
+        "min": 786,
+        "median": 901,
+        "p90": 1049,
+        "max": 1049
+      },
+      "worker_process_total_ms": {
+        "min": 1082,
+        "median": 1253,
+        "p90": 1385,
+        "max": 1385
+      },
+      "executor_duration_ms": {
+        "min": 786,
+        "median": 901,
+        "p90": 1049,
+        "max": 1049
+      },
+      "warm_reuses": 4,
+      "cold_starts": 0,
+      "worker_counts": {
+        "d5a083814c4f": 1,
+        "9cdc9eaa1090": 3
+      }
+    },
+    "hot_burst": {
+      "count": 6,
+      "statuses": [
+        "succeeded"
+      ],
+      "wall_ms": 11344,
+      "duration_ms": {
+        "min": 1664,
+        "median": 4897,
+        "p90": 6184,
+        "max": 6263
+      },
+      "worker_process_total_ms": {
+        "min": 4119,
+        "median": 6617,
+        "p90": 8299,
+        "max": 8532
+      },
+      "executor_duration_ms": {
+        "min": 1664,
+        "median": 4897,
+        "p90": 6184,
+        "max": 6263
+      },
+      "warm_reuses": 2,
+      "cold_starts": 4,
+      "worker_counts": {
+        "d5a083814c4f": 5,
+        "9cdc9eaa1090": 1
+      }
+    }
+  },
+  "worker_warm_inventory": [
+    {
+      "name": "06ee8de3e345",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:06ee8de3e345:jobs",
+        "warm_pool": {
+          "containers": [],
+          "enabled": false
+        }
+      }
+    },
+    {
+      "name": "0d7c54bbd9bf",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:0d7c54bbd9bf:jobs"
+      }
+    },
+    {
+      "name": "1b4d3a9ea9e0",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:1b4d3a9ea9e0:jobs"
+      }
+    },
+    {
+      "name": "27a37f824010",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:27a37f824010:jobs"
+      }
+    },
+    {
+      "name": "2ad67373ed7c",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:2ad67373ed7c:jobs"
+      }
+    },
+    {
+      "name": "2e5f719b989f",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:2e5f719b989f:jobs"
+      }
+    },
+    {
+      "name": "42cab6eaf2f5",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:42cab6eaf2f5:jobs"
+      }
+    },
+    {
+      "name": "433dc2bcd9fa",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:433dc2bcd9fa:jobs"
+      }
+    },
+    {
+      "name": "468219851efb",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:468219851efb:jobs",
+        "warm_pool": {
+          "containers": [
+            {
+              "busy_count": 0,
+              "function_version_id": "47",
+              "handler": "handler.main",
+              "hit_count": 5,
+              "idle_count": 1,
+              "image_ref": "localhost:5000/functions/warm-bench-hot-44ba5f3b:v47-v1",
+              "memory_mb": 128,
+              "output_tmpfs_size_bytes": 10485760,
+              "use_count": 6
+            }
+          ],
+          "enabled": true
+        }
+      }
+    },
+    {
+      "name": "4af1464b8aa7",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:4af1464b8aa7:jobs",
+        "warm_pool": {
+          "containers": [
+            {
+              "busy_count": 0,
+              "function_version_id": "49",
+              "handler": "handler.main",
+              "hit_count": 5,
+              "idle_count": 1,
+              "image_ref": "localhost:5000/functions/warm-bench-hot-765066a9:v49-v1",
+              "memory_mb": 128,
+              "output_tmpfs_size_bytes": 10485760,
+              "use_count": 6
+            },
+            {
+              "busy_count": 0,
+              "function_version_id": "50",
+              "handler": "handler.main",
+              "hit_count": 1,
+              "idle_count": 1,
+              "image_ref": "localhost:5000/functions/warm-bench-cold-d8ff7bdd:v50-v1",
+              "memory_mb": 128,
+              "output_tmpfs_size_bytes": 10485760,
+              "use_count": 2
+            }
+          ],
+          "enabled": true
+        }
+      }
+    },
+    {
+      "name": "6e6493607616",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:6e6493607616:jobs"
+      }
+    },
+    {
+      "name": "7b8bb5fb91f0",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:7b8bb5fb91f0:jobs"
+      }
+    },
+    {
+      "name": "85692637d841",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:85692637d841:jobs",
+        "warm_pool": {
+          "containers": [],
+          "enabled": false
+        }
+      }
+    },
+    {
+      "name": "90eb8a4cf6d4",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:90eb8a4cf6d4:jobs"
+      }
+    },
+    {
+      "name": "9cdc9eaa1090",
+      "status": "online",
+      "metadata": {
+        "legacy_queue_name": "worker:9cdc9eaa1090:jobs",
+        "warm_pool": {
+          "containers": [
+            {
+              "busy_count": 0,
+              "function_version_id": "53",
+              "handler": "handler.main",
+              "hit_count": 6,
+              "idle_count": 1,
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "memory_mb": 128,
+              "output_tmpfs_size_bytes": 10485760,
+              "use_count": 7
+            },
+            {
+              "busy_count": 0,
+              "function_version_id": "54",
+              "handler": "handler.main",
+              "hit_count": 1,
+              "idle_count": 1,
+              "image_ref": "localhost:5000/functions/warm-bench-cold-da9dfeaa:v54-v1",
+              "memory_mb": 128,
+              "output_tmpfs_size_bytes": 10485760,
+              "use_count": 2
+            }
+          ],
+          "enabled": true
+        }
+      }
+    },
+    {
+      "name": "a4cf338bd8bf",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:a4cf338bd8bf:jobs",
+        "warm_pool": {
+          "containers": [
+            {
+              "busy_count": 0,
+              "function_version_id": "47",
+              "handler": "handler.main",
+              "hit_count": 0,
+              "idle_count": 1,
+              "image_ref": "localhost:5000/functions/warm-bench-hot-44ba5f3b:v47-v1",
+              "memory_mb": 128,
+              "output_tmpfs_size_bytes": 10485760,
+              "use_count": 1
+            }
+          ],
+          "enabled": true
+        }
+      }
+    },
+    {
+      "name": "c31577db7ac7",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:c31577db7ac7:jobs"
+      }
+    },
+    {
+      "name": "cbf700bbb970",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:cbf700bbb970:jobs"
+      }
+    },
+    {
+      "name": "cef052f919ea",
+      "status": "offline",
+      "metadata": {
+        "legacy_queue_name": "worker:cef052f919ea:jobs",
+        "warm_pool": {
+          "containers": [
+            {
+              "busy_count": 0,
+              "function_version_id": "49",
+              "handler": "handler.main",
+              "hit_count": 6,
+              "idle_count": 1,
+              "image_ref": "localhost:5000/functions/warm-bench-hot-765066a9:v49-v1",
+              "memory_mb": 128,
+              "output_tmpfs_size_bytes": 10485760,
+              "use_count": 7
+            }
+          ],
+          "enabled": true
+        }
+      }
+    },
+    {
+      "name": "d5a083814c4f",
+      "status": "online",
+      "metadata": {
+        "legacy_queue_name": "worker:d5a083814c4f:jobs",
+        "warm_pool": {
+          "containers": [
+            {
+              "busy_count": 0,
+              "function_version_id": "53",
+              "handler": "handler.main",
+              "hit_count": 0,
+              "idle_count": 1,
+              "image_ref": "localhost:5000/functions/warm-bench-hot-9275b598:v53-v1",
+              "memory_mb": 128,
+              "output_tmpfs_size_bytes": 10485760,
+              "use_count": 1
+            }
+          ],
+          "enabled": true
+        }
+      }
+    }
+  ]
+}

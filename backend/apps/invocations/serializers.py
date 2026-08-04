@@ -2,7 +2,9 @@ from rest_framework import serializers
 
 from .models import (
     Invocation,
+    InvocationAttempt,
     InvocationInputFile,
+    InvocationLogArtifact,
     InvocationOutputFile,
     StagedCompletionStatus,
     InvocationStatus,
@@ -12,6 +14,18 @@ from .models import (
 class InvocationSerializer(serializers.ModelSerializer):
     input_files = serializers.SerializerMethodField()
     output_files = serializers.SerializerMethodField()
+    frontend_state = serializers.SerializerMethodField()
+    is_terminal = serializers.SerializerMethodField()
+    poll_after_seconds = serializers.SerializerMethodField()
+    result_available = serializers.SerializerMethodField()
+    outputs_available = serializers.SerializerMethodField()
+    can_read_outputs = serializers.SerializerMethodField()
+    can_download = serializers.SerializerMethodField()
+    outputs_url = serializers.SerializerMethodField()
+    download_url = serializers.SerializerMethodField()
+    links = serializers.SerializerMethodField()
+    log_delivery = serializers.SerializerMethodField()
+    attempts = serializers.SerializerMethodField()
 
     class Meta:
         model = Invocation
@@ -32,6 +46,66 @@ class InvocationSerializer(serializers.ModelSerializer):
             obj.output_files.filter(status=StagedCompletionStatus.COMMITTED),
             many=True,
         ).data
+
+    def get_frontend_state(self, obj):
+        return obj.status
+
+    def get_is_terminal(self, obj):
+        return obj.status in terminal_invocation_statuses()
+
+    def get_poll_after_seconds(self, obj):
+        return None if self.get_is_terminal(obj) else 1
+
+    def get_result_available(self, obj):
+        return self.get_is_terminal(obj)
+
+    def get_outputs_available(self, obj):
+        if not self.get_is_terminal(obj):
+            return False
+        return obj.output_files.filter(status=StagedCompletionStatus.COMMITTED).exists()
+
+    def get_can_read_outputs(self, obj):
+        return self.get_is_terminal(obj)
+
+    def get_can_download(self, obj):
+        return self.get_is_terminal(obj)
+
+    def get_outputs_url(self, obj):
+        return f"/api/invocations/{obj.id}/outputs/"
+
+    def get_download_url(self, obj):
+        return f"/api/invocations/{obj.id}/download/"
+
+    def get_links(self, obj):
+        return {
+            "self": f"/api/invocations/{obj.id}/",
+            "outputs": self.get_outputs_url(obj),
+            "download": self.get_download_url(obj),
+        }
+
+    def get_log_delivery(self, obj):
+        return "zip_only"
+
+    def get_attempts(self, obj):
+        return InvocationAttemptSerializer(obj.attempts.all(), many=True).data
+
+
+class InvocationAttemptSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InvocationAttempt
+        fields = [
+            "id",
+            "attempt_number",
+            "dispatch_attempt",
+            "worker_name",
+            "status",
+            "failure_kind",
+            "error_message",
+            "queued_at",
+            "started_at",
+            "finished_at",
+            "duration_ms",
+        ]
 
 
 class InvocationInputFileSerializer(serializers.ModelSerializer):
@@ -61,6 +135,30 @@ class InvocationOutputFileSerializer(serializers.ModelSerializer):
             "position",
             "created_at",
         ]
+
+
+class InvocationLogArtifactSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InvocationLogArtifact
+        fields = [
+            "id",
+            "stream",
+            "safe_name",
+            "content_type",
+            "size_bytes",
+            "preview",
+            "status",
+            "created_at",
+        ]
+
+
+def terminal_invocation_statuses():
+    return {
+        InvocationStatus.SUCCEEDED,
+        InvocationStatus.FAILED,
+        InvocationStatus.TIMEOUT,
+        InvocationStatus.CANCELLED,
+    }
 
 
 class InvocationReportSerializer(serializers.Serializer):

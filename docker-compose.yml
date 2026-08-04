@@ -10,6 +10,17 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
+  userservice-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${USERSERVICE_POSTGRES_DB:-userservice}
+      POSTGRES_USER: ${USERSERVICE_POSTGRES_USER:-userservice}
+      POSTGRES_PASSWORD: ${USERSERVICE_POSTGRES_PASSWORD:-userservice}
+    ports:
+      - "5433:5432"
+    volumes:
+      - userservice-postgres-data:/var/lib/postgresql/data
+
   redis:
     image: redis:7
     command:
@@ -37,6 +48,37 @@ services:
     volumes:
       - registry-data:/var/lib/registry
 
+  userservice:
+    build:
+      context: .
+      dockerfile: userservice/Dockerfile
+    command: gunicorn userservice.wsgi:application --bind 0.0.0.0:8100 --workers 2 --timeout 120 --reload
+    environment:
+      USERSERVICE_POSTGRES_DB: ${USERSERVICE_POSTGRES_DB:-userservice}
+      USERSERVICE_POSTGRES_USER: ${USERSERVICE_POSTGRES_USER:-userservice}
+      USERSERVICE_POSTGRES_PASSWORD: ${USERSERVICE_POSTGRES_PASSWORD:-userservice}
+      USERSERVICE_POSTGRES_HOST: userservice-postgres
+      USERSERVICE_JWT_ISSUER: ${USERSERVICE_JWT_ISSUER:-serverless-userservice}
+      USERSERVICE_JWT_AUDIENCE: ${USERSERVICE_JWT_AUDIENCE:-serverless-platform}
+      USERSERVICE_JWT_KEY_PATH: /app/keys/jwt_private.pem
+    volumes:
+      - ./userservice:/app
+      - userservice-keys:/app/keys
+    ports:
+      - "8100:8100"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8100/health/', timeout=2)"
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      userservice-postgres:
+        condition: service_started
+
   backend:
     build:
       context: .
@@ -56,15 +98,19 @@ services:
       LOCAL_REGISTRY: localhost:5000
       WORKER_SHARED_SECRET: ${WORKER_SHARED_SECRET:-change-me}
       ORCHESTRATOR_BASE_URL: http://orchestrator:8010
-      V2_BUILD_PILOT_ENABLED: ${V2_BUILD_PILOT_ENABLED:-false}
-      V2_INVOCATION_PILOT_ENABLED: ${V2_INVOCATION_PILOT_ENABLED:-false}
+      V2_BUILD_PILOT_ENABLED: ${V2_BUILD_PILOT_ENABLED:-true}
+      V2_INVOCATION_PILOT_ENABLED: ${V2_INVOCATION_PILOT_ENABLED:-true}
       V2_BUILD_ROLLOUT_PERCENT: ${V2_BUILD_ROLLOUT_PERCENT:-100}
       V2_INVOCATION_ROLLOUT_PERCENT: ${V2_INVOCATION_ROLLOUT_PERCENT:-100}
       V2_BUILD_CANARY_FUNCTION_IDS: ${V2_BUILD_CANARY_FUNCTION_IDS:-}
       V2_INVOCATION_CANARY_FUNCTION_IDS: ${V2_INVOCATION_CANARY_FUNCTION_IDS:-}
       V2_CUTOVER_STAGE: ${V2_CUTOVER_STAGE:-all}
-      V1_JOB_CREATION_ENABLED: ${V1_JOB_CREATION_ENABLED:-true}
+      V1_JOB_CREATION_ENABLED: ${V1_JOB_CREATION_ENABLED:-false}
       V1_COORDINATION_ENDPOINTS_ENABLED: ${V1_COORDINATION_ENDPOINTS_ENABLED:-true}
+      USERSERVICE_JWT_ISSUER: ${USERSERVICE_JWT_ISSUER:-serverless-userservice}
+      USERSERVICE_JWT_AUDIENCE: ${USERSERVICE_JWT_AUDIENCE:-serverless-platform}
+      USERSERVICE_JWKS_URL: http://userservice:8100/api/auth/jwks/
+      USERSERVICE_JWKS_CACHE_SECONDS: 300
     volumes:
       - ./backend:/app
       - backend-media:/app/media
@@ -86,6 +132,8 @@ services:
         condition: service_healthy
       registry:
         condition: service_started
+      userservice:
+        condition: service_healthy
 
   outbox-relay:
     build:
@@ -270,6 +318,21 @@ services:
       WORKER_MAX_INVOCATION_CONCURRENCY: 4
       WORKER_MAX_BUILD_CONCURRENCY: 1
       WORKER_IDLE_SLEEP_SECONDS: 0.2
+      WORKER_METRICS_PORT: 9102
+      WORKER_WARM_CONTAINERS_ENABLED: "true"
+      WORKER_WARM_IDLE_TTL_SECONDS: 60
+      WORKER_WARM_MAX_CONTAINERS: 2
+      WORKER_WARM_MAX_PER_FUNCTION_VERSION: 1
+      WORKER_WARM_MAX_AGE_SECONDS: 900
+      WORKER_WARM_MAX_USES: 100
+      WORKER_WARM_MAX_MEMORY_MB: 0
+      WORKER_WARM_RESIDENT_RUNNER_ENABLED: ${WORKER_WARM_RESIDENT_RUNNER_ENABLED:-false}
+      WORKER_WARM_RESIDENT_RUNNER_PORT: 8765
+      WORKER_WARM_RESIDENT_RUNNER_STARTUP_TIMEOUT_SECONDS: 5
+      WORKER_RUNNER_DIRECT_OUTPUT_UPLOAD_ENABLED: ${WORKER_RUNNER_DIRECT_OUTPUT_UPLOAD_ENABLED:-false}
+      WORKER_RUNNER_OUTPUT_UPLOAD_TIMEOUT_SECONDS: 10
+      WORKER_RUNNER_OUTPUT_UPLOAD_TOKEN_TTL_SECONDS: 300
+      FUNCTION_CONTAINER_NETWORK: ${FUNCTION_CONTAINER_NETWORK:-serverless-platform_default}
       LOCAL_REGISTRY: localhost:5000
       BACKEND_BASE_URL: http://backend:8000
       ORCHESTRATOR_BASE_URL: http://orchestrator:8010
@@ -341,8 +404,143 @@ services:
       outbox-relay:
         condition: service_started
 
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    profiles:
+      - observability
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      backend:
+        condition: service_healthy
+      userservice:
+        condition: service_healthy
+      orchestrator:
+        condition: service_healthy
+      worker:
+        condition: service_started
+      redis-exporter:
+        condition: service_started
+      postgres-exporter:
+        condition: service_started
+      userservice-postgres-exporter:
+        condition: service_started
+
+  grafana:
+    image: grafana/grafana:11.2.2
+    profiles:
+      - observability
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_DEFAULT_THEME: light
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+
+  loki:
+    image: grafana/loki:3.2.1
+    profiles:
+      - observability
+    command:
+      - -config.file=/etc/loki/loki.yml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./observability/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
+
+  alloy:
+    image: grafana/alloy:v1.4.3
+    profiles:
+      - observability
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+    ports:
+      - "12345:12345"
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      loki:
+        condition: service_started
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    profiles:
+      - observability
+    privileged: true
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.67.0
+    profiles:
+      - observability
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    ports:
+      - "9121:9121"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    profiles:
+      - observability
+    environment:
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-serverless}:${POSTGRES_PASSWORD:-serverless}@postgres:5432/${POSTGRES_DB:-serverless}?sslmode=disable
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_started
+
+  userservice-postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    profiles:
+      - observability
+    environment:
+      DATA_SOURCE_NAME: postgresql://${USERSERVICE_POSTGRES_USER:-userservice}:${USERSERVICE_POSTGRES_PASSWORD:-userservice}@userservice-postgres:5432/${USERSERVICE_POSTGRES_DB:-userservice}?sslmode=disable
+    ports:
+      - "9188:9187"
+    depends_on:
+      userservice-postgres:
+        condition: service_started
+
 volumes:
   postgres-data:
+  userservice-postgres-data:
+  userservice-keys:
   redis-data:
   registry-data:
   backend-media:
+  prometheus-data:
+  grafana-data:
+  loki-data:

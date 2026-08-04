@@ -14,10 +14,18 @@ import redis
 
 from orchestrator_state import V2JobStateStore, V2JobStatus
 from orchestrator_workers import WorkerOperationalStateStore
-from scheduler import choose_worker, workers_with_queue_lengths
+from scheduler import (
+    choose_worker,
+    remember_local_invocation_dispatch,
+    remember_local_warm_reservation,
+    remember_recent_invocation_route,
+    workers_with_queue_lengths,
+)
 
 
 logger = logging.getLogger("production-orchestrator")
+
+DEFAULT_INVOCATION_RETRY_BACKOFF_SECONDS = [0, 2, 8]
 
 
 DISPATCH_TO_STREAM_SCRIPT = r"""
@@ -118,8 +126,9 @@ class ProductionOrchestrator:
         )
         self.workers = worker_store or WorkerOperationalStateStore(redis_client)
         self.round_robin_state: dict[str, int] = {}
-        self.recent_invocations: dict[str, dict] = {}
         self.local_invocation_loads: dict[str, list[float]] = {}
+        self.local_warm_reservations: dict[str, list[float]] = {}
+        self.local_recent_invocation_routes: dict[str, dict] = {}
 
     def ensure_event_group(self) -> None:
         try:
@@ -207,8 +216,9 @@ class ProductionOrchestrator:
             choice = choose_worker(
                 workers,
                 {"payload": payload},
-                recent_invocations=self.recent_invocations,
                 local_invocation_loads=self.local_invocation_loads,
+                local_warm_reservations=self.local_warm_reservations,
+                local_recent_invocation_routes=self.local_recent_invocation_routes,
                 round_robin_state=self.round_robin_state,
             )
             if choice is None:
@@ -232,6 +242,25 @@ class ProductionOrchestrator:
                 self.ensure_worker_group(worker_stream)
                 self.redis.zadd(self.lease_key, {job_id: now_ms + self.lease_ttl_ms})
                 dispatched += 1
+                policy_job = {"payload": payload}
+                remember_local_warm_reservation(
+                    policy_job,
+                    choice,
+                    local_warm_reservations=self.local_warm_reservations,
+                    local_load_ttl_seconds=10.0,
+                )
+                remember_local_invocation_dispatch(
+                    policy_job,
+                    choice,
+                    local_invocation_loads=self.local_invocation_loads,
+                    local_load_ttl_seconds=10.0,
+                )
+                remember_recent_invocation_route(
+                    policy_job,
+                    choice,
+                    local_recent_invocation_routes=self.local_recent_invocation_routes,
+                    local_load_ttl_seconds=10.0,
+                )
                 self.emit_projection(job_id, "job.dispatched")
         return dispatched
 
@@ -308,6 +337,18 @@ class ProductionOrchestrator:
     ) -> dict:
         now_ms = current_ms(now_ms)
         job_before = self.state.get_job(job_id)
+        retry = self._maybe_retry_invocation(
+            job_id,
+            job_before=job_before,
+            worker_name=worker_name,
+            dispatch_attempt=dispatch_attempt,
+            completion_id=completion_id,
+            status=status,
+            completion_payload=completion_payload,
+            now_ms=now_ms,
+        )
+        if retry is not None:
+            return retry
         begun = self.state.begin_finalization(
             job_id,
             worker_name=worker_name,
@@ -347,6 +388,72 @@ class ProductionOrchestrator:
             self.ack_delivery(self.state.get_job(job_id))
             self.emit_projection(job_id, f"job.{status}")
         return transition_payload(finished, completed=finished.accepted)
+
+    def _maybe_retry_invocation(
+        self,
+        job_id: str,
+        *,
+        job_before: dict,
+        worker_name: str,
+        dispatch_attempt: int,
+        completion_id: str,
+        status: str,
+        completion_payload: dict,
+        now_ms: int,
+    ) -> dict | None:
+        if job_before.get("job_type") != "invocation" or status != V2JobStatus.FAILED:
+            return None
+        if (
+            job_before.get("status") == V2JobStatus.QUEUED
+            and job_before.get("retry_completion_id") == completion_id
+        ):
+            return {
+                "accepted": True,
+                "code": "already",
+                "status": V2JobStatus.QUEUED,
+                "dispatch_attempt": int(job_before.get("dispatch_attempt", 0)),
+                "idempotent": True,
+                "completed": True,
+                "retry_scheduled": True,
+                "available_at_ms": int(job_before.get("available_at_ms", 0)),
+            }
+        payload = job_before.get("payload") or {}
+        if not invocation_completion_is_retryable(
+            completion_payload,
+            payload,
+            retry_count=int(job_before.get("retry_count", 0)),
+        ):
+            return None
+        available_at_ms = now_ms + (
+            invocation_retry_backoff_seconds(
+                payload,
+                int(job_before.get("retry_count", 0)),
+            )
+            * 1000
+        )
+        reason = completion_payload.get("error_message", "Invocation retry requested.")
+        result = self.state.retry_invocation(
+            job_id,
+            worker_name=worker_name,
+            dispatch_attempt=dispatch_attempt,
+            completion_id=completion_id,
+            available_at_ms=available_at_ms,
+            reason=reason,
+            completion_payload=completion_payload,
+            now_ms=now_ms,
+        )
+        if not result.accepted:
+            return None
+        self.redis.zrem(self.lease_key, job_id)
+        self.ack_delivery(job_before)
+        self.redis.zadd(self.ready_key, {job_id: available_at_ms})
+        self.emit_projection(job_id, "job.retrying")
+        return {
+            **transition_payload(result, completed=True),
+            "accepted": True,
+            "retry_scheduled": True,
+            "available_at_ms": available_at_ms,
+        }
 
     def finalize_job(
         self,
@@ -480,6 +587,12 @@ class ProductionOrchestrator:
             "terminal_succeeded": succeeded,
             "terminal_failed": failed,
             "error_rate": (failed / terminal_total) if terminal_total else 0.0,
+            "ready_jobs_total": self.redis.zcard(self.ready_key),
+            "ready_jobs_available": self.redis.zcount(self.ready_key, "-inf", now_ms),
+            "creation": self._stream_group_metrics(
+                self.event_stream,
+                self.event_group,
+            ),
             "finalizing_count": self.redis.zcard(self.active_finalizing_key),
             "oldest_finalizing_age_ms": finalizing_age_ms,
             "duplicate_dispatches": counters.get("duplicate_dispatches", 0),
@@ -495,6 +608,7 @@ class ProductionOrchestrator:
                 self.finalization_stream,
                 "invocation-finalizers-v2",
             ),
+            "worker_streams": self._worker_stream_metrics(now_ms=now_ms),
         }
 
     def _stream_group_metrics(self, stream: str, group: str) -> dict:
@@ -509,6 +623,29 @@ class ProductionOrchestrator:
                     "pending": int(item.get("pending") or 0),
                 }
         return {"lag": 0, "pending": 0}
+
+    def _worker_stream_metrics(self, *, now_ms: int) -> list[dict]:
+        rows = []
+        for worker in self.workers.list_online_workers(now_ms=now_ms):
+            worker_name = worker["name"]
+            for queue_type, job_type in (
+                ("invocations", "invocation"),
+                ("builds", "build"),
+            ):
+                metrics = self._stream_group_metrics(
+                    self.worker_stream(worker_name, job_type),
+                    "v2-workers",
+                )
+                rows.append(
+                    {
+                        "worker": worker_name,
+                        "queue_type": queue_type,
+                        "lag": metrics["lag"],
+                        "pending": metrics["pending"],
+                        "outstanding": metrics["lag"] + metrics["pending"],
+                    }
+                )
+        return rows
 
     def emit_projection(self, job_id: str, event_type: str) -> str:
         job = self.state.get_job(job_id)
@@ -590,6 +727,37 @@ def timestamp_ms(value: str | None) -> int:
     return int(parsed.timestamp() * 1000)
 
 
+def invocation_completion_is_retryable(
+    completion_payload: dict,
+    job_payload: dict,
+    *,
+    retry_count: int,
+) -> bool:
+    max_retries = int(job_payload.get("invocation_max_retries") or 0)
+    if retry_count >= max_retries:
+        return False
+
+    failure_kind = str(completion_payload.get("failure_kind") or "")
+    if failure_kind == "platform":
+        return True
+    if failure_kind == "timeout":
+        return bool(job_payload.get("retry_invocation_timeouts", False))
+    if failure_kind in {"function", "output"}:
+        return bool(job_payload.get("retry_invocation_function_errors", False))
+    return False
+
+
+def invocation_retry_backoff_seconds(job_payload: dict, retry_count: int) -> int:
+    values = job_payload.get("invocation_retry_backoff_seconds")
+    if not values:
+        values = DEFAULT_INVOCATION_RETRY_BACKOFF_SECONDS
+    cleaned = [max(int(value), 0) for value in values]
+    if not cleaned:
+        return 0
+    index = min(max(retry_count, 0), len(cleaned) - 1)
+    return cleaned[index]
+
+
 def current_ms(value: int | None = None) -> int:
     return int(time.time() * 1000) if value is None else int(value)
 
@@ -617,9 +785,9 @@ class OrchestratorRequestHandler(BaseHTTPRequestHandler):
         if self.path == "/health/":
             return self.respond(200, {"status": "ok"})
         if self.path == "/metrics/":
-            if self.headers.get("X-Internal-Token", "") != self.internal_token:
+            if not self.authorized():
                 return self.respond(401, {"detail": "Unauthorized."})
-            return self.respond(200, self.orchestrator.metrics_snapshot())
+            return self.respond_text(200, prometheus_metrics(self.orchestrator.metrics_snapshot()))
         return self.respond(404, {"detail": "Not found."})
 
     def do_POST(self):
@@ -651,6 +819,11 @@ class OrchestratorRequestHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         return json.loads(self.rfile.read(length) or b"{}")
 
+    def authorized(self) -> bool:
+        if self.headers.get("X-Internal-Token", "") == self.internal_token:
+            return True
+        return self.headers.get("Authorization", "") == f"Bearer {self.internal_token}"
+
     def respond(self, status: int, payload: dict):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
@@ -659,8 +832,102 @@ class OrchestratorRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def respond_text(self, status: int, body_text: str):
+        body = body_text.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def log_message(self, format, *args):
         logger.info("orchestrator api " + format, *args)
+
+
+def prometheus_metrics(snapshot: dict) -> str:
+    lines = [
+        "# HELP serverless_orchestrator_up Orchestrator metrics endpoint availability.",
+        "# TYPE serverless_orchestrator_up gauge",
+        "serverless_orchestrator_up 1",
+    ]
+    for key in (
+        "terminal_succeeded",
+        "terminal_failed",
+        "finalizing_count",
+        "oldest_finalizing_age_ms",
+        "duplicate_dispatches",
+        "duplicate_claims",
+        "duplicate_completions",
+        "duplicate_finalizations",
+        "recovery_count",
+    ):
+        emit_prom_metric(lines, f"serverless_orchestrator_{key}", snapshot.get(key, 0))
+    emit_prom_metric(lines, "serverless_orchestrator_error_rate", snapshot.get("error_rate", 0))
+    emit_prom_metric(
+        lines,
+        "serverless_orchestrator_ready_jobs_total",
+        snapshot.get("ready_jobs_total", 0),
+    )
+    emit_prom_metric(
+        lines,
+        "serverless_orchestrator_ready_jobs_available_total",
+        snapshot.get("ready_jobs_available", 0),
+    )
+    for name in ("creation", "projection", "finalization"):
+        section = snapshot.get(name) or {}
+        emit_prom_metric(
+            lines,
+            "serverless_orchestrator_stream_lag",
+            section.get("lag", 0),
+            {"stream": name},
+        )
+        emit_prom_metric(
+            lines,
+            "serverless_orchestrator_stream_pending",
+            section.get("pending", 0),
+            {"stream": name},
+        )
+    for row in snapshot.get("worker_streams") or []:
+        labels = {"worker": row["worker"], "queue_type": row["queue_type"]}
+        emit_prom_metric(
+            lines,
+            "serverless_worker_queue_lag",
+            row.get("lag", 0),
+            labels,
+        )
+        emit_prom_metric(
+            lines,
+            "serverless_worker_queue_pending",
+            row.get("pending", 0),
+            labels,
+        )
+        emit_prom_metric(
+            lines,
+            "serverless_worker_queue_outstanding",
+            row.get("outstanding", 0),
+            labels,
+        )
+    return "\n".join(lines) + "\n"
+
+
+def emit_prom_metric(
+    lines: list[str],
+    name: str,
+    value,
+    labels: dict[str, object] | None = None,
+) -> None:
+    labels = labels or {}
+    label_text = ""
+    if labels:
+        label_text = "{" + ",".join(
+            f'{key}="{escape_prom_label(value)}"'
+            for key, value in sorted(labels.items())
+        ) + "}"
+    lines.append(f"{name}{label_text} {float(value)}")
+
+
+def escape_prom_label(value) -> str:
+    return str(value).replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
 
 
 def serve_api(orchestrator: ProductionOrchestrator, host: str, port: int, token: str):

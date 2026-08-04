@@ -19,8 +19,10 @@ def worker_metadata(worker: dict) -> dict:
 
 
 def safe_int(value, default: int = 0) -> int:
+    if value in (None, ""):
+        return default
     try:
-        return int(value or 0)
+        return int(value)
     except (TypeError, ValueError):
         return default
 
@@ -56,25 +58,55 @@ def worker_queued_builds(worker: dict) -> int:
     return safe_int(worker.get("queued_builds"))
 
 
-def invocation_affinity_key(job: dict) -> str:
+def megabytes_to_bytes(value, *, default_mb: int) -> int:
+    size_mb = safe_int(value, default=default_mb)
+    return max(size_mb, 1) * 1024 * 1024
+
+
+def invocation_warm_key(job: dict) -> dict:
     payload = job.get("payload") or {}
-    return str(
-        payload.get("function_version_id")
-        or payload.get("image_ref")
-        or payload.get("function_id")
-        or ""
+    config = payload.get("config") or {}
+    image_ref = str(payload.get("image_ref") or "")
+    return {
+        "function_version_id": str(
+            payload.get("function_version_id")
+            or payload.get("version_id")
+            or image_ref
+        ),
+        "image_ref": image_ref,
+        "handler": str(payload.get("handler") or "handler.main"),
+        "memory_mb": safe_int(config.get("memory_mb"), default=256),
+        "output_tmpfs_size_bytes": megabytes_to_bytes(
+            payload.get("invocation_output_max_total_size_mb"),
+            default_mb=10,
+        ),
+    }
+
+
+def warm_reservation_key(worker: dict, warm_key: dict) -> str:
+    return (
+        f"{worker.get('name', '')}|{warm_key.get('function_version_id', '')}|"
+        f"{warm_key.get('image_ref', '')}|{warm_key.get('handler', '')}|"
+        f"{warm_key.get('memory_mb', 0)}|"
+        f"{warm_key.get('output_tmpfs_size_bytes', 0)}"
     )
+
+
+def invocation_route_key(job: dict) -> str:
+    warm_key = invocation_warm_key(job)
+    return json.dumps(warm_key, separators=(",", ":"), sort_keys=True)
 
 
 def choose_worker(
     workers: list[dict],
     job: dict,
     *,
-    recent_invocations: dict[str, dict] | None = None,
     local_invocation_loads: dict[str, list[float]] | None = None,
+    local_warm_reservations: dict[str, list[float]] | None = None,
+    local_recent_invocation_routes: dict[str, dict] | None = None,
     local_load_ttl_seconds: float = 10.0,
-    affinity_ttl_seconds: float = 10.0,
-    sticky_max_invocation_load: int = 2,
+    predictive_sticky_load_slack: int = 1,
+    predictive_sticky_max_local_dispatches: int = 1,
     round_robin_state: dict[str, int] | None = None,
     now: float | None = None,
 ) -> dict | None:
@@ -86,11 +118,14 @@ def choose_worker(
         return choose_invocation_worker(
             workers,
             job,
-            recent_invocations=recent_invocations,
             local_invocation_loads=local_invocation_loads,
+            local_warm_reservations=local_warm_reservations,
+            local_recent_invocation_routes=local_recent_invocation_routes,
             local_load_ttl_seconds=local_load_ttl_seconds,
-            affinity_ttl_seconds=affinity_ttl_seconds,
-            sticky_max_invocation_load=sticky_max_invocation_load,
+            predictive_sticky_load_slack=predictive_sticky_load_slack,
+            predictive_sticky_max_local_dispatches=(
+                predictive_sticky_max_local_dispatches
+            ),
             round_robin_state=round_robin_state,
             now=now,
         )
@@ -106,42 +141,76 @@ def choose_invocation_worker(
     workers: list[dict],
     job: dict,
     *,
-    recent_invocations: dict[str, dict] | None,
     local_invocation_loads: dict[str, list[float]] | None = None,
+    local_warm_reservations: dict[str, list[float]] | None = None,
+    local_recent_invocation_routes: dict[str, dict] | None = None,
     local_load_ttl_seconds: float = 10.0,
-    affinity_ttl_seconds: float = 10.0,
-    sticky_max_invocation_load: int = 2,
+    predictive_sticky_load_slack: int = 1,
+    predictive_sticky_max_local_dispatches: int = 1,
     round_robin_state: dict[str, int] | None = None,
     now: float | None = None,
 ) -> dict | None:
     now = time.monotonic() if now is None else now
-    recent_invocations = recent_invocations or {}
     prune_local_invocation_loads(
         local_invocation_loads,
         now=now,
         ttl_seconds=local_load_ttl_seconds,
     )
+    prune_local_warm_reservations(
+        local_warm_reservations,
+        now=now,
+        ttl_seconds=local_load_ttl_seconds,
+    )
+    prune_local_recent_invocation_routes(
+        local_recent_invocation_routes,
+        now=now,
+        ttl_seconds=local_load_ttl_seconds,
+    )
 
-    affinity_key = invocation_affinity_key(job)
-    if affinity_key:
-        route = recent_invocations.get(affinity_key)
-        if route and now - float(route.get("last_seen", 0)) <= affinity_ttl_seconds:
-            worker = next(
-                (
-                    item
-                    for item in workers
-                    if item.get("name") == route.get("worker_name")
-                ),
-                None,
-            )
-            if worker and invocation_worker_is_light_enough(
+    warm_key = invocation_warm_key(job)
+    warm_candidates = [
+        worker
+        for worker in workers
+        if worker_active_builds(worker) == 0
+        and worker_queued_builds(worker) == 0
+        and invocation_load(
+            worker,
+            local_invocation_loads=local_invocation_loads,
+            local_load_ttl_seconds=local_load_ttl_seconds,
+            now=now,
+        )
+        < worker_max_invocation_concurrency(worker)
+        and worker_idle_warm_count(
+            worker,
+            warm_key,
+            local_warm_reservations=local_warm_reservations,
+            local_load_ttl_seconds=local_load_ttl_seconds,
+            now=now,
+        )
+        > 0
+    ]
+    if warm_candidates:
+        best_load = min(
+            invocation_load(
                 worker,
                 local_invocation_loads=local_invocation_loads,
                 local_load_ttl_seconds=local_load_ttl_seconds,
-                sticky_max_invocation_load=sticky_max_invocation_load,
                 now=now,
-            ):
-                return worker
+            )
+            for worker in warm_candidates
+        )
+        best = [
+            worker
+            for worker in warm_candidates
+            if invocation_load(
+                worker,
+                local_invocation_loads=local_invocation_loads,
+                local_load_ttl_seconds=local_load_ttl_seconds,
+                now=now,
+            )
+            == best_load
+        ]
+        return choose_round_robin_worker(best, "warm-invocation", round_robin_state)
 
     no_build_workers = [
         worker
@@ -167,6 +236,19 @@ def choose_invocation_worker(
     ]
     candidates = workers_with_capacity or candidates
 
+    sticky_worker = choose_predictive_sticky_worker(
+        candidates,
+        job,
+        local_invocation_loads=local_invocation_loads,
+        local_recent_invocation_routes=local_recent_invocation_routes,
+        local_load_ttl_seconds=local_load_ttl_seconds,
+        predictive_sticky_load_slack=predictive_sticky_load_slack,
+        predictive_sticky_max_local_dispatches=predictive_sticky_max_local_dispatches,
+        now=now,
+    )
+    if sticky_worker is not None:
+        return sticky_worker
+
     best_load = min(
         invocation_load(
             worker,
@@ -190,23 +272,114 @@ def choose_invocation_worker(
     return choose_round_robin_worker(best, "invocation", round_robin_state)
 
 
-def invocation_worker_is_light_enough(
-    worker: dict,
+def choose_predictive_sticky_worker(
+    candidates: list[dict],
+    job: dict,
     *,
-    local_invocation_loads: dict[str, list[float]] | None = None,
-    local_load_ttl_seconds: float = 10.0,
-    sticky_max_invocation_load: int,
-    now: float | None = None,
-) -> bool:
-    return (
-        worker_active_builds(worker) == 0
-        and invocation_load(
+    local_invocation_loads: dict[str, list[float]] | None,
+    local_recent_invocation_routes: dict[str, dict] | None,
+    local_load_ttl_seconds: float,
+    predictive_sticky_load_slack: int,
+    predictive_sticky_max_local_dispatches: int,
+    now: float,
+) -> dict | None:
+    if predictive_sticky_load_slack < 0 or not candidates:
+        return None
+    route = recent_invocation_route(
+        job,
+        local_recent_invocation_routes=local_recent_invocation_routes,
+        local_load_ttl_seconds=local_load_ttl_seconds,
+        now=now,
+    )
+    if not route:
+        return None
+    worker_name = route.get("worker_name")
+    if not worker_name:
+        return None
+
+    best_reported_load = min(worker_reported_invocation_load(worker) for worker in candidates)
+    for worker in candidates:
+        if worker.get("name") != worker_name:
+            continue
+        if worker_active_builds(worker) != 0 or worker_queued_builds(worker) != 0:
+            return None
+        reported_load = worker_reported_invocation_load(worker)
+        local_dispatches = local_invocation_load(
             worker,
             local_invocation_loads=local_invocation_loads,
             local_load_ttl_seconds=local_load_ttl_seconds,
             now=now,
         )
-        <= sticky_max_invocation_load
+        if local_dispatches > predictive_sticky_max_local_dispatches:
+            return None
+        if reported_load + local_dispatches >= worker_max_invocation_concurrency(worker):
+            return None
+        if reported_load > best_reported_load + predictive_sticky_load_slack:
+            return None
+        return worker
+    return None
+
+
+def recent_invocation_route(
+    job: dict,
+    *,
+    local_recent_invocation_routes: dict[str, dict] | None,
+    local_load_ttl_seconds: float,
+    now: float | None,
+) -> dict | None:
+    if local_recent_invocation_routes is None:
+        return None
+    now = time.monotonic() if now is None else now
+    prune_local_recent_invocation_routes(
+        local_recent_invocation_routes,
+        now=now,
+        ttl_seconds=local_load_ttl_seconds,
+    )
+    return local_recent_invocation_routes.get(invocation_route_key(job))
+
+
+def worker_idle_warm_count(
+    worker: dict,
+    warm_key: dict,
+    *,
+    local_warm_reservations: dict[str, list[float]] | None = None,
+    local_load_ttl_seconds: float = 10.0,
+    now: float | None = None,
+) -> int:
+    metadata = worker_metadata(worker)
+    warm_pool = metadata.get("warm_pool") or {}
+    if not isinstance(warm_pool, dict) or not warm_pool.get("enabled"):
+        return 0
+    containers = warm_pool.get("containers") or []
+    if not isinstance(containers, list):
+        return 0
+    idle_count = 0
+    for item in containers:
+        if warm_inventory_item_matches(item, warm_key):
+            idle_count += safe_int(item.get("idle_count"))
+    if idle_count <= 0:
+        return 0
+    reservations = local_warm_reservation_count(
+        worker,
+        warm_key,
+        local_warm_reservations=local_warm_reservations,
+        local_load_ttl_seconds=local_load_ttl_seconds,
+        now=now,
+    )
+    return max(idle_count - reservations, 0)
+
+
+def warm_inventory_item_matches(item: dict, warm_key: dict) -> bool:
+    if not isinstance(item, dict):
+        return False
+    return (
+        str(item.get("function_version_id") or "")
+        == str(warm_key.get("function_version_id") or "")
+        and str(item.get("image_ref") or "") == str(warm_key.get("image_ref") or "")
+        and str(item.get("handler") or "") == str(warm_key.get("handler") or "")
+        and safe_int(item.get("memory_mb")) == safe_int(warm_key.get("memory_mb"))
+        and safe_int(item.get("output_tmpfs_size_bytes"))
+        == safe_int(warm_key.get("output_tmpfs_size_bytes"))
     )
 
 
@@ -228,6 +401,10 @@ def invocation_load(
         worker_active_jobs(worker)
         + max(queued, local)
     )
+
+
+def worker_reported_invocation_load(worker: dict) -> int:
+    return worker_active_jobs(worker) + worker_queued_invocations(worker)
 
 
 def local_invocation_load(
@@ -263,6 +440,57 @@ def prune_local_invocation_loads(
         ]
         if not local_invocation_loads[worker_name]:
             del local_invocation_loads[worker_name]
+
+
+def local_warm_reservation_count(
+    worker: dict,
+    warm_key: dict,
+    *,
+    local_warm_reservations: dict[str, list[float]] | None,
+    local_load_ttl_seconds: float,
+    now: float | None,
+) -> int:
+    if local_warm_reservations is None:
+        return 0
+    now = time.monotonic() if now is None else now
+    prune_local_warm_reservations(
+        local_warm_reservations,
+        now=now,
+        ttl_seconds=local_load_ttl_seconds,
+    )
+    return len(local_warm_reservations.get(warm_reservation_key(worker, warm_key), []))
+
+
+def prune_local_warm_reservations(
+    local_warm_reservations: dict[str, list[float]] | None,
+    *,
+    now: float,
+    ttl_seconds: float,
+) -> None:
+    if local_warm_reservations is None:
+        return
+    cutoff = now - ttl_seconds
+    for key in list(local_warm_reservations):
+        local_warm_reservations[key] = [
+            value for value in local_warm_reservations[key] if value >= cutoff
+        ]
+        if not local_warm_reservations[key]:
+            del local_warm_reservations[key]
+
+
+def prune_local_recent_invocation_routes(
+    local_recent_invocation_routes: dict[str, dict] | None,
+    *,
+    now: float,
+    ttl_seconds: float,
+) -> None:
+    if local_recent_invocation_routes is None:
+        return
+    cutoff = now - ttl_seconds
+    for key in list(local_recent_invocation_routes):
+        route = local_recent_invocation_routes[key]
+        if float(route.get("updated_at", 0)) < cutoff:
+            del local_recent_invocation_routes[key]
 
 
 def choose_build_worker(
@@ -342,13 +570,15 @@ def process_job_id(
     redis_client,
     pending_queue: str,
     pending_queues: dict[str, str] | None = None,
-    recent_invocations: dict[str, dict] | None = None,
     local_invocation_loads: dict[str, list[float]] | None = None,
+    local_warm_reservations: dict[str, list[float]] | None = None,
+    local_recent_invocation_routes: dict[str, dict] | None = None,
     local_load_ttl_seconds: float = 10.0,
+    predictive_sticky_load_slack: int = 1,
+    predictive_sticky_max_local_dispatches: int = 1,
     round_robin_state: dict[str, int] | None = None,
-    affinity_ttl_seconds: float = 10.0,
-    sticky_max_invocation_load: int = 2,
     requeue_delay_seconds: float = 1.0,
+    stale_after_seconds: int | None = None,
 ) -> bool:
     job = backend.get_job(job_id)
     coordination_version = safe_int(job.get("coordination_version", 1), default=1)
@@ -378,15 +608,19 @@ def process_job_id(
         redis_client.rpush(pending_queue_for_job(job, pending_queue, pending_queues), job_id)
         return False
 
+    if stale_after_seconds is not None:
+        backend.expire_stale_workers(stale_after_seconds=stale_after_seconds)
+
     workers = workers_with_queue_lengths(backend.list_workers(), redis_client)
     worker = choose_worker(
         workers,
         job,
-        recent_invocations=recent_invocations,
         local_invocation_loads=local_invocation_loads,
+        local_warm_reservations=local_warm_reservations,
+        local_recent_invocation_routes=local_recent_invocation_routes,
         local_load_ttl_seconds=local_load_ttl_seconds,
-        affinity_ttl_seconds=affinity_ttl_seconds,
-        sticky_max_invocation_load=sticky_max_invocation_load,
+        predictive_sticky_load_slack=predictive_sticky_load_slack,
+        predictive_sticky_max_local_dispatches=predictive_sticky_max_local_dispatches,
         round_robin_state=round_robin_state,
     )
     if worker is None:
@@ -428,15 +662,22 @@ def process_job_id(
         worker["name"],
         queue_name,
     )
-    remember_invocation_route(
+    remember_local_warm_reservation(
         job,
         worker,
-        recent_invocations=recent_invocations,
+        local_warm_reservations=local_warm_reservations,
+        local_load_ttl_seconds=local_load_ttl_seconds,
     )
     remember_local_invocation_dispatch(
         job,
         worker,
         local_invocation_loads=local_invocation_loads,
+        local_load_ttl_seconds=local_load_ttl_seconds,
+    )
+    remember_recent_invocation_route(
+        job,
+        worker,
+        local_recent_invocation_routes=local_recent_invocation_routes,
         local_load_ttl_seconds=local_load_ttl_seconds,
     )
     return True
@@ -465,6 +706,22 @@ def worker_queue_for_job(worker: dict, job: dict) -> str:
     return worker["queue_name"]
 
 
+def worker_recovery_queues(worker: dict) -> list[str]:
+    queue_names = [
+        worker.get("processing_queue_name"),
+        worker.get("invocation_queue_name"),
+        worker.get("build_queue_name"),
+        worker.get("queue_name"),
+    ]
+    seen = set()
+    unique = []
+    for queue_name in queue_names:
+        if queue_name and queue_name not in seen:
+            unique.append(queue_name)
+            seen.add(queue_name)
+    return unique
+
+
 def pending_queue_for_job(
     job: dict,
     default_queue: str,
@@ -476,23 +733,36 @@ def pending_queue_for_job(
     return job.get("queue_name") or default_queue
 
 
-def remember_invocation_route(
+def remember_local_warm_reservation(
     job: dict,
     worker: dict,
     *,
-    recent_invocations: dict[str, dict] | None,
+    local_warm_reservations: dict[str, list[float]] | None,
+    local_load_ttl_seconds: float,
 ) -> None:
-    if recent_invocations is None:
+    if local_warm_reservations is None:
         return
     if (job.get("payload") or {}).get("type") != "function.invoke":
         return
-    affinity_key = invocation_affinity_key(job)
-    if not affinity_key:
+    now = time.monotonic()
+    warm_key = invocation_warm_key(job)
+    if worker_idle_warm_count(
+        worker,
+        warm_key,
+        local_warm_reservations=local_warm_reservations,
+        local_load_ttl_seconds=local_load_ttl_seconds,
+        now=now,
+    ) <= 0:
         return
-    recent_invocations[affinity_key] = {
-        "worker_name": worker["name"],
-        "last_seen": time.monotonic(),
-    }
+    prune_local_warm_reservations(
+        local_warm_reservations,
+        now=now,
+        ttl_seconds=local_load_ttl_seconds,
+    )
+    local_warm_reservations.setdefault(
+        warm_reservation_key(worker, warm_key),
+        [],
+    ).append(now)
 
 
 def remember_local_invocation_dispatch(
@@ -515,6 +785,29 @@ def remember_local_invocation_dispatch(
     local_invocation_loads.setdefault(worker["name"], []).append(now)
 
 
+def remember_recent_invocation_route(
+    job: dict,
+    worker: dict,
+    *,
+    local_recent_invocation_routes: dict[str, dict] | None,
+    local_load_ttl_seconds: float,
+) -> None:
+    if local_recent_invocation_routes is None:
+        return
+    if (job.get("payload") or {}).get("type") != "function.invoke":
+        return
+    now = time.monotonic()
+    prune_local_recent_invocation_routes(
+        local_recent_invocation_routes,
+        now=now,
+        ttl_seconds=local_load_ttl_seconds,
+    )
+    local_recent_invocation_routes[invocation_route_key(job)] = {
+        "worker_name": worker["name"],
+        "updated_at": now,
+    }
+
+
 def recover_stale_workers(
     *,
     backend: BackendClient,
@@ -529,57 +822,57 @@ def recover_stale_workers(
     recovered = 0
     for worker in expired_response.get("expired", []):
         worker_name = worker["name"]
-        processing_queue = worker["processing_queue_name"]
-        delivery_messages = redis_client.lrange(processing_queue, 0, -1)
-        if not delivery_messages:
-            continue
-
-        logger.info(
-            "recovering stale worker jobs worker=%s processing_queue=%s count=%s",
-            worker_name,
-            processing_queue,
-            len(delivery_messages),
-        )
-        for delivery_message in delivery_messages:
-            delivery = parse_delivery_message(delivery_message)
-            job_id = delivery["job_id"]
-            job = backend.get_job(job_id)
-            if job.get("status") in TERMINAL_JOB_STATUSES:
-                redis_client.lrem(processing_queue, 1, delivery_message)
+        for queue_name in worker_recovery_queues(worker):
+            delivery_messages = redis_client.lrange(queue_name, 0, -1)
+            if not delivery_messages:
                 continue
 
-            requeue = backend.requeue_job(
-                job_id,
-                worker_name=worker_name,
-                reason=f"Worker {worker_name} missed heartbeat.",
-                recovery=True,
+            logger.info(
+                "recovering stale worker jobs worker=%s queue=%s count=%s",
+                worker_name,
+                queue_name,
+                len(delivery_messages),
             )
-            if requeue.get("dead_lettered"):
-                redis_client.lrem(processing_queue, 1, delivery_message)
-                logger.warning(
-                    "dead-lettered recovered job job_id=%s worker=%s",
+            for delivery_message in delivery_messages:
+                delivery = parse_delivery_message(delivery_message)
+                job_id = delivery["job_id"]
+                job = backend.get_job(job_id)
+                if job.get("status") in TERMINAL_JOB_STATUSES:
+                    redis_client.lrem(queue_name, 1, delivery_message)
+                    continue
+
+                requeue = backend.requeue_job(
+                    job_id,
+                    worker_name=worker_name,
+                    reason=f"Worker {worker_name} missed heartbeat.",
+                    recovery=True,
+                )
+                if requeue.get("dead_lettered"):
+                    redis_client.lrem(queue_name, 1, delivery_message)
+                    logger.warning(
+                        "dead-lettered recovered job job_id=%s worker=%s",
+                        job_id,
+                        worker_name,
+                    )
+                    continue
+                if not requeue.get("requeued"):
+                    continue
+
+                redis_client.lrem(queue_name, 1, delivery_message)
+                redis_client.rpush(
+                    pending_queue_for_job(
+                        requeue.get("job") or job,
+                        pending_queue,
+                        pending_queues,
+                    ),
+                    job_id,
+                )
+                recovered += 1
+                logger.info(
+                    "recovered stale job job_id=%s worker=%s",
                     job_id,
                     worker_name,
                 )
-                continue
-            if not requeue.get("requeued"):
-                continue
-
-            redis_client.lrem(processing_queue, 1, delivery_message)
-            redis_client.rpush(
-                pending_queue_for_job(
-                    requeue.get("job") or job,
-                    pending_queue,
-                    pending_queues,
-                ),
-                job_id,
-            )
-            recovered += 1
-            logger.info(
-                "recovered stale job job_id=%s worker=%s",
-                job_id,
-                worker_name,
-            )
     return recovered
 
 
@@ -604,12 +897,14 @@ def main() -> None:
     worker_token = os.getenv("WORKER_SHARED_SECRET", "change-me")
     requeue_delay_seconds = float(os.getenv("SCHEDULER_REQUEUE_DELAY_SECONDS", "1"))
     stale_after_seconds = int(os.getenv("WORKER_STALE_AFTER_SECONDS", "30"))
-    affinity_ttl_seconds = float(os.getenv("SCHEDULER_AFFINITY_TTL_SECONDS", "10"))
     local_load_ttl_seconds = float(
-        os.getenv("SCHEDULER_LOCAL_LOAD_TTL_SECONDS", str(affinity_ttl_seconds))
+        os.getenv("SCHEDULER_LOCAL_LOAD_TTL_SECONDS", "10")
     )
-    sticky_max_invocation_load = int(
-        os.getenv("SCHEDULER_STICKY_MAX_INVOCATION_LOAD", "2")
+    predictive_sticky_load_slack = int(
+        os.getenv("SCHEDULER_PREDICTIVE_STICKY_LOAD_SLACK", "1")
+    )
+    predictive_sticky_max_local_dispatches = int(
+        os.getenv("SCHEDULER_PREDICTIVE_STICKY_MAX_LOCAL_DISPATCHES", "1")
     )
     recovery_interval_seconds = float(
         os.getenv("SCHEDULER_RECOVERY_INTERVAL_SECONDS", "5")
@@ -618,8 +913,9 @@ def main() -> None:
     redis_client = redis.Redis.from_url(redis_url, decode_responses=True)
     backend = BackendClient(backend_base_url, worker_token)
     next_recovery_at = time.monotonic()
-    recent_invocations: dict[str, dict] = {}
     local_invocation_loads: dict[str, list[float]] = {}
+    local_warm_reservations: dict[str, list[float]] = {}
+    local_recent_invocation_routes: dict[str, dict] = {}
     round_robin_state: dict[str, int] = {}
 
     logger.info(
@@ -658,13 +954,17 @@ def main() -> None:
                 redis_client=redis_client,
                 pending_queue=source_pending_queue,
                 pending_queues=pending_queues,
-                recent_invocations=recent_invocations,
                 local_invocation_loads=local_invocation_loads,
+                local_warm_reservations=local_warm_reservations,
+                local_recent_invocation_routes=local_recent_invocation_routes,
                 local_load_ttl_seconds=local_load_ttl_seconds,
+                predictive_sticky_load_slack=predictive_sticky_load_slack,
+                predictive_sticky_max_local_dispatches=(
+                    predictive_sticky_max_local_dispatches
+                ),
                 round_robin_state=round_robin_state,
-                affinity_ttl_seconds=affinity_ttl_seconds,
-                sticky_max_invocation_load=sticky_max_invocation_load,
                 requeue_delay_seconds=requeue_delay_seconds,
+                stale_after_seconds=stale_after_seconds,
             )
         except BackendError:
             logger.exception("backend error while scheduling job_id=%s", job_id)

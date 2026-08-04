@@ -90,7 +90,7 @@ class DurableJobRecordTests(APITestCase):
         job = Job.objects.get(invocation=invocation)
         self.assertEqual(job.type, JobType.INVOCATION)
         self.assertEqual(job.status, JobStatus.QUEUED)
-        self.assertEqual(job.coordination_version, CoordinationVersion.V1)
+        self.assertEqual(job.coordination_version, CoordinationVersion.V2)
         self.assertEqual(job.payload["job_id"], str(job.job_id))
         self.assertEqual(
             job.payload["declared_output_files"],
@@ -99,14 +99,16 @@ class DurableJobRecordTests(APITestCase):
         self.assertEqual(job.payload["invocation_output_max_files"], 2)
         self.assertEqual(job.payload["invocation_output_max_file_size_mb"], 3)
         self.assertEqual(job.payload["invocation_output_max_total_size_mb"], 10)
+        self.assertEqual(job.payload["invocation_max_retries"], 0)
+        self.assertEqual(job.payload["invocation_retry_backoff_seconds"], [])
+        self.assertFalse(job.payload["retry_invocation_timeouts"])
+        self.assertFalse(job.payload["retry_invocation_function_errors"])
         self.assertEqual(payload["job_id"], str(job.job_id))
         event = OutboxEvent.objects.get(aggregate_id=job.job_id)
         self.assertEqual(event.event_type, "job.created")
         self.assertEqual(event.payload["job_type"], JobType.INVOCATION)
-        redis_client.rpush.assert_called_once_with(
-            "scheduler-pending-invocations",
-            str(job.job_id),
-        )
+        self.assertEqual(event.payload["coordination_version"], CoordinationVersion.V2)
+        redis_client.rpush.assert_not_called()
 
     @patch("redis.Redis.from_url")
     def test_build_report_updates_durable_job_status(self, redis_from_url):

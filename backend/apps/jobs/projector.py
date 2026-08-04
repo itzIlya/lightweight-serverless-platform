@@ -11,6 +11,9 @@ from django.utils import timezone
 from apps.functions.models import BuildStatus
 from apps.functions.services import sync_version_from_attempt
 from apps.invocations.models import (
+    InvocationAttempt,
+    InvocationAttemptStatus,
+    InvocationFailureKind,
     InvocationStagedCompletion,
     InvocationStatus,
     StagedCompletionStatus,
@@ -74,6 +77,7 @@ def projected_job_status(event_type: str, state_status: str | None) -> str:
         "job.dispatched": JobStatus.DISPATCHED,
         "job.running": JobStatus.RUNNING,
         "job.requeued": JobStatus.QUEUED,
+        "job.retrying": JobStatus.QUEUED,
         "job.succeeded": JobStatus.SUCCEEDED,
         "job.failed": JobStatus.FAILED,
         "job.cancelled": JobStatus.CANCELLED,
@@ -116,14 +120,44 @@ def project_build(job: Job, event_type: str, state: dict) -> None:
 def project_invocation(job: Job, event_type: str, state: dict) -> None:
     invocation = job.invocation
     if event_type == "job.running":
+        attempt = upsert_invocation_attempt(job, state)
+        attempt.status = InvocationAttemptStatus.RUNNING
+        attempt.started_at = attempt.started_at or timezone.now()
+        attempt.save(update_fields=["status", "started_at"])
         invocation.status = InvocationStatus.RUNNING
         invocation.started_at = invocation.started_at or timezone.now()
         invocation.save(update_fields=["status", "started_at"])
-    elif event_type == "job.requeued":
+    elif event_type in {"job.requeued", "job.retrying"}:
+        if event_type == "job.retrying":
+            attempt = upsert_invocation_attempt(job, state)
+            completion = state.get("completion_payload") or {}
+            attempt.status = InvocationAttemptStatus.RETRYING
+            attempt.failure_kind = completion.get("failure_kind", "") or InvocationFailureKind.PLATFORM
+            attempt.error_message = completion.get("error_message", "")
+            attempt.duration_ms = completion.get("duration_ms")
+            attempt.finished_at = timezone.now()
+            attempt.save(
+                update_fields=[
+                    "status",
+                    "failure_kind",
+                    "error_message",
+                    "duration_ms",
+                    "finished_at",
+                ]
+            )
         invocation.status = InvocationStatus.QUEUED
         invocation.started_at = None
-        invocation.save(update_fields=["status", "started_at"])
+        invocation.retry_count = int(state.get("retry_count", invocation.retry_count))
+        invocation.save(update_fields=["status", "started_at", "retry_count"])
     elif event_type == "job.dead_lettered":
+        attempt = upsert_invocation_attempt(job, state)
+        attempt.status = InvocationAttemptStatus.FAILED
+        attempt.failure_kind = InvocationFailureKind.PLATFORM
+        attempt.error_message = "Invocation exceeded V2 recovery attempts."
+        attempt.finished_at = timezone.now()
+        attempt.save(
+            update_fields=["status", "failure_kind", "error_message", "finished_at"]
+        )
         invocation.status = InvocationStatus.FAILED
         invocation.finished_at = timezone.now()
         invocation.error_message = "Invocation exceeded V2 recovery attempts."
@@ -138,6 +172,27 @@ def project_invocation(job: Job, event_type: str, state: dict) -> None:
             raise ValueError("Terminal projection requires a committed staged completion.")
         if str(completion.artifact_commit_id) != str(state.get("artifact_commit_id", "")):
             raise ValueError("Artifact commit ID does not match orchestrator state.")
+        attempt = upsert_invocation_attempt(job, state)
+        attempt.status = (
+            InvocationAttemptStatus.SUCCEEDED
+            if event_type == "job.succeeded"
+            else InvocationAttemptStatus.FAILED
+        )
+        attempt.failure_kind = completion.error_message and (
+            (state.get("completion_payload") or {}).get("failure_kind", "")
+        ) or ""
+        attempt.error_message = completion.error_message
+        attempt.duration_ms = completion.duration_ms
+        attempt.finished_at = timezone.now()
+        attempt.save(
+            update_fields=[
+                "status",
+                "failure_kind",
+                "error_message",
+                "duration_ms",
+                "finished_at",
+            ]
+        )
         invocation.status = (
             InvocationStatus.SUCCEEDED
             if event_type == "job.succeeded"
@@ -150,6 +205,7 @@ def project_invocation(job: Job, event_type: str, state: dict) -> None:
         invocation.cold_start = completion.cold_start
         invocation.error_message = completion.error_message
         invocation.duration_ms = completion.duration_ms
+        invocation.retry_count = int(state.get("retry_count", invocation.retry_count))
         invocation.finished_at = timezone.now()
         invocation.save(
             update_fields=[
@@ -161,9 +217,37 @@ def project_invocation(job: Job, event_type: str, state: dict) -> None:
                 "cold_start",
                 "error_message",
                 "duration_ms",
+                "retry_count",
                 "finished_at",
             ]
         )
+
+
+def upsert_invocation_attempt(job: Job, state: dict) -> InvocationAttempt:
+    attempt_number = max(int(state.get("dispatch_attempt", 0)), 1)
+    attempt, _ = InvocationAttempt.objects.get_or_create(
+        invocation=job.invocation,
+        attempt_number=attempt_number,
+        defaults={
+            "job": job,
+            "dispatch_attempt": attempt_number,
+            "worker_name": state.get("assigned_worker", ""),
+        },
+    )
+    changed = []
+    if attempt.job_id != job.id:
+        attempt.job = job
+        changed.append("job")
+    if attempt.dispatch_attempt != attempt_number:
+        attempt.dispatch_attempt = attempt_number
+        changed.append("dispatch_attempt")
+    worker_name = state.get("assigned_worker", "")
+    if worker_name and attempt.worker_name != worker_name:
+        attempt.worker_name = worker_name
+        changed.append("worker_name")
+    if changed:
+        attempt.save(update_fields=changed)
+    return attempt
 
 
 class OrchestratorProjector:

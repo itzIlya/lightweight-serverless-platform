@@ -27,6 +27,13 @@ class Function(models.Model):
         choices=InvokeAccess.choices,
         default=InvokeAccess.PRIVATE,
     )
+    active_version = models.ForeignKey(
+        "functions.FunctionVersion",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -59,6 +66,7 @@ class FunctionInvokeToken(models.Model):
     )
     is_active = models.BooleanField(default=True)
     expires_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
     last_used_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -79,8 +87,36 @@ class FunctionInvokeToken(models.Model):
         )
         return token, raw_token
 
+    def rotate(self, *, expires_at=None):
+        raw_token = f"fn_{secrets.token_urlsafe(32)}"
+        self.token_hash = hash_invoke_token(raw_token)
+        self.prefix = raw_token[:16]
+        self.expires_at = expires_at
+        self.is_active = True
+        self.revoked_at = None
+        self.last_used_at = None
+        self.save(
+            update_fields=[
+                "token_hash",
+                "prefix",
+                "expires_at",
+                "is_active",
+                "revoked_at",
+                "last_used_at",
+                "updated_at",
+            ]
+        )
+        return raw_token
+
+    def revoke(self, *, when=None) -> None:
+        self.is_active = False
+        self.revoked_at = when or timezone.now()
+        self.save(update_fields=["is_active", "revoked_at", "updated_at"])
+
     def is_usable(self) -> bool:
         if not self.is_active:
+            return False
+        if self.revoked_at is not None:
             return False
         return self.expires_at is None or self.expires_at > timezone.now()
 
@@ -96,6 +132,14 @@ class BuildStatus(models.TextChoices):
     BUILT = "built", "Built"
     FAILED = "failed", "Failed"
     CANCELLED = "cancelled", "Cancelled"
+
+
+class FunctionImageStatus(models.TextChoices):
+    ACTIVE = "active", "Active"
+    CANDIDATE = "candidate", "Candidate"
+    PENDING_DELETE = "pending_delete", "Pending delete"
+    DELETED = "deleted", "Deleted"
+    DELETE_FAILED = "delete_failed", "Delete failed"
 
 
 class FunctionVersion(models.Model):
@@ -117,6 +161,10 @@ class FunctionVersion(models.Model):
     invocation_output_max_files = models.PositiveSmallIntegerField(default=5)
     invocation_output_max_file_size_mb = models.PositiveSmallIntegerField(default=10)
     invocation_output_max_total_size_mb = models.PositiveSmallIntegerField(default=10)
+    invocation_max_retries = models.PositiveSmallIntegerField(default=0)
+    invocation_retry_backoff_seconds = models.JSONField(default=list, blank=True)
+    retry_invocation_timeouts = models.BooleanField(default=False)
+    retry_invocation_function_errors = models.BooleanField(default=False)
     image_ref = models.CharField(max_length=255, blank=True)
     build_status = models.CharField(
         max_length=20,
@@ -141,6 +189,47 @@ class FunctionVersion(models.Model):
 
     def __str__(self) -> str:
         return f"{self.function.slug}:{self.version}"
+
+
+class FunctionImage(models.Model):
+    function = models.ForeignKey(
+        Function,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="images",
+    )
+    function_version = models.ForeignKey(
+        FunctionVersion,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="images",
+    )
+    image_ref = models.CharField(max_length=500, unique=True)
+    status = models.CharField(
+        max_length=30,
+        choices=FunctionImageStatus.choices,
+        default=FunctionImageStatus.CANDIDATE,
+        db_index=True,
+    )
+    reason = models.CharField(max_length=255, blank=True)
+    delete_after = models.DateTimeField(null=True, blank=True, db_index=True)
+    delete_attempts = models.PositiveSmallIntegerField(default=0)
+    last_error = models.TextField(blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["function", "status"]),
+            models.Index(fields=["status", "delete_after"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.image_ref} ({self.status})"
 
 
 class BuildAttempt(models.Model):

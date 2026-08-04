@@ -96,6 +96,8 @@ class ProductionOrchestratorTests(unittest.TestCase):
             self.worker_lease_key,
             self.orchestrator.worker_stream("worker-a", "build"),
             self.orchestrator.worker_stream("worker-a", "invocation"),
+            self.orchestrator.worker_stream("worker-b", "build"),
+            self.orchestrator.worker_stream("worker-b", "invocation"),
         ]
         keys.extend(self.redis.scan_iter(f"{self.state_prefix}:*"))
         keys.extend(self.redis.scan_iter(f"{self.worker_prefix}:*"))
@@ -108,6 +110,10 @@ class ProductionOrchestratorTests(unittest.TestCase):
             "type": payload_type,
             "build_request_id": str(uuid.uuid4()),
             "request_id": str(uuid.uuid4()),
+            "function_version_id": 10,
+            "handler": "handler.main",
+            "config": {"memory_mb": 128},
+            "invocation_output_max_total_size_mb": 10,
             "image_ref": "localhost:5000/functions/test:v1-a1-abc",
         }
         return {
@@ -124,6 +130,13 @@ class ProductionOrchestratorTests(unittest.TestCase):
                 }
             ),
         }
+
+    def creation_fields_with_payload(self, job_type="invocation", **payload_updates):
+        fields = self.creation_fields(job_type)
+        event = json.loads(fields["payload"])
+        event["payload"].update(payload_updates)
+        fields["payload"] = json.dumps(event)
+        return fields
 
     def create_and_dispatch(self, job_type="build"):
         self.orchestrator.process_creation_event("1-0", self.creation_fields(job_type))
@@ -154,6 +167,199 @@ class ProductionOrchestratorTests(unittest.TestCase):
         self.assertEqual(metrics["duplicate_dispatches"], 1)
         self.assertEqual(
             self.orchestrator.state.get_job(self.job_id)["dispatch_attempt"], 1
+        )
+
+    def test_metrics_snapshot_reports_orchestrator_and_worker_queue_depths(self):
+        self.orchestrator.process_creation_event("1-0", self.creation_fields("invocation"))
+        ready = self.orchestrator.metrics_snapshot(now_ms=1000)
+
+        self.assertEqual(ready["ready_jobs_total"], 1)
+        self.assertEqual(ready["ready_jobs_available"], 1)
+
+        self.assertEqual(self.orchestrator.dispatch_ready_once(now_ms=1010), 1)
+        invocation_stream = self.orchestrator.worker_stream("worker-a", "invocation")
+        self.redis.xreadgroup(
+            "v2-workers",
+            "test-consumer",
+            {invocation_stream: ">"},
+            count=1,
+        )
+
+        build_job_id = str(uuid.uuid4())
+        self.job_id = build_job_id
+        self.orchestrator.process_creation_event("2-0", self.creation_fields("build"))
+        self.assertEqual(self.orchestrator.dispatch_ready_once(now_ms=1020), 1)
+
+        metrics = self.orchestrator.metrics_snapshot(now_ms=1030)
+        streams = {
+            (row["worker"], row["queue_type"]): row
+            for row in metrics["worker_streams"]
+        }
+
+        self.assertEqual(metrics["ready_jobs_total"], 0)
+        self.assertEqual(metrics["ready_jobs_available"], 0)
+        self.assertEqual(streams[("worker-a", "invocations")]["lag"], 0)
+        self.assertEqual(streams[("worker-a", "invocations")]["pending"], 1)
+        self.assertEqual(streams[("worker-a", "invocations")]["outstanding"], 1)
+        self.assertEqual(streams[("worker-a", "builds")]["lag"], 1)
+        self.assertEqual(streams[("worker-a", "builds")]["pending"], 0)
+        self.assertEqual(streams[("worker-a", "builds")]["outstanding"], 1)
+
+    def test_retryable_invocation_failure_requeues_without_finalization(self):
+        self.orchestrator.process_creation_event(
+            "1-0",
+            self.creation_fields_with_payload(
+                "invocation",
+                invocation_max_retries=2,
+                invocation_retry_backoff_seconds=[0, 2, 8],
+            ),
+        )
+        self.assertEqual(self.orchestrator.dispatch_ready_once(now_ms=1000), 1)
+        claim = self.orchestrator.claim_job(
+            self.job_id,
+            worker_name="worker-a",
+            dispatch_attempt=1,
+            now_ms=1010,
+        )
+        self.assertTrue(claim["claimed"])
+
+        completed = self.orchestrator.complete_job(
+            self.job_id,
+            worker_name="worker-a",
+            dispatch_attempt=1,
+            completion_id="completion-1",
+            status="failed",
+            completion_payload={
+                "failure_kind": "platform",
+                "error_message": "docker daemon temporarily unavailable",
+            },
+            now_ms=1020,
+        )
+
+        state = self.orchestrator.state.get_job(self.job_id)
+        self.assertTrue(completed["retry_scheduled"])
+        self.assertEqual(state["status"], "queued")
+        self.assertEqual(state["retry_count"], 1)
+        self.assertEqual(self.redis.xlen(self.finalization_stream), 0)
+        self.assertEqual(self.redis.zscore(self.ready_key, self.job_id), 1020)
+
+    def test_lost_retry_completion_response_is_idempotent(self):
+        self.orchestrator.process_creation_event(
+            "1-0",
+            self.creation_fields_with_payload(
+                "invocation",
+                invocation_max_retries=1,
+                invocation_retry_backoff_seconds=[2],
+            ),
+        )
+        self.orchestrator.dispatch_ready_once(now_ms=1000)
+        self.orchestrator.claim_job(
+            self.job_id,
+            worker_name="worker-a",
+            dispatch_attempt=1,
+            now_ms=1010,
+        )
+        payload = {
+            "failure_kind": "platform",
+            "error_message": "network blip",
+        }
+
+        first = self.orchestrator.complete_job(
+            self.job_id,
+            worker_name="worker-a",
+            dispatch_attempt=1,
+            completion_id="completion-1",
+            status="failed",
+            completion_payload=payload,
+            now_ms=1020,
+        )
+        retry = self.orchestrator.complete_job(
+            self.job_id,
+            worker_name="worker-a",
+            dispatch_attempt=1,
+            completion_id="completion-1",
+            status="failed",
+            completion_payload=payload,
+            now_ms=1021,
+        )
+
+        self.assertTrue(first["retry_scheduled"])
+        self.assertTrue(retry["retry_scheduled"])
+        self.assertTrue(retry["idempotent"])
+        self.assertEqual(self.orchestrator.state.get_job(self.job_id)["retry_count"], 1)
+
+    def test_function_failure_does_not_retry_by_default(self):
+        self.orchestrator.process_creation_event(
+            "1-0",
+            self.creation_fields_with_payload(
+                "invocation",
+                invocation_max_retries=2,
+            ),
+        )
+        self.orchestrator.dispatch_ready_once(now_ms=1000)
+        self.orchestrator.claim_job(
+            self.job_id,
+            worker_name="worker-a",
+            dispatch_attempt=1,
+            now_ms=1010,
+        )
+
+        completed = self.orchestrator.complete_job(
+            self.job_id,
+            worker_name="worker-a",
+            dispatch_attempt=1,
+            completion_id="completion-1",
+            status="failed",
+            completion_payload={
+                "failure_kind": "function",
+                "error_message": "Container exited with a non-zero status.",
+            },
+            now_ms=1020,
+        )
+
+        state = self.orchestrator.state.get_job(self.job_id)
+        self.assertFalse(completed.get("retry_scheduled", False))
+        self.assertEqual(state["status"], "finalizing")
+        self.assertEqual(self.redis.xlen(self.finalization_stream), 1)
+
+    def test_invocation_dispatch_prefers_worker_with_exact_idle_warm_container(self):
+        self.worker_store.record_heartbeat(
+            {
+                "name": "worker-b",
+                "hostname": "worker-b",
+                "max_concurrency": 4,
+                "max_build_concurrency": 1,
+                "max_invocation_concurrency": 4,
+                "queue_name": "worker:worker-b:jobs",
+                "invocation_queue_name": "worker:worker-b:invocations",
+                "build_queue_name": "worker:worker-b:builds",
+                "processing_queue_name": "worker:worker-b:processing",
+                "metadata": {
+                    "warm_pool": {
+                        "enabled": True,
+                        "containers": [
+                            {
+                                "function_version_id": "10",
+                                "image_ref": "localhost:5000/functions/test:v1-a1-abc",
+                                "handler": "handler.main",
+                                "memory_mb": 128,
+                                "output_tmpfs_size_bytes": 10 * 1024 * 1024,
+                                "idle_count": 1,
+                                "busy_count": 0,
+                            }
+                        ],
+                    }
+                },
+            },
+            now_ms=1000,
+        )
+
+        job = self.create_and_dispatch("invocation")
+
+        self.assertEqual(job["assigned_worker"], "worker-b")
+        self.assertEqual(
+            len(self.redis.xrange(self.orchestrator.worker_stream("worker-b", "invocation"))),
+            1,
         )
 
     def test_duplicate_claim_and_completion_are_idempotent(self):

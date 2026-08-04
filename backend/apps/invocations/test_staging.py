@@ -17,11 +17,13 @@ from apps.functions.models import BuildStatus, Function, FunctionVersion
 from apps.jobs.models import CoordinationVersion, Job, JobStatus, JobType
 from apps.jobs.projector import apply_orchestrator_projection
 
+from .services import issue_runner_output_upload_token
 from .management.commands.cleanup_staged_invocations import (
     cleanup_expired_staged_completions,
 )
 from .models import (
     Invocation,
+    InvocationLogArtifact,
     InvocationOutputFile,
     InvocationStagedCompletion,
     InvocationStatus,
@@ -127,6 +129,30 @@ class StagedInvocationArtifactTests(APITestCase):
             HTTP_X_INTERNAL_TOKEN="change-me",
         )
 
+    def direct_upload_token(self, *, completion_id=None):
+        return issue_runner_output_upload_token(
+            request_id=self.invocation.request_id,
+            job_id=self.job.job_id,
+            dispatch_attempt=1,
+            completion_id=completion_id or self.completion_id,
+        )
+
+    def direct_stage(self, *, token=None, original_path="report.txt", body=None):
+        return self.client.post(
+            reverse(
+                "stage-invocation-output-direct",
+                args=[self.invocation.request_id],
+            ),
+            data=self.body if body is None else body,
+            content_type="text/plain",
+            HTTP_X_RUNNER_UPLOAD_TOKEN=token or self.direct_upload_token(),
+            HTTP_X_JOB_ID=str(self.job.job_id),
+            HTTP_X_DISPATCH_ATTEMPT="1",
+            HTTP_X_COMPLETION_ID=self.completion_id,
+            HTTP_X_ORIGINAL_PATH=original_path,
+            HTTP_X_POSITION="0",
+        )
+
     def test_worker_dies_after_upload_staged_data_stays_hidden(self):
         staged = self.stage()
         self.assertEqual(staged.status_code, 201, staged.content)
@@ -159,6 +185,8 @@ class StagedInvocationArtifactTests(APITestCase):
         self.assertEqual(second.data["artifact_commit_id"], first.data["artifact_commit_id"])
         self.assertEqual(before.data["result"], {})
         self.assertEqual(before.data["output_files"], [])
+        self.assertNotIn("log_files", before.data)
+        self.assertEqual(InvocationLogArtifact.objects.count(), 1)
 
         applied = apply_orchestrator_projection(
             {
@@ -178,11 +206,15 @@ class StagedInvocationArtifactTests(APITestCase):
         )
         after = self.client.get(reverse("invocation-detail", args=[self.invocation.id]))
         outputs = self.client.get(reverse("invocation-outputs", args=[self.invocation.id]))
+        logs = self.client.get(f"/api/invocations/{self.invocation.id}/logs/")
 
         self.assertTrue(applied)
         self.assertEqual(after.data["status"], InvocationStatus.SUCCEEDED)
         self.assertEqual(after.data["result"], {"ok": True})
+        self.assertEqual(after.data["stdout"], "done")
+        self.assertNotIn("log_files", after.data)
         self.assertEqual(len(outputs.data), 1)
+        self.assertEqual(logs.status_code, 404)
 
     def test_checksum_or_manifest_mismatch_cannot_commit(self):
         bad_upload = self.stage(checksum="0" * 64)
@@ -207,6 +239,51 @@ class StagedInvocationArtifactTests(APITestCase):
             HTTP_X_INTERNAL_TOKEN="change-me",
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_direct_runner_upload_stages_without_checksum_and_commits(self):
+        staged = self.direct_stage()
+        self.assertEqual(staged.status_code, 201, staged.content)
+        output = InvocationOutputFile.objects.get()
+
+        response = self.client.post(
+            reverse(
+                "commit-staged-invocation",
+                args=[self.invocation.request_id, self.completion_id],
+            ),
+            data={
+                "job_id": str(self.job.job_id),
+                "dispatch_attempt": 1,
+                "terminal_status": "succeeded",
+                "completion_payload": {"result": {"ok": True}},
+                "output_manifest": [
+                    {
+                        "original_path": "report.txt",
+                        "size_bytes": len(self.body),
+                    }
+                ],
+            },
+            format="json",
+            HTTP_X_INTERNAL_TOKEN="change-me",
+        )
+
+        output.refresh_from_db()
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(output.checksum_sha256, "")
+        self.assertEqual(output.status, StagedCompletionStatus.COMMITTED)
+
+    def test_direct_runner_upload_rejects_invalid_token(self):
+        response = self.direct_stage(token="bad-token")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("token", str(response.data["output"]).lower())
+        self.assertEqual(InvocationOutputFile.objects.count(), 0)
+
+    def test_direct_runner_upload_rejects_undeclared_output(self):
+        response = self.direct_stage(original_path="extra.txt")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("not declared", str(response.data["output"]))
+        self.assertEqual(InvocationOutputFile.objects.count(), 0)
 
     def test_expired_staged_files_are_deleted(self):
         staged = self.stage()

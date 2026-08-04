@@ -1,7 +1,11 @@
 from django.conf import settings
+from django.core.files.base import ContentFile
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils.crypto import constant_time_compare
+import json
+import tempfile
+import zipfile
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action, api_view, parser_classes, permission_classes
 from rest_framework.exceptions import NotAuthenticated, PermissionDenied, ValidationError
@@ -16,7 +20,6 @@ from apps.jobs.services import mark_invocation_jobs_from_status
 from .models import (
     Invocation,
     InvocationOutputFile,
-    InvocationStatus,
     StagedCompletionStatus,
     hash_invocation_read_token,
 )
@@ -27,8 +30,17 @@ from .serializers import (
 )
 from .services import (
     commit_staged_invocation_completion,
+    log_preview,
+    store_invocation_log_artifacts,
     store_invocation_output_file,
     store_staged_invocation_output_file,
+    verify_runner_output_upload_token,
+)
+from .v2_reads import (
+    invocation_outputs_are_published,
+    serialize_invocation_for_read,
+    visible_invocation_outputs,
+    visible_invocation_logs,
 )
 
 
@@ -36,11 +48,11 @@ class InvocationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
     queryset = Invocation.objects.select_related(
         "function_version",
         "function_version__function",
-    ).prefetch_related("input_files", "output_files")
+    ).prefetch_related("input_files", "output_files", "log_artifacts", "attempts")
     serializer_class = InvocationSerializer
 
     def get_permissions(self):
-        if self.action in {"retrieve", "outputs", "download_output"}:
+        if self.action in {"retrieve", "outputs", "download_output", "download"}:
             return [AllowAny()]
         return super().get_permissions()
 
@@ -48,8 +60,8 @@ class InvocationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
         queryset = Invocation.objects.select_related(
             "function_version",
             "function_version__function",
-        ).prefetch_related("input_files", "output_files")
-        if self.action in {"retrieve", "outputs", "download_output"} and _read_token_from_request(
+        ).prefetch_related("input_files", "output_files", "log_artifacts", "attempts")
+        if self.action in {"retrieve", "outputs", "download_output", "download"} and _read_token_from_request(
             self.request
         ):
             return queryset
@@ -62,7 +74,7 @@ class InvocationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
     def retrieve(self, request, *args, **kwargs):
         invocation = self.get_object()
         _authorize_invocation_read(request, invocation)
-        return Response(self.get_serializer(invocation).data)
+        return Response(serialize_invocation_for_read(invocation))
 
     @action(detail=True, methods=["get"], url_path="outputs")
     def outputs(self, request, pk=None):
@@ -89,12 +101,24 @@ class InvocationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
             invocation=invocation,
             status=StagedCompletionStatus.COMMITTED,
         )
-        if invocation.status not in terminal_invocation_statuses():
+        if not invocation_outputs_are_published(invocation):
             raise PermissionDenied("Invocation outputs are not published yet.")
         return FileResponse(
             output_file.file.open("rb"),
             as_attachment=True,
             filename=output_file.safe_name,
+        )
+
+    @action(detail=True, methods=["get"], url_path="download")
+    def download(self, request, pk=None):
+        invocation = self.get_object()
+        _authorize_invocation_read(request, invocation)
+        bundle = _build_invocation_download_bundle(invocation)
+        return FileResponse(
+            bundle,
+            as_attachment=True,
+            filename=f"invocation-{invocation.request_id}.zip",
+            content_type="application/zip",
         )
 
 
@@ -124,21 +148,6 @@ def _authorize_invocation_read(request, invocation: Invocation) -> None:
         token_hash,
     ):
         raise PermissionDenied("Invalid invocation read token.")
-
-
-def terminal_invocation_statuses():
-    return {
-        InvocationStatus.SUCCEEDED,
-        InvocationStatus.FAILED,
-        InvocationStatus.TIMEOUT,
-        InvocationStatus.CANCELLED,
-    }
-
-
-def visible_invocation_outputs(invocation):
-    if invocation.status not in terminal_invocation_statuses():
-        return invocation.output_files.none()
-    return invocation.output_files.filter(status=StagedCompletionStatus.COMMITTED)
 
 
 @api_view(["PATCH"])
@@ -180,9 +189,19 @@ def report_invocation(request, request_id):
     if stale_response is not None:
         return stale_response
 
+    raw_stdout = values.get("stdout", "")
+    raw_stderr = values.get("stderr", "")
+    values["stdout"] = log_preview(raw_stdout)
+    values["stderr"] = log_preview(raw_stderr)
     for field, value in values.items():
         setattr(invocation, field, value)
     invocation.save()
+    store_invocation_log_artifacts(
+        invocation=invocation,
+        stdout=raw_stdout,
+        stderr=raw_stderr,
+        status=StagedCompletionStatus.COMMITTED,
+    )
     mark_invocation_jobs_from_status(invocation, invocation.status)
 
     return Response(InvocationSerializer(invocation).data)
@@ -230,6 +249,73 @@ def upload_invocation_output(request, request_id):
     )
 
 
+def _build_invocation_download_bundle(invocation: Invocation):
+    buffer = tempfile.SpooledTemporaryFile(max_size=10 * 1024 * 1024)
+    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        manifest = {
+            "request_id": str(invocation.request_id),
+            "invocation_id": invocation.id,
+            "function_id": invocation.function_version.function_id,
+            "function_version_id": invocation.function_version_id,
+            "status": invocation.status,
+            "queued_at": invocation.queued_at.isoformat() if invocation.queued_at else None,
+            "started_at": invocation.started_at.isoformat() if invocation.started_at else None,
+            "finished_at": invocation.finished_at.isoformat() if invocation.finished_at else None,
+            "duration_ms": invocation.duration_ms,
+            "input_files": [],
+            "output_files": [],
+            "log_files": [],
+        }
+        for input_file in invocation.input_files.order_by("position", "created_at"):
+            arcname = f"input/{input_file.position:03d}-{input_file.original_name}"
+            _write_field_file_to_zip(archive, arcname, input_file.file)
+            manifest["input_files"].append(
+                {
+                    "id": input_file.id,
+                    "original_name": input_file.original_name,
+                    "content_type": input_file.content_type,
+                    "size_bytes": input_file.size_bytes,
+                    "position": input_file.position,
+                    "archive_path": arcname,
+                }
+            )
+        for output_file in visible_invocation_outputs(invocation):
+            arcname = f"output/{output_file.position:03d}-{output_file.safe_name}"
+            _write_field_file_to_zip(archive, arcname, output_file.file)
+            manifest["output_files"].append(
+                {
+                    "id": output_file.id,
+                    "original_path": output_file.original_path,
+                    "safe_name": output_file.safe_name,
+                    "content_type": output_file.content_type,
+                    "size_bytes": output_file.size_bytes,
+                    "position": output_file.position,
+                    "archive_path": arcname,
+                }
+            )
+        for log_file in visible_invocation_logs(invocation):
+            arcname = f"logs/{log_file.stream}.txt"
+            _write_field_file_to_zip(archive, arcname, log_file.file)
+            manifest["log_files"].append(
+                {
+                    "id": log_file.id,
+                    "stream": log_file.stream,
+                    "safe_name": log_file.safe_name,
+                    "content_type": log_file.content_type,
+                    "size_bytes": log_file.size_bytes,
+                    "archive_path": arcname,
+                }
+            )
+        archive.writestr("manifest.json", json.dumps(manifest, indent=2, sort_keys=True))
+    buffer.seek(0)
+    return buffer
+
+
+def _write_field_file_to_zip(archive: zipfile.ZipFile, arcname: str, field_file) -> None:
+    with field_file.open("rb") as source:
+        archive.writestr(arcname, source.read())
+
+
 @api_view(["POST"])
 @permission_classes([])
 @parser_classes([MultiPartParser, FormParser])
@@ -257,6 +343,66 @@ def stage_invocation_output(request, request_id):
         )
     except (TypeError, ValueError) as exc:
         raise ValidationError({"output": str(exc)}) from exc
+    return Response(
+        {
+            "id": output.id,
+            "original_path": output.original_path,
+            "size_bytes": output.size_bytes,
+            "checksum_sha256": output.checksum_sha256,
+            "status": output.status,
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([])
+def stage_invocation_output_direct(request, request_id):
+    token = request.headers.get("X-Runner-Upload-Token", "")
+    if not token:
+        return Response({"detail": "Unauthorized."}, status=status.HTTP_401_UNAUTHORIZED)
+
+    invocation = get_object_or_404(
+        Invocation.objects.select_related(
+            "function_version",
+            "function_version__function",
+        ),
+        request_id=request_id,
+    )
+    try:
+        job_id = request.headers.get("X-Job-Id", "")
+        dispatch_attempt = int(request.headers.get("X-Dispatch-Attempt", "0") or 0)
+        completion_id = request.headers.get("X-Completion-Id", "")
+        original_path = request.headers.get("X-Original-Path", "")
+        position = int(request.headers.get("X-Position", "0") or 0)
+        verify_runner_output_upload_token(
+            token,
+            request_id=request_id,
+            job_id=job_id,
+            dispatch_attempt=dispatch_attempt,
+            completion_id=completion_id,
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValidationError({"output": str(exc)}) from exc
+
+    uploaded_file = ContentFile(request.body or b"")
+    uploaded_file.name = original_path or "output"
+    uploaded_file.content_type = request.headers.get("Content-Type", "") or ""
+
+    try:
+        output = store_staged_invocation_output_file(
+            invocation=invocation,
+            job_id=job_id,
+            dispatch_attempt=dispatch_attempt,
+            completion_id=completion_id,
+            uploaded_file=uploaded_file,
+            original_path=original_path,
+            checksum_sha256="",
+            position=position,
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValidationError({"output": str(exc)}) from exc
+
     return Response(
         {
             "id": output.id,

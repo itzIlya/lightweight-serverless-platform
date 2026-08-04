@@ -19,6 +19,23 @@ class InvocationStatus(models.TextChoices):
     CANCELLED = "cancelled", "Cancelled"
 
 
+class InvocationAttemptStatus(models.TextChoices):
+    QUEUED = "queued", "Queued"
+    RUNNING = "running", "Running"
+    SUCCEEDED = "succeeded", "Succeeded"
+    FAILED = "failed", "Failed"
+    RETRYING = "retrying", "Retrying"
+    STALE = "stale", "Stale"
+
+
+class InvocationFailureKind(models.TextChoices):
+    NONE = "", "None"
+    PLATFORM = "platform", "Platform"
+    TIMEOUT = "timeout", "Timeout"
+    FUNCTION = "function", "Function"
+    OUTPUT = "output", "Output"
+
+
 class Invocation(models.Model):
     request_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     function_version = models.ForeignKey(
@@ -58,6 +75,51 @@ class Invocation(models.Model):
         self.read_token_prefix = raw_token[:16]
         self.save(update_fields=["read_token_hash", "read_token_prefix"])
         return raw_token
+
+
+class InvocationAttempt(models.Model):
+    invocation = models.ForeignKey(
+        Invocation,
+        on_delete=models.CASCADE,
+        related_name="attempts",
+    )
+    job = models.ForeignKey(
+        "jobs.Job",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="invocation_attempts",
+    )
+    attempt_number = models.PositiveIntegerField()
+    dispatch_attempt = models.PositiveIntegerField(default=0)
+    worker_name = models.CharField(max_length=120, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=InvocationAttemptStatus.choices,
+        default=InvocationAttemptStatus.QUEUED,
+    )
+    failure_kind = models.CharField(
+        max_length=20,
+        choices=InvocationFailureKind.choices,
+        blank=True,
+    )
+    error_message = models.TextField(blank=True)
+    queued_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    duration_ms = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["attempt_number"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["invocation", "attempt_number"],
+                name="unique_invocation_attempt_number",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.invocation.request_id}:attempt-{self.attempt_number}"
 
 
 def hash_invocation_read_token(raw_token: str) -> str:
@@ -196,3 +258,58 @@ class InvocationOutputFile(models.Model):
 
     def __str__(self) -> str:
         return f"{self.invocation.request_id}:{self.original_path}"
+
+
+class InvocationLogStream(models.TextChoices):
+    STDOUT = "stdout", "Stdout"
+    STDERR = "stderr", "Stderr"
+
+
+def invocation_log_upload_to(instance, filename: str) -> str:
+    safe_name = get_valid_filename(filename) or f"{instance.stream}.txt"
+    completion = getattr(instance, "staged_completion", None)
+    stage = (
+        get_valid_filename(completion.completion_id).replace(":", "-")
+        if completion
+        else "committed"
+    )
+    return f"invocation_logs/{instance.invocation.request_id}/{stage}/{safe_name}"
+
+
+class InvocationLogArtifact(models.Model):
+    invocation = models.ForeignKey(
+        Invocation,
+        on_delete=models.CASCADE,
+        related_name="log_artifacts",
+    )
+    staged_completion = models.ForeignKey(
+        InvocationStagedCompletion,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="log_artifacts",
+    )
+    stream = models.CharField(max_length=20, choices=InvocationLogStream.choices)
+    status = models.CharField(
+        max_length=20,
+        choices=StagedCompletionStatus.choices,
+        default=StagedCompletionStatus.COMMITTED,
+        db_index=True,
+    )
+    file = models.FileField(upload_to=invocation_log_upload_to, max_length=500)
+    safe_name = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=255, default="text/plain")
+    size_bytes = models.PositiveIntegerField(default=0)
+    preview = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["stream", "created_at"]
+        indexes = [
+            models.Index(fields=["invocation", "stream"]),
+            models.Index(fields=["staged_completion", "stream"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.invocation.request_id}:{self.stream}"

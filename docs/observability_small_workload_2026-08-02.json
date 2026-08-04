@@ -1,0 +1,1822 @@
+{
+  "scenario": "observability_small_private_existing_function",
+  "function_id": 69,
+  "count": 6,
+  "sleep_seconds": 2,
+  "wall_ms": 64453.0,
+  "throughput_per_second": 0.093,
+  "statuses": [
+    "succeeded",
+    "failed",
+    "succeeded",
+    "succeeded",
+    "succeeded",
+    "succeeded"
+  ],
+  "submit_elapsed_ms": [
+    125.0,
+    125.0,
+    235.0,
+    328.0,
+    219.0,
+    344.0
+  ],
+  "submit_median_ms": 227.0,
+  "poll_elapsed_ms": [
+    51844.0,
+    60750.0,
+    61453.0,
+    62281.0,
+    60422.0,
+    61703.0
+  ],
+  "poll_median_ms": 61101.5,
+  "invocation_ids": [
+    677,
+    678,
+    679,
+    681,
+    680,
+    682
+  ],
+  "metrics_samples": [
+    {
+      "label": "before",
+      "at_monotonic": 223937.609,
+      "queries": {
+        "sum(serverless_worker_up{status=\"online\"})": [
+          {
+            "metric": {},
+            "value": [
+              1785670007.987,
+              "1"
+            ]
+          }
+        ],
+        "serverless_orchestrator_ready_jobs_total": [
+          {
+            "metric": {
+              "__name__": "serverless_orchestrator_ready_jobs_total",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator"
+            },
+            "value": [
+              1785670007.992,
+              "0"
+            ]
+          }
+        ],
+        "serverless_orchestrator_ready_jobs_available_total": [
+          {
+            "metric": {
+              "__name__": "serverless_orchestrator_ready_jobs_available_total",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator"
+            },
+            "value": [
+              1785670007.997,
+              "0"
+            ]
+          }
+        ],
+        "serverless_worker_queue_outstanding": [
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_outstanding",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "invocations",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670008.002,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_outstanding",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "builds",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670008.002,
+              "0"
+            ]
+          }
+        ],
+        "serverless_worker_queue_lag": [
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_lag",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "invocations",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670008.007,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_lag",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "builds",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670008.007,
+              "0"
+            ]
+          }
+        ],
+        "serverless_worker_queue_pending": [
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_pending",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "invocations",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670008.017,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_pending",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "builds",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670008.017,
+              "0"
+            ]
+          }
+        ],
+        "sum(serverless_worker_active_jobs)": [
+          {
+            "metric": {},
+            "value": [
+              1785670008.026,
+              "0"
+            ]
+          }
+        ],
+        "sum(serverless_worker_active_invocations)": [
+          {
+            "metric": {},
+            "value": [
+              1785670008.034,
+              "0"
+            ]
+          }
+        ],
+        "sum(serverless_worker_warm_containers_idle)": [],
+        "sum(rate(container_cpu_usage_seconds_total[1m])) by (name)": [
+          {
+            "metric": {},
+            "value": [
+              1785670008.061,
+              "4.102754506203237"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-redis-exporter-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.009331408507307976"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-backend-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.41262891836204113"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-prometheus-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.03622018541126198"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-staged-artifact-cleaner-1"
+            },
+            "value": [
+              1785670008.061,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-registry-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.00023829229319457482"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-scheduler-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.0004519965296146518"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orchestrator-reconciler-1"
+            },
+            "value": [
+              1785670008.061,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-worker-4"
+            },
+            "value": [
+              1785670008.061,
+              "0.008858906489937798"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orchestrator-shadow-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.0009408452969799321"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-redis-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.03262735288965016"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-cadvisor-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.22090263116740974"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orchestrator-projector-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.00129253037167717"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-userservice-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.27174269941923745"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-loki-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.015181229449033617"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-userservice-postgres-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.012506644451581839"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-postgres-exporter-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.009909955071137361"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-alloy-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.018640561924753704"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-userservice-postgres-exporter-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.009668416184041184"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-postgres-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.028149284212633713"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-invocation-finalizer-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.0010678129519524364"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orphan-image-cleaner-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.0006782632787144763"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-outbox-relay-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.0123145571151983"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-grafana-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.04241537237744857"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orchestrator-1"
+            },
+            "value": [
+              1785670008.061,
+              "0.2791490683229817"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "label": "after_submit",
+      "at_monotonic": 223938.156,
+      "queries": {
+        "sum(serverless_worker_up{status=\"online\"})": [
+          {
+            "metric": {},
+            "value": [
+              1785670008.467,
+              "1"
+            ]
+          }
+        ],
+        "serverless_orchestrator_ready_jobs_total": [
+          {
+            "metric": {
+              "__name__": "serverless_orchestrator_ready_jobs_total",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator"
+            },
+            "value": [
+              1785670008.473,
+              "0"
+            ]
+          }
+        ],
+        "serverless_orchestrator_ready_jobs_available_total": [
+          {
+            "metric": {
+              "__name__": "serverless_orchestrator_ready_jobs_available_total",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator"
+            },
+            "value": [
+              1785670008.478,
+              "0"
+            ]
+          }
+        ],
+        "serverless_worker_queue_outstanding": [
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_outstanding",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "invocations",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670008.483,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_outstanding",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "builds",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670008.483,
+              "0"
+            ]
+          }
+        ],
+        "serverless_worker_queue_lag": [
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_lag",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "invocations",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670008.49,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_lag",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "builds",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670008.49,
+              "0"
+            ]
+          }
+        ],
+        "serverless_worker_queue_pending": [
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_pending",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "invocations",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670008.494,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_pending",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "builds",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670008.494,
+              "0"
+            ]
+          }
+        ],
+        "sum(serverless_worker_active_jobs)": [
+          {
+            "metric": {},
+            "value": [
+              1785670008.5,
+              "0"
+            ]
+          }
+        ],
+        "sum(serverless_worker_active_invocations)": [
+          {
+            "metric": {},
+            "value": [
+              1785670008.506,
+              "0"
+            ]
+          }
+        ],
+        "sum(serverless_worker_warm_containers_idle)": [],
+        "sum(rate(container_cpu_usage_seconds_total[1m])) by (name)": [
+          {
+            "metric": {},
+            "value": [
+              1785670008.545,
+              "4.102754044051542"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-redis-exporter-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.009331408507307976"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-backend-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.41262891836204113"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-prometheus-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.03622018541126198"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-staged-artifact-cleaner-1"
+            },
+            "value": [
+              1785670008.545,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-registry-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.00023829229319457482"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-scheduler-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.0004519965296146518"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orchestrator-reconciler-1"
+            },
+            "value": [
+              1785670008.545,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-worker-4"
+            },
+            "value": [
+              1785670008.545,
+              "0.008858906489937798"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orchestrator-shadow-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.0009408452969799321"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-redis-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.03262735288965016"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-cadvisor-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.22090263116740974"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orchestrator-projector-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.0012925303716771698"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-userservice-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.2717426994192375"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-loki-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.015181229449033617"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-userservice-postgres-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.012506644451581839"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-postgres-exporter-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.009909955071137361"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-alloy-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.018640561924753704"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-userservice-postgres-exporter-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.009668416184041184"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-postgres-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.028149284212633713"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-invocation-finalizer-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.0010678129519524364"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orphan-image-cleaner-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.0006782632787144763"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-outbox-relay-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.012314557115198297"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-grafana-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.04241537237744858"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orchestrator-1"
+            },
+            "value": [
+              1785670008.545,
+              "0.2791490683229817"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "label": "during_sleep",
+      "at_monotonic": 223939.265,
+      "queries": {
+        "sum(serverless_worker_up{status=\"online\"})": [
+          {
+            "metric": {},
+            "value": [
+              1785670009.58,
+              "1"
+            ]
+          }
+        ],
+        "serverless_orchestrator_ready_jobs_total": [
+          {
+            "metric": {
+              "__name__": "serverless_orchestrator_ready_jobs_total",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator"
+            },
+            "value": [
+              1785670009.611,
+              "0"
+            ]
+          }
+        ],
+        "serverless_orchestrator_ready_jobs_available_total": [
+          {
+            "metric": {
+              "__name__": "serverless_orchestrator_ready_jobs_available_total",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator"
+            },
+            "value": [
+              1785670009.647,
+              "0"
+            ]
+          }
+        ],
+        "serverless_worker_queue_outstanding": [
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_outstanding",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "invocations",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670009.675,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_outstanding",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "builds",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670009.675,
+              "0"
+            ]
+          }
+        ],
+        "serverless_worker_queue_lag": [
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_lag",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "invocations",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670009.709,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_lag",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "builds",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670009.709,
+              "0"
+            ]
+          }
+        ],
+        "serverless_worker_queue_pending": [
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_pending",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "invocations",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670009.712,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_pending",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "builds",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670009.712,
+              "0"
+            ]
+          }
+        ],
+        "sum(serverless_worker_active_jobs)": [
+          {
+            "metric": {},
+            "value": [
+              1785670009.732,
+              "0"
+            ]
+          }
+        ],
+        "sum(serverless_worker_active_invocations)": [
+          {
+            "metric": {},
+            "value": [
+              1785670009.744,
+              "0"
+            ]
+          }
+        ],
+        "sum(serverless_worker_warm_containers_idle)": [],
+        "sum(rate(container_cpu_usage_seconds_total[1m])) by (name)": [
+          {
+            "metric": {},
+            "value": [
+              1785670009.877,
+              "4.102753330131851"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-redis-exporter-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.009331408507307976"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-backend-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.41262891836204113"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-prometheus-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.03622018541126198"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-staged-artifact-cleaner-1"
+            },
+            "value": [
+              1785670009.877,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-registry-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.00023829229319457482"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-scheduler-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.0004519965296146518"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orchestrator-reconciler-1"
+            },
+            "value": [
+              1785670009.877,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-worker-4"
+            },
+            "value": [
+              1785670009.877,
+              "0.0088589064899378"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orchestrator-shadow-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.0009408452969799321"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-redis-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.03262735288965016"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-cadvisor-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.22090263116740974"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orchestrator-projector-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.0012925303716771698"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-userservice-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.2717426994192375"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-loki-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.015181229449033617"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-userservice-postgres-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.012506644451581844"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-postgres-exporter-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.009909955071137361"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-alloy-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.018640561924753704"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-userservice-postgres-exporter-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.009668416184041186"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-postgres-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.028149284212633713"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-invocation-finalizer-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.0010678129519524364"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orphan-image-cleaner-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.0006782632787144763"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-outbox-relay-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.012314557115198297"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-grafana-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.04241537237744858"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orchestrator-1"
+            },
+            "value": [
+              1785670009.877,
+              "0.2791490683229817"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "label": "after_terminal",
+      "at_monotonic": 224001.968,
+      "queries": {
+        "sum(serverless_worker_up{status=\"online\"})": [
+          {
+            "metric": {},
+            "value": [
+              1785670072.264,
+              "1"
+            ]
+          }
+        ],
+        "serverless_orchestrator_ready_jobs_total": [
+          {
+            "metric": {
+              "__name__": "serverless_orchestrator_ready_jobs_total",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator"
+            },
+            "value": [
+              1785670072.285,
+              "0"
+            ]
+          }
+        ],
+        "serverless_orchestrator_ready_jobs_available_total": [
+          {
+            "metric": {
+              "__name__": "serverless_orchestrator_ready_jobs_available_total",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator"
+            },
+            "value": [
+              1785670072.301,
+              "0"
+            ]
+          }
+        ],
+        "serverless_worker_queue_outstanding": [
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_outstanding",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "invocations",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670072.307,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_outstanding",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "builds",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670072.307,
+              "0"
+            ]
+          }
+        ],
+        "serverless_worker_queue_lag": [
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_lag",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "invocations",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670072.313,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_lag",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "builds",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670072.313,
+              "0"
+            ]
+          }
+        ],
+        "serverless_worker_queue_pending": [
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_pending",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "invocations",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670072.32,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "__name__": "serverless_worker_queue_pending",
+              "instance": "orchestrator:8010",
+              "job": "orchestrator",
+              "queue_type": "builds",
+              "worker": "192534f5d797"
+            },
+            "value": [
+              1785670072.32,
+              "0"
+            ]
+          }
+        ],
+        "sum(serverless_worker_active_jobs)": [
+          {
+            "metric": {},
+            "value": [
+              1785670072.327,
+              "0"
+            ]
+          }
+        ],
+        "sum(serverless_worker_active_invocations)": [
+          {
+            "metric": {},
+            "value": [
+              1785670072.334,
+              "0"
+            ]
+          }
+        ],
+        "sum(serverless_worker_warm_containers_idle)": [
+          {
+            "metric": {},
+            "value": [
+              1785670072.341,
+              "1"
+            ]
+          }
+        ],
+        "sum(rate(container_cpu_usage_seconds_total[1m])) by (name)": [
+          {
+            "metric": {},
+            "value": [
+              1785670072.347,
+              "7.2093082243084305"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-redis-exporter-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.016215243032531596"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-backend-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.7326049945754842"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-prometheus-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.0692110291785602"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-staged-artifact-cleaner-1"
+            },
+            "value": [
+              1785670072.347,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-registry-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.0001701074514818412"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-scheduler-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.0024699476102378335"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orchestrator-reconciler-1"
+            },
+            "value": [
+              1785670072.347,
+              "0"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-worker-4"
+            },
+            "value": [
+              1785670072.347,
+              "0.022023686589653462"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orchestrator-shadow-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.0010253850661309217"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-redis-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.049173767479840494"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-cadvisor-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.335203476482618"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orchestrator-projector-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.004249598094671045"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-userservice-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.2899903504814938"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-loki-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.022255984640921482"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-userservice-postgres-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.021975043576335472"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-postgres-exporter-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.018316837190821517"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-alloy-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.018936881415423535"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-userservice-postgres-exporter-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.011273259477589165"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-postgres-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.2617581251249248"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-invocation-finalizer-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.032223608292547064"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orphan-image-cleaner-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.0011263578372429299"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-outbox-relay-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.018346760499989918"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-grafana-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.06464536082474227"
+            ]
+          },
+          {
+            "metric": {
+              "name": "serverless-platform-orchestrator-1"
+            },
+            "value": [
+              1785670072.347,
+              "0.3337857904230892"
+            ]
+          },
+          {
+            "metric": {
+              "name": "laughing_swartz"
+            },
+            "value": [
+              1785670072.347,
+              "0.1059961852696653"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": 677,
+      "input_files": [],
+      "output_files": [],
+      "is_terminal": true,
+      "poll_after_seconds": null,
+      "outputs_url": "/api/invocations/677/outputs/",
+      "download_url": "/api/invocations/677/download/",
+      "attempts": [
+        {
+          "id": 1,
+          "attempt_number": 1,
+          "dispatch_attempt": 1,
+          "worker_name": "192534f5d797",
+          "status": "succeeded",
+          "failure_kind": "",
+          "error_message": "",
+          "queued_at": "2026-08-02T11:26:52.473688Z",
+          "started_at": "2026-08-02T11:26:52.547672Z",
+          "finished_at": "2026-08-02T11:27:41.558167Z",
+          "duration_ms": 14607
+        }
+      ],
+      "request_id": "0949ed9f-1aca-445e-be3b-56ccd1e94056",
+      "status": "succeeded",
+      "event": {
+        "index": 0,
+        "sleep_seconds": 2
+      },
+      "result": {
+        "index": 0,
+        "request_id": "0949ed9f-1aca-445e-be3b-56ccd1e94056",
+        "slept_seconds": 2.0,
+        "elapsed_seconds": 2.001
+      },
+      "stdout": "__FUNCTION_RESULT__={\"index\": 0, \"slept_seconds\": 2.0, \"elapsed_seconds\": 2.001, \"request_id\": \"0949ed9f-1aca-445e-be3b-56ccd1e94056\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 2001, \"runner_handler_import_ms\": 11, \"runner_module_imports_ms\": 5503, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 14, \"runner_setup_ms\": 0, \"runner_total_ms\": 7531}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "cold_start": true,
+      "retry_count": 0,
+      "error_message": "",
+      "queued_at": "2026-08-02T11:26:48.135919Z",
+      "started_at": "2026-08-02T11:26:52.564050Z",
+      "finished_at": "2026-08-02T11:27:36.459409Z",
+      "duration_ms": 14607,
+      "function_version": 80,
+      "poll_elapsed_ms": 51844.0
+    },
+    {
+      "id": 678,
+      "input_files": [],
+      "output_files": [],
+      "is_terminal": true,
+      "poll_after_seconds": null,
+      "outputs_url": "/api/invocations/678/outputs/",
+      "download_url": "/api/invocations/678/download/",
+      "attempts": [
+        {
+          "id": 2,
+          "attempt_number": 1,
+          "dispatch_attempt": 1,
+          "worker_name": "192534f5d797",
+          "status": "failed",
+          "failure_kind": "timeout",
+          "error_message": "Function execution timed out after 10 seconds.",
+          "queued_at": "2026-08-02T11:26:52.670928Z",
+          "started_at": "2026-08-02T11:26:52.677055Z",
+          "finished_at": "2026-08-02T11:27:50.237809Z",
+          "duration_ms": 0
+        }
+      ],
+      "request_id": "68a8301c-3e14-42d6-9e4a-fce1c5d90ba0",
+      "status": "failed",
+      "event": {
+        "index": 1,
+        "sleep_seconds": 2
+      },
+      "result": {},
+      "stdout": "",
+      "stderr": "",
+      "exit_code": null,
+      "cold_start": true,
+      "retry_count": 0,
+      "error_message": "Function execution timed out after 10 seconds.",
+      "queued_at": "2026-08-02T11:26:48.138349Z",
+      "started_at": "2026-08-02T11:26:52.680202Z",
+      "finished_at": "2026-08-02T11:27:50.161802Z",
+      "duration_ms": 0,
+      "function_version": 80,
+      "poll_elapsed_ms": 60750.0
+    },
+    {
+      "id": 679,
+      "input_files": [],
+      "output_files": [],
+      "is_terminal": true,
+      "poll_after_seconds": null,
+      "outputs_url": "/api/invocations/679/outputs/",
+      "download_url": "/api/invocations/679/download/",
+      "attempts": [
+        {
+          "id": 3,
+          "attempt_number": 1,
+          "dispatch_attempt": 1,
+          "worker_name": "192534f5d797",
+          "status": "succeeded",
+          "failure_kind": "",
+          "error_message": "",
+          "queued_at": "2026-08-02T11:26:52.749971Z",
+          "started_at": "2026-08-02T11:26:52.755745Z",
+          "finished_at": "2026-08-02T11:27:50.934224Z",
+          "duration_ms": 15535
+        }
+      ],
+      "request_id": "46ee31fd-4017-43e2-94a2-26227f3bfbfe",
+      "status": "succeeded",
+      "event": {
+        "index": 2,
+        "sleep_seconds": 2
+      },
+      "result": {
+        "index": 2,
+        "request_id": "46ee31fd-4017-43e2-94a2-26227f3bfbfe",
+        "slept_seconds": 2.0,
+        "elapsed_seconds": 2.001
+      },
+      "stdout": "__FUNCTION_RESULT__={\"index\": 2, \"slept_seconds\": 2.0, \"elapsed_seconds\": 2.001, \"request_id\": \"46ee31fd-4017-43e2-94a2-26227f3bfbfe\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 2001, \"runner_handler_import_ms\": 1, \"runner_module_imports_ms\": 6295, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 8299}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "cold_start": true,
+      "retry_count": 0,
+      "error_message": "",
+      "queued_at": "2026-08-02T11:26:48.259023Z",
+      "started_at": "2026-08-02T11:26:52.760816Z",
+      "finished_at": "2026-08-02T11:27:50.549412Z",
+      "duration_ms": 15535,
+      "function_version": 80,
+      "poll_elapsed_ms": 61453.0
+    },
+    {
+      "id": 681,
+      "input_files": [],
+      "output_files": [],
+      "is_terminal": true,
+      "poll_after_seconds": null,
+      "outputs_url": "/api/invocations/681/outputs/",
+      "download_url": "/api/invocations/681/download/",
+      "attempts": [
+        {
+          "id": 5,
+          "attempt_number": 1,
+          "dispatch_attempt": 1,
+          "worker_name": "192534f5d797",
+          "status": "succeeded",
+          "failure_kind": "",
+          "error_message": "",
+          "queued_at": "2026-08-02T11:27:05.661712Z",
+          "started_at": "2026-08-02T11:27:05.675974Z",
+          "finished_at": "2026-08-02T11:27:52.003459Z",
+          "duration_ms": 7903
+        }
+      ],
+      "request_id": "d6b6a61e-66bf-49d6-94fb-7ce9aa5f6ca2",
+      "status": "succeeded",
+      "event": {
+        "index": 3,
+        "sleep_seconds": 2
+      },
+      "result": {
+        "index": 3,
+        "request_id": "d6b6a61e-66bf-49d6-94fb-7ce9aa5f6ca2",
+        "slept_seconds": 2.0,
+        "elapsed_seconds": 2.002
+      },
+      "stdout": "__FUNCTION_RESULT__={\"index\": 3, \"slept_seconds\": 2.0, \"elapsed_seconds\": 2.002, \"request_id\": \"d6b6a61e-66bf-49d6-94fb-7ce9aa5f6ca2\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 2001, \"runner_handler_import_ms\": 1, \"runner_module_imports_ms\": 1496, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 3500}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "cold_start": true,
+      "retry_count": 0,
+      "error_message": "",
+      "queued_at": "2026-08-02T11:26:48.392339Z",
+      "started_at": "2026-08-02T11:27:05.680212Z",
+      "finished_at": "2026-08-02T11:27:51.723215Z",
+      "duration_ms": 7903,
+      "function_version": 80,
+      "poll_elapsed_ms": 62281.0
+    },
+    {
+      "id": 680,
+      "input_files": [],
+      "output_files": [],
+      "is_terminal": true,
+      "poll_after_seconds": null,
+      "outputs_url": "/api/invocations/680/outputs/",
+      "download_url": "/api/invocations/680/download/",
+      "attempts": [
+        {
+          "id": 4,
+          "attempt_number": 1,
+          "dispatch_attempt": 1,
+          "worker_name": "192534f5d797",
+          "status": "succeeded",
+          "failure_kind": "",
+          "error_message": "",
+          "queued_at": "2026-08-02T11:26:52.808560Z",
+          "started_at": "2026-08-02T11:26:52.812852Z",
+          "finished_at": "2026-08-02T11:27:49.907132Z",
+          "duration_ms": 15837
+        }
+      ],
+      "request_id": "193a598d-c1b5-4a59-859c-9cd468e051b8",
+      "status": "succeeded",
+      "event": {
+        "index": 4,
+        "sleep_seconds": 2
+      },
+      "result": {
+        "index": 4,
+        "request_id": "193a598d-c1b5-4a59-859c-9cd468e051b8",
+        "slept_seconds": 2.0,
+        "elapsed_seconds": 2.004
+      },
+      "stdout": "__FUNCTION_RESULT__={\"index\": 4, \"slept_seconds\": 2.0, \"elapsed_seconds\": 2.004, \"request_id\": \"193a598d-c1b5-4a59-859c-9cd468e051b8\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 2004, \"runner_handler_import_ms\": 0, \"runner_module_imports_ms\": 6554, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 8560}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "cold_start": true,
+      "retry_count": 0,
+      "error_message": "",
+      "queued_at": "2026-08-02T11:26:48.264292Z",
+      "started_at": "2026-08-02T11:26:52.821598Z",
+      "finished_at": "2026-08-02T11:27:19.500684Z",
+      "duration_ms": 15837,
+      "function_version": 80,
+      "poll_elapsed_ms": 60422.0
+    },
+    {
+      "id": 682,
+      "input_files": [],
+      "output_files": [],
+      "is_terminal": true,
+      "poll_after_seconds": null,
+      "outputs_url": "/api/invocations/682/outputs/",
+      "download_url": "/api/invocations/682/download/",
+      "attempts": [
+        {
+          "id": 6,
+          "attempt_number": 1,
+          "dispatch_attempt": 1,
+          "worker_name": "192534f5d797",
+          "status": "running",
+          "failure_kind": "",
+          "error_message": "",
+          "queued_at": "2026-08-02T11:27:06.098509Z",
+          "started_at": "2026-08-02T11:27:06.101659Z",
+          "finished_at": null,
+          "duration_ms": null
+        }
+      ],
+      "request_id": "ae975240-9c10-4d69-8e23-0c4a681ab819",
+      "status": "succeeded",
+      "event": {
+        "index": 5,
+        "sleep_seconds": 2
+      },
+      "result": {
+        "index": 5,
+        "request_id": "ae975240-9c10-4d69-8e23-0c4a681ab819",
+        "slept_seconds": 2.0,
+        "elapsed_seconds": 2.0
+      },
+      "stdout": "__FUNCTION_RESULT__={\"index\": 5, \"slept_seconds\": 2.0, \"elapsed_seconds\": 2.0, \"request_id\": \"ae975240-9c10-4d69-8e23-0c4a681ab819\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 2000, \"runner_handler_import_ms\": 1, \"runner_module_imports_ms\": 1630, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 3633}\n",
+      "stderr": "",
+      "exit_code": 0,
+      "cold_start": false,
+      "retry_count": 0,
+      "error_message": "",
+      "queued_at": "2026-08-02T11:26:48.394490Z",
+      "started_at": "2026-08-02T11:27:06.105151Z",
+      "finished_at": "2026-08-02T11:27:51.324379Z",
+      "duration_ms": 6309,
+      "function_version": 80,
+      "poll_elapsed_ms": 61703.0
+    }
+  ]
+}

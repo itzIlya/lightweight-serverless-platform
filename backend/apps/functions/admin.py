@@ -5,6 +5,7 @@ from .models import (
     BuildLease,
     BuildPolicy,
     Function,
+    FunctionImage,
     FunctionInvokeToken,
     FunctionVersion,
 )
@@ -12,17 +13,32 @@ from .models import (
 
 @admin.register(Function)
 class FunctionAdmin(admin.ModelAdmin):
-    list_display = ("slug", "name", "owner", "invoke_access", "created_at")
+    list_display = ("slug", "name", "owner", "invoke_access", "active_version", "created_at")
     list_filter = ("invoke_access",)
     search_fields = ("slug", "name", "owner__username")
 
 
 @admin.register(FunctionInvokeToken)
 class FunctionInvokeTokenAdmin(admin.ModelAdmin):
-    list_display = ("function", "name", "prefix", "is_active", "expires_at", "last_used_at")
+    list_display = (
+        "function",
+        "name",
+        "prefix",
+        "is_active",
+        "expires_at",
+        "revoked_at",
+        "last_used_at",
+    )
     list_filter = ("is_active",)
     search_fields = ("function__slug", "name", "prefix")
-    readonly_fields = ("token_hash", "prefix", "last_used_at", "created_at", "updated_at")
+    readonly_fields = (
+        "token_hash",
+        "prefix",
+        "revoked_at",
+        "last_used_at",
+        "created_at",
+        "updated_at",
+    )
 
 
 @admin.register(FunctionVersion)
@@ -30,6 +46,21 @@ class FunctionVersionAdmin(admin.ModelAdmin):
     list_display = ("function", "version", "runtime", "build_status", "created_at")
     list_filter = ("runtime", "build_status")
     search_fields = ("function__slug", "version", "handler")
+
+
+@admin.register(FunctionImage)
+class FunctionImageAdmin(admin.ModelAdmin):
+    list_display = (
+        "image_ref",
+        "function",
+        "function_version",
+        "status",
+        "delete_after",
+        "delete_attempts",
+        "deleted_at",
+    )
+    list_filter = ("status",)
+    search_fields = ("image_ref", "function__slug", "function_version__version")
 
 
 @admin.register(BuildAttempt)

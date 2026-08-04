@@ -1,9 +1,21 @@
 from pathlib import Path
 from datetime import timedelta
 import os
+import sys
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def env_bool(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).lower() in {"1", "true", "yes"}
+
+
+def normalize_endpoint_url(value: str) -> str:
+    value = str(value or "").strip()
+    if value and "://" not in value:
+        return f"https://{value}"
+    return value
 
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-secret-key")
 DEBUG = os.getenv("DEBUG", "1") == "1"
@@ -30,6 +42,21 @@ INSTALLED_APPS = [
     "apps.jobs.apps.JobsConfig",
     "apps.workers.apps.WorkersConfig",
 ]
+
+TESTING = "test" in sys.argv
+OBJECT_STORAGE_ENABLED = env_bool("OBJECT_STORAGE_ENABLED") and not TESTING
+OBJECT_STORAGE_ENDPOINT_URL = normalize_endpoint_url(
+    os.getenv("OBJECT_STORAGE_ENDPOINT_URL", "")
+)
+OBJECT_STORAGE_ACCESS_KEY_ID = os.getenv("OBJECT_STORAGE_ACCESS_KEY_ID", "")
+OBJECT_STORAGE_SECRET_ACCESS_KEY = os.getenv("OBJECT_STORAGE_SECRET_ACCESS_KEY", "")
+OBJECT_STORAGE_BUCKET_NAME = os.getenv("OBJECT_STORAGE_BUCKET_NAME", "")
+OBJECT_STORAGE_REGION_NAME = os.getenv("OBJECT_STORAGE_REGION_NAME", "us-east-1")
+OBJECT_STORAGE_FORCE_PATH_STYLE = env_bool("OBJECT_STORAGE_FORCE_PATH_STYLE", "true")
+OBJECT_STORAGE_MEDIA_LOCATION = os.getenv("OBJECT_STORAGE_MEDIA_LOCATION", "media")
+
+if OBJECT_STORAGE_ENABLED:
+    INSTALLED_APPS.append("storages")
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -86,6 +113,48 @@ USE_TZ = True
 STATIC_URL = "static/"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+if OBJECT_STORAGE_ENABLED:
+    missing_object_storage_settings = [
+        name
+        for name, value in {
+            "OBJECT_STORAGE_ENDPOINT_URL": OBJECT_STORAGE_ENDPOINT_URL,
+            "OBJECT_STORAGE_ACCESS_KEY_ID": OBJECT_STORAGE_ACCESS_KEY_ID,
+            "OBJECT_STORAGE_SECRET_ACCESS_KEY": OBJECT_STORAGE_SECRET_ACCESS_KEY,
+            "OBJECT_STORAGE_BUCKET_NAME": OBJECT_STORAGE_BUCKET_NAME,
+        }.items()
+        if not value
+    ]
+    if missing_object_storage_settings:
+        raise RuntimeError(
+            "Object storage is enabled but missing settings: "
+            + ", ".join(missing_object_storage_settings)
+        )
+
+    object_storage_options = {
+        "bucket_name": OBJECT_STORAGE_BUCKET_NAME,
+        "endpoint_url": OBJECT_STORAGE_ENDPOINT_URL,
+        "access_key": OBJECT_STORAGE_ACCESS_KEY_ID,
+        "secret_key": OBJECT_STORAGE_SECRET_ACCESS_KEY,
+        "region_name": OBJECT_STORAGE_REGION_NAME,
+        "default_acl": None,
+        "querystring_auth": True,
+        "file_overwrite": False,
+        "location": OBJECT_STORAGE_MEDIA_LOCATION,
+        "signature_version": "s3v4",
+    }
+    if OBJECT_STORAGE_FORCE_PATH_STYLE:
+        object_storage_options["addressing_style"] = "path"
+
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3.S3Storage",
+            "OPTIONS": object_storage_options,
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -165,11 +234,34 @@ JOB_RECOVERY_BACKOFF_SECONDS_INVOCATION = os.getenv(
     "JOB_RECOVERY_BACKOFF_SECONDS_INVOCATION",
     "0,2,8",
 )
+INVOCATION_RETENTION_DAYS = int(os.getenv("INVOCATION_RETENTION_DAYS", "7"))
+DEAD_LETTER_RETENTION_DAYS = int(os.getenv("DEAD_LETTER_RETENTION_DAYS", "60"))
 WORKER_SHARED_SECRET = os.getenv("WORKER_SHARED_SECRET", "change-me")
 LOCAL_REGISTRY = os.getenv("LOCAL_REGISTRY", "localhost:5000")
+REGISTRY_INTERNAL_BASE_URL = os.getenv(
+    "REGISTRY_INTERNAL_BASE_URL",
+    "http://registry:5000",
+)
+MAX_ACTIVE_INVOKE_TOKENS_PER_FUNCTION = int(
+    os.getenv("MAX_ACTIVE_INVOKE_TOKENS_PER_FUNCTION", "20")
+)
+USERSERVICE_JWT_ALGORITHM = os.getenv("USERSERVICE_JWT_ALGORITHM", "RS256")
+USERSERVICE_JWT_ISSUER = os.getenv(
+    "USERSERVICE_JWT_ISSUER",
+    "serverless-userservice",
+)
+USERSERVICE_JWT_AUDIENCE = os.getenv(
+    "USERSERVICE_JWT_AUDIENCE",
+    "serverless-platform",
+)
+USERSERVICE_JWKS_URL = os.getenv("USERSERVICE_JWKS_URL", "")
+USERSERVICE_JWKS_CACHE_SECONDS = int(
+    os.getenv("USERSERVICE_JWKS_CACHE_SECONDS", "300")
+)
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "apps.accounts.external_auth.ExternalUserServiceJWTAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [

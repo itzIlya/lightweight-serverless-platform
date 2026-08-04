@@ -42,7 +42,11 @@ def cleanup_expired_staged_completions() -> int:
             for output in completion.output_files.all():
                 if output.file:
                     output.file.delete(save=False)
+            for log_file in completion.log_artifacts.all():
+                if log_file.file:
+                    log_file.file.delete(save=False)
             completion.output_files.all().delete()
+            completion.log_artifacts.all().delete()
             completion.status = StagedCompletionStatus.EXPIRED
             completion.save(update_fields=["status", "updated_at"])
             cleaned += 1

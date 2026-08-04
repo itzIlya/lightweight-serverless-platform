@@ -1,6 +1,6 @@
 # Project Status Report
 
-Date: 2026-07-01
+Date: 2026-07-30
 
 Source basis:
 - `ROADMAP.md`
@@ -48,16 +48,41 @@ The platform currently includes:
   total-size limit
 - Export-copy of tmpfs outputs into the normal sandbox volume before container
   exit, so containers do not need to stay alive for artifact extraction
+- Scheduler-aware warm-container routing for exact idle warm matches
+- Guarded predictive sticky routing as a fallback when exact warm metadata is
+  not yet visible
+- Usage- and pressure-aware warm-container eviction
+- Repeatable warm-routing benchmark with cold baseline, initial warm run, and
+  tuned warm run
 - Invocation read tokens for token/public callers to read only their own result
   and output artifacts
-- JWT-based account login, refresh, and authenticated management APIs
+- S3-compatible object storage configuration for media artifacts, live
+  smoke-tested against Parspack
+- Invocation logs stored as object-storage-backed artifacts with database
+  previews
+- Function active-version pointer and safe source-replacement/rebuild flow
+- Function image ledger for active, superseded, failed, deleted, and
+  delete-failed registry images
+- Safe registry-image cleanup scheduling for replaced builds, failed candidate
+  builds, and deleted functions
+- User-facing function summaries that expose the active image, current build
+  status, pending build, and per-function invocation history without requiring
+  the frontend to understand every internal version row
+- Frontend-facing response helpers for build and invocation reads, including
+  `frontend_state`, `can_*` flags, polling hints, and stable `links`
+- Curated OpenAPI 3.0 schema and Swagger docs endpoints for both backend and
+  userservice
+- Separate userservice for account login, refresh, JWT issuing, and public-key
+  discovery, with backend-side userservice JWT verification
 - Owner-scoped functions, versions, builds, and invocations
-- Separate function invocation tokens for non-owner callers
+- Function invocation-token management APIs for non-owner callers
 - Build and invocation status, logs, timing, and result capture
+- Retention policy docs and cleanup commands for expired invocations and
+  dead-letter jobs
 
 The main remaining work is no longer the basic execution path. It is deeper
-distributed-worker coordination, security hardening, observability, evaluation,
-retention/cleanup policies, and final documentation.
+distributed-worker coordination, security hardening, operational alerting,
+evaluation, resource controls, and final documentation.
 
 ## Roadmap Status
 
@@ -67,16 +92,24 @@ Status: Largely complete
 
 Implemented:
 - Django backend under `backend/`
+- Django userservice under `userservice/`
 - PostgreSQL, Redis, registry, backend, and worker services in Docker Compose
+- Separate userservice PostgreSQL database in Docker Compose
 - Models for functions, function versions, invocations, invocation input files,
   build attempts, build policy, jobs, and worker nodes
 - Django admin registrations
 - Database migrations
 - Health endpoint
 - REST serializers, views, and routes
-- `accounts` app for registration, login, JWT refresh, and current-user lookup
+- `userservice` for registration, login, JWT refresh, current-user lookup,
+  public-key discovery, and JWKS discovery
+- Userservice OpenAPI schema and Swagger docs at `/api/schema/` and `/api/docs/`
+- Backend compatibility bridge for userservice-issued RS256 JWTs
+- Backend OpenAPI schema and Swagger docs at `/api/schema/` and `/api/docs/`
 - Account role profile with `user` and `admin` roles
-- JWT claims include role and username
+- Userservice JWT claims include stable subject, role, username, email,
+  issuer, audience, token type, and expiry
+- Backend still accepts previous local SimpleJWT tokens during migration
 - Function creation now uses the authenticated JWT user as owner
 - Ownership filtering for functions, versions, build attempts, and invocations
 - Admin-only worker-node API
@@ -85,8 +118,8 @@ Implemented:
 Remaining:
 - Password reset / email verification flow
 - More complete account-management APIs
-- Optional future extraction of accounts into a separate identity service
-- API documentation or an OpenAPI schema
+- Replace local backend shadow users and `Function.owner` foreign keys with
+  external userservice subject ownership fields
 - Production secret and JWT signing-key management
 
 ### Phase 2: Upload and Build
@@ -97,6 +130,18 @@ Implemented:
 - Zip bundle upload and storage in Django media storage
 - Required bundle-file and unsafe-path validation
 - Function-version runtime, handler, configuration, and input-contract metadata
+- Source replacement API that creates a candidate build while keeping the
+  existing active image live
+- Successful builds promote `Function.active_version`; failed builds do not
+  break current invocations
+- Successful rebuilds mark the old image as `pending_delete` for later registry
+  cleanup
+- Failed candidate builds with produced image references are also marked
+  `pending_delete`
+- Function deletion removes source bundles and invocation artifacts, then leaves
+  image records queued for registry cleanup
+- Registry cleanup command skips images that are still the active image for a
+  function
 - Asynchronous build jobs through Redis
 - Scheduler-based dispatch to worker-specific queues
 - Secure source download by the worker
@@ -113,7 +158,8 @@ Implemented:
 
 Remaining hardening:
 - Build timeout and resource limits
-- Source, log, image, and build-history retention policies
+- Build-history retention policy, if we eventually decide not to keep it
+  indefinitely
 - Stronger isolation from the host Docker daemon
 - Dependency/image security scanning
 - Support for additional runtimes if they remain in project scope
@@ -141,7 +187,11 @@ Implemented:
 - Worker export of `/sandbox/output` into `/sandbox/export/output` before
   container exit
 - Worker upload of declared files from the exported output directory
+- Optional runner direct-upload fast path that sends declared outputs straight
+  to the backend with a scoped upload token and skips Docker output export/copy
 - Public owner/admin APIs to list and download invocation outputs
+- Frontend-facing build-status endpoint, invocation polling hints, action flags,
+  output links, and invocation ZIP download semantics
 - Invocation read tokens returned by invoke responses so token/public callers can
   read only their own result and output files
 - Invocation access modes:
@@ -166,13 +216,13 @@ Invocation-time input files are implemented:
 
 Remaining:
 - Output MIME allow-listing if needed
-- Larger-output storage design beyond memory-backed tmpfs
-- Output retention and cleanup policies
 - Invocation cancellation
 - Invocation retry policy and per-attempt history
 - CPU and process-count limits
 - Read-only root filesystem and additional container hardening
-- Warm-container reuse and cold-start optimization
+- Prewarming and deeper cold-start optimization
+- Compose-backed backend tests for the direct-upload fast path once Docker is
+  reachable again
 
 ### Phase 4: Reliability and Distributed Workers
 
@@ -187,13 +237,23 @@ Implemented:
 - Shared per-worker processing queues for recovery
 - Worker-side invocation priority before build work
 - Scheduler round-robin tie-breaking across suitable workers
-- Recent-function sticky invocation routing with a 10 second TTL
+- Scheduler-aware invocation routing to exact matching idle warm containers
+- Guarded predictive sticky routing for recent exact function-version routes
+  when no exact warm match is visible
+- Local warm-container reservations to avoid overbooking one idle warm container
+  during burst dispatch between worker heartbeats
+- Warm-container reuse counters, memory-pressure eviction, and eviction reasons
 - Scheduler avoids workers with active builds for invocation placement
 - Scheduler sends builds only to idle workers
 - Worker registration at startup
 - Worker heartbeat endpoint and loop
-- Worker heartbeat metadata for active jobs, active builds, and active
-  invocations
+- Worker heartbeat metadata for active jobs, active builds, active invocations,
+  and warm-container inventory
+- V2 worker heartbeat status propagation for `online`, `draining`, and
+  `offline`
+- Graceful worker drain on SIGTERM/SIGINT: workers stop accepting new jobs,
+  continue heartbeating as `draining`, wait for active jobs, then mark
+  themselves `offline`
 - Stale-worker expiry
 - Worker processing queues for non-destructive job acceptance
 - Worker claim validation before execution
@@ -210,6 +270,10 @@ Implemented:
 - Worker reports update durable job status
 - Invocation timeouts
 - Build retries, history, and cancellation
+- V2 invocation retry policy fields on function versions
+- V2 invocation attempt history projected into PostgreSQL
+- V2 invocation retry scheduling for retryable platform failures with
+  idempotent lost-response handling
 - Build submission rate limits
 - Build execution leases with expiry and release
 - Protected worker-to-backend reporting
@@ -219,14 +283,12 @@ Implemented:
 - Internal worker endpoints continue to use `X-Internal-Token`
 
 Remaining:
-- Invocation retries with configurable backoff
 - More complete idempotency protection for duplicate scheduler dispatches
 - Worker capability reporting, such as runtimes, memory classes, cached images,
   and supported runtimes
 - More advanced capacity-aware scheduling beyond queue depth and active builds
-- Graceful worker shutdown and draining
 - Broader multi-worker crash and network-partition tests
-- Warm pool or reusable container management
+- Proactive warm-container prewarming
 
 The scheduler now places small delivery messages onto worker-specific invocation
 or build queues. Each delivery message contains a durable `job_id` and
@@ -239,8 +301,67 @@ durable recovery counter, use type-specific backoff, and move to `dead_lettered`
 after too many recoveries.
 
 This is a meaningful reliability step, but it is not the final form. Remaining
-hardening includes duplicate-safe scheduler dispatch, graceful shutdown, richer
-capability-aware routing, and multi-worker failure tests.
+hardening includes duplicate-safe scheduler dispatch, richer capability-aware
+routing, and multi-worker failure tests.
+
+Warm-container Stage 1 is implemented behind
+`WORKER_WARM_CONTAINERS_ENABLED`. Each worker can keep a small local pool of
+reactively warmed containers keyed by function version, image, handler, memory,
+and output tmpfs size. A reused warm container receives a fresh event file,
+fresh input directory, fresh output directory, and a fresh `/runner.py` process
+per invocation. Containers are evicted by idle TTL, max age, max uses, failed
+execution, cleanup failure, or least-recently-used pressure. This stage is
+worker-local when first introduced. The worker keeps one shared invocation
+executor per process so the warm pool survives across jobs.
+
+A newer resident-runner variant is now implemented behind
+`WORKER_WARM_RESIDENT_RUNNER_ENABLED`. In that mode, the warm container starts a
+long-lived in-container HTTP runner, and the worker talks to that resident
+runner instead of launching a fresh `python /runner.py` process for every warm
+invocation. The first real smoke run showed the second warm invocation dropping
+to 32 ms worker-side with Docker output export skipped for JSON-only results.
+
+Warm-container Stage 1 benchmarking is documented in
+`docs/warm_container_stage1_benchmark_report.md`. In the focused executor
+benchmark, steady-state warm median duration improved from 3819 ms to 2572 ms
+for no-op invocations and from 4798 ms to 2695 ms for one-second invocations.
+In the valid API-level sequential no-op benchmark, median invocation duration
+improved from 1620 ms to 925 ms.
+
+Warm-container Stage 2 is implemented. Workers publish compact warm-pool
+inventory in heartbeat metadata, grouped by function version, image, handler,
+memory, and output tmpfs size. The scheduler and V2 production orchestrator now
+prefer workers with an exact idle warm match before falling back to the existing
+build-aware, least-loaded placement policy. The old recent-function route is no
+longer used as a primary placement rule. A guarded predictive sticky fallback
+has been added for testing: if no exact warm match is visible, the scheduler can
+prefer the most recent exact function-version route only when that worker has no
+build pressure, has invocation capacity, and is not materially more loaded than
+the best candidate.
+
+Warm-container Stage 4 is implemented without minimum warm instances. The worker
+pool now tracks reuse hits, total uses, memory cost, and eviction reasons.
+Eviction is usage- and pressure-aware: hot containers are preferred over cold
+containers, per-function over-limit eviction removes the lowest-value idle
+container for that function version, global pool pressure removes the lowest
+value idle container, and optional memory pressure can evict large cold
+containers first. `WORKER_WARM_MAX_MEMORY_MB=0` keeps memory-pressure eviction
+disabled by default.
+
+Warm-container Stage 4 benchmarking is documented in
+`docs/warm_routing_stage4_benchmark_report.md`, with raw data in
+`docs/warm_routing_benchmark_cold_baseline_2026-07-19.json`,
+`docs/warm_routing_benchmark_2026-07-19.json`, and
+`docs/warm_routing_benchmark_tuned_2026-07-19.json`. Predictive-sticky raw data
+is stored in `docs/warm_routing_benchmark_sticky_tuned_2026-07-19.json` and
+`docs/warm_routing_benchmark_sticky_guarded_2026-07-19.json`. In the tuned
+two-worker run, hot sequential no-op invocations improved from 2199 ms
+cold-baseline median executor time to 928 ms, and hot-after-pressure improved
+from 2609 ms to 842 ms. The benchmark also showed that warm-aware routing
+depends on fresh worker warm-pool metadata; the benchmark profile now uses a
+2-second worker heartbeat instead of the default 10-second heartbeat. Guarded
+predictive sticky is safe but not a clear performance win over the 2-second
+heartbeat run, so it should remain a fallback hint.
 
 ### Orchestrator V2 Migration Foundation
 
@@ -329,9 +450,9 @@ Not implemented yet:
 
 All production execution remains on coordination V1.
 
-### Phase 5: Metrics and Evaluation
+### Phase 5: Metrics, Logs, and Evaluation
 
-Status: Early
+Status: Functional local observability stack implemented
 
 Implemented:
 - Invocation and build duration
@@ -347,14 +468,26 @@ Implemented:
 - Output validation test plan in `docs/output_file_validation_tests.md`
 - Real concurrent workload test in `docs/real_workload_test_report.md`
 - Invocation latency profile in `docs/invocation_latency_profile_report.md`
+- Prometheus-compatible metrics endpoints for backend and userservice
+- Prometheus-compatible internal metrics for orchestrator and worker
+- Prometheus, Grafana, Loki, Alloy, cAdvisor, Redis exporter, and Postgres
+  exporters in the Docker Compose `observability` profile
+- Grafana dashboard provisioning for platform state, job state, worker load,
+  warm-pool state, orchestrator lag, and recent platform errors
+- Docker log collection through Alloy into Loki for platform application
+  services
+- Runflare mirror override for environments where Docker Hub is unavailable
+- Observability usage notes in `docs/observability_stack.md`
 
 Remaining:
-- Structured, searchable logs
-- Queue-depth, throughput, error-rate, and latency metrics
-- CPU and memory usage metering
+- More structured application log fields and consistent request/job IDs in log
+  messages
+- More precise throughput, error-rate, and percentile latency metrics
+- Per-function and per-owner resource metering with careful cardinality limits
 - Cold-start measurements
-- Worker health and capacity metrics
-- Metrics endpoint and dashboard
+- Alert rules for stuck finalization, unhealthy workers, queue growth, and high
+  error rates
+- OpenTelemetry tracing for cross-service request/job timelines
 - Repeatable benchmark scripts and workloads
 - Cold versus warm execution comparison
 - Broader single-worker versus multi-worker evaluation
@@ -367,12 +500,23 @@ Remaining:
 
 Available endpoints:
 - `GET /health/`
-- `POST /api/auth/register/`
-- `POST /api/auth/token/`
-- `POST /api/auth/token/refresh/`
-- `GET /api/auth/me/`
+- Userservice: `GET /health/`
+- Userservice: `POST /api/auth/register/`
+- Userservice: `POST /api/auth/token/`
+- Userservice: `POST /api/auth/token/refresh/`
+- Userservice: `GET /api/auth/me/`
+- Userservice: `GET /api/auth/public-key/`
+- Userservice: `GET /api/auth/jwks/`
 - `GET|POST /api/functions/`
 - `GET /api/functions/{id}/`
+- `DELETE /api/functions/{id}/`
+- `GET /api/functions/{id}/build-status/`
+- `POST /api/functions/{id}/source/`
+- `GET /api/functions/{id}/invocations/`
+- `GET|POST /api/functions/{id}/tokens/`
+- `GET|PATCH|DELETE /api/functions/{id}/tokens/{token_id}/`
+- `POST /api/functions/{id}/tokens/{token_id}/revoke/`
+- `POST /api/functions/{id}/tokens/{token_id}/rotate/`
 - `GET|POST /api/functions/{id}/versions/`
 - `POST /api/functions/{id}/invoke/`
 - `GET /api/versions/`
@@ -387,6 +531,7 @@ Available endpoints:
 - `GET /api/invocations/{id}/`
 - `GET /api/invocations/{id}/outputs/`
 - `GET /api/invocations/{id}/outputs/{file_id}/download/`
+- `GET /api/invocations/{id}/download/`
 - `GET /api/workers/`
 - `GET /api/workers/{id}/`
 
@@ -397,10 +542,14 @@ Authentication notes:
 - Private functions require owner/admin JWT.
 - Token-protected functions accept `X-Function-Token`.
 - Public functions accept unauthenticated invocations.
+- Function owners/admins can create, list, update, revoke, expire, and rotate
+  function-scoped invocation tokens. Raw token values are returned only once on
+  create or rotate; token hashes are never exposed through the API.
 - Invoke responses include an invocation `read_token`; callers can use
   `X-Invocation-Read-Token` to read that one invocation and its output files.
 
 Protected internal worker endpoints:
+- `POST /api/internal/auth/userservice-jwks-cache/clear/`
 - `GET /api/internal/builds/{build_request_id}/source/`
 - `GET /api/internal/builds/{build_request_id}/state/`
 - `PATCH /api/internal/builds/{build_request_id}/report/`
@@ -422,11 +571,33 @@ Latest verification:
 - Migrations applied successfully for `jobs.0003_job_coordination_version` and
   `jobs.0004_outboxevent`
 - Migration applied successfully for `invocations.0004_staged_completions`
-- Backend Docker test suite passed: `89` tests
-- Worker Docker test suite passed: `58` tests
-- Scheduler/orchestrator test suite passed: `63` tests
+- Migrations applied successfully for `functions.0010_functionimage` and
+  `functions.0011_backfill_function_images`
+- Userservice migrations applied successfully through `accounts.0001_initial`
+- Focused functions test suite passed: `51` tests
+- Userservice account/JWT suite passed: `3` tests
+- Backend account suite passed: `4` tests, including userservice RS256 JWT
+  verification and shadow-owner creation
+- Adjacent accounts/invocations/jobs/workers test suite passed: `81` tests
+- Backend Docker app test suite passed: `133` tests
+- Worker Docker test suite passed: `78` tests
+- Scheduler/orchestrator test suite passed: `75` tests
 - Compile check passed for backend, worker, and scheduler
-- Migration drift check passed: `No changes detected`
+- Compile check passed for userservice
+- Backend and userservice migration drift checks passed: `No changes detected`
+- OpenAPI/frontend-contract focused backend test run passed: `24` tests across
+  backend schema docs, function build/source responses, invocation log/result
+  contract, and V2 invocation reads
+- Userservice OpenAPI focused test run passed: `2` tests
+- Compile checks passed for the touched backend and userservice API/docs modules
+- Live schema smoke passed for `http://localhost:8000/api/schema/` and
+  `http://localhost:8100/api/schema/`
+- Live Swagger docs smoke passed for `http://localhost:8000/api/docs/` and
+  `http://localhost:8100/api/docs/`
+- Live userservice-to-backend auth smoke passed: userservice registered a user,
+  issued an RS256 JWT, backend verified it through JWKS, created a local shadow
+  account, and created function `70`
+- Userservice public-key and JWKS endpoints returned an RSA `RS256` key
 - User journey smoke test passed with tmpfs-backed exported output file
 - Single-worker user journey smoke test passed with split queues using function
   `14`, version `21`, and invocation `24`
@@ -454,14 +625,36 @@ Latest verification:
   `docs/orchestrator_migration_steps_12_13_test_report.md`
 - Ordered cutover and V1 retirement verification documented in
   `docs/orchestrator_migration_steps_13_14_test_report.md`
+- Warm-container Stage 2 scheduler/orchestrator tests passed, covering exact
+  warm-match routing, old recent-route removal, local warm reservations, live
+  heartbeat inventory, Redis worker-state preservation, and V2 production
+  dispatch to a warm worker
+- Warm-container Stage 4 worker tests passed, covering hot-container survival
+  under pool pressure, memory-pressure eviction, per-function over-limit
+  eviction, and eviction-reason recording
+- Warm-container Stage 4 real workload benchmark documented in
+  `docs/warm_routing_stage4_benchmark_report.md`; all benchmark invocations
+  succeeded across cold baseline, initial warm, and tuned warm runs
+- Real-world milestone 6/7 integrity suite documented in
+  `docs/real_world_integrity_suite_report.md`; the final accepted run used
+  Parspack S3-compatible object storage and passed source replacement under
+  concurrent traffic, declared output visibility, invocation read-token
+  isolation, image cleanup after replacement, image cleanup after function
+  deletion, and an 8-invocation concurrent burst
 
 The backend test suite now covers:
 - JWT registration, login, refresh support, and `/api/auth/me/`
+- Userservice RS256 JWT issuing, refresh, `/me`, public key and JWKS discovery
+- Backend verification of userservice RS256 JWTs using JWKS, including shadow
+  user/account creation for the current compatibility phase
 - JWT-authenticated function, build, and invocation API access
 - Owner isolation across functions, versions, build attempts, and invocations
 - Admin-only worker-node access
 - Worker internal endpoints protected by `X-Internal-Token`
 - Function invocation tokens using `X-Function-Token` separately from JWT
+- Function invocation-token management APIs for create, list, detail, update,
+  soft revoke, expiry, rotation, last-used tracking, ownership/admin access,
+  max active token limits, and no token/hash leakage
 - Public, private, and token-protected invocation modes
 - Durable job records for build and invocation enqueue paths
 - Scheduler internal APIs for reading and dispatching queued jobs
@@ -470,18 +663,31 @@ The backend test suite now covers:
 - Worker processing queue recovery
 - Separate build/invocation pending queues and worker queues
 - Queue-aware scheduler placement with round-robin tie-breaking
-- Short sticky routing for recently invoked functions
+- Warm-aware invocation routing to workers with exact idle warm-container
+  matches
 - Build placement only on idle workers
 - Worker-side invocation priority before build work
 - Worker-side thread pool with bounded total/invocation/build concurrency
 - Worker heartbeats report active invocation and build counts
+- Worker heartbeats report live warm-container inventory
+- Worker heartbeats report drain/offline status so V2 placement excludes
+  draining workers
 - Recovery backoff and dead-letter handling for recovered jobs
+- V2 invocation retry policy, retry backoff, retry-safe completion
+  idempotency, and invocation attempt history
 - Dispatch blocking while a recovered job's `available_at` is still in the future
 - Worker claim validation before execution
 - Stale worker-report rejection using dispatch attempts
 - Durable job status updates from worker build/invocation reports
 - Invocation output upload validation, owner/download authorization, and
   invocation read-token authorization
+- Frontend-facing invocation detail contract with `frontend_state`,
+  `is_terminal`, `poll_after_seconds`, `result_available`, `can_download`,
+  `can_read_outputs`, `outputs_url`, `download_url`, `links`, stdout/stderr
+  previews, and no standalone user-facing log listing/download endpoints
+- Backend and userservice OpenAPI schema/docs endpoints, including frontend
+  schemas for functions, builds, invocation tokens, invocations, outputs,
+  downloads, userservice auth, public keys, and JWKS
 - Worker-side output validation for unsafe names, reserved names, file-count
   limit, per-file size limit, total-size limit, and no-upload-on-failure
 - Worker tmpfs output mount, export-copy wrapper, Docker archive extraction
@@ -522,23 +728,48 @@ The backend test suite now covers:
 - The current recovery loop is coarse and heartbeat-based, so recovery is not
   instant.
 - Durable jobs exist, but Redis is still the active queue transport.
-- V2 build and invocation pilots are implemented, but both pilot flags default
-  to false. Normal API-created jobs therefore remain V1 until explicitly enabled.
+- V2 build and invocation pilots are implemented. Local Compose now defaults
+  both pilots to enabled and disables new V1 job creation; V1 coordination
+  endpoints remain available only for compatibility while old work drains.
 - V2 invocation inputs and durable artifact storage still use the backend, but
   staged artifacts remain hidden until the orchestrator receives a matching
   artifact commit and emits terminal state.
-- Scheduler placement is queue-aware and build-aware, but not yet capability-aware by
-  runtime, memory, CPU, cached image, or warm-container availability.
+- Scheduler placement is queue-aware, build-aware, and warm-container-aware, but
+  not yet capability-aware by runtime, memory class, CPU, cached image without a
+  warm container, or supported runtime.
+- Warm-aware scheduling currently learns warm-pool inventory through periodic
+  worker heartbeats. The benchmark profile uses a faster heartbeat, but a better
+  production design would publish small warm-pool updates immediately after
+  container release.
+- **`warm_pool_release_ms` is the time spent handing a warm container back to
+  the warm pool after an invocation finishes. If it grows, the cleanup/reuse
+  path is the bottleneck, not user code.**
+- Guarded predictive sticky routing is implemented for testing, but benchmark
+  results do not justify using it as the main warm-routing mechanism.
 - Only Python image builds are currently implemented.
-- Invocation input and declared output files are persisted, but retention cleanup
-  is not implemented yet.
+- Source bundles are retained forever by policy.
+- Invocation inputs, outputs, and logs currently expire with the invocation
+  after 7 days through cleanup commands.
+- Function image replacement now has a safe active-version switch-over flow;
+  registry deletion is scheduled through the `FunctionImage` ledger and run by
+  `cleanup_function_images`.
 - `/sandbox/output` is memory-backed tmpfs, so large declared outputs compete
   with function memory and should stay small in this prototype.
 - The worker requires access to the Docker socket.
-- JWT signing currently uses the project `SECRET_KEY`; production should use a strong dedicated secret/key policy.
-- Function invocation tokens can be created at the model level, but there is no public token-management API yet.
+- Userservice now signs JWTs with RS256. The dev private key is persisted in a
+  Docker volume; production still needs managed signing keys, rotation policy,
+  and rollout procedure.
+- The serverless backend still has a temporary local `accounts` app and accepts
+  old local SimpleJWT tokens for compatibility. This should be retired after
+  clients move to userservice-issued tokens.
+- Serverless ownership still uses local shadow users and foreign keys during
+  this bridge phase. The next identity migration should store userservice
+  subjects directly on owned resources.
+- Function invocation-token management APIs exist, but they do not yet have
+  per-token usage analytics beyond `last_used_at`.
 - There is no rate limiting for JWT-authenticated, token-based, or public invocations.
-- There is no cleanup policy for uploaded sources, input files, images, or logs.
+- Cleanup policy now exists for expired invocations, dead-letter jobs, and
+  superseded function images.
 - There is no production UI, dashboard, CI pipeline, or deployment manifest.
 
 ## Remaining Work in Recommended Order
@@ -546,38 +777,42 @@ The backend test suite now covers:
 ### Priority 1: Complete Invocation Artifacts and Reliability
 
 1. Add output MIME allow-listing if output content-type restrictions are needed.
-2. Add retention and cleanup policies for sources, inputs, outputs, images, and logs.
-3. Add a larger-output artifact strategy, such as direct object-storage upload.
-4. Add invocation attempt history and an admin-configurable retry policy.
-5. Add invocation cancellation.
+2. Add any remaining frontend-driven export controls beyond the existing
+   invocation ZIP download.
+3. Decide later whether larger outputs need direct object-storage upload.
+4. Add invocation cancellation.
+5. Add admin/global defaults for invocation retry policy if per-version policy
+   is not enough.
 6. Make scheduler dispatch more strongly idempotent and duplicate-safe.
 
 ### Priority 2: Make Workers Truly Distributed
 
 7. Report richer worker capabilities, including runtimes, memory classes, CPU,
-   cached images, and warm-container availability.
+   cached images, and supported runtime variants.
 8. Route jobs to suitable workers using those capabilities.
-9. Add graceful worker shutdown and draining.
+9. Expand graceful shutdown testing to real multi-worker restart/drain
+   scenarios.
 10. Test multiple workers and worker-failure scenarios.
 
 ### Priority 3: Security and Resource Isolation
 
-11. Add public APIs for creating, listing, rotating, expiring, and revoking function invocation tokens.
-12. Add rate limits for JWT-authenticated, token-based, and public invocations.
-13. Add password reset and email verification if account UX remains in this backend.
-14. Add CPU, process, disk, and output quotas.
-15. Use a read-only function root filesystem where possible.
-16. Add secret/environment-variable management for functions.
-17. Plan an alternative to unrestricted Docker-socket access.
-18. Add dependency and image scanning.
+11. Add rate limits for JWT-authenticated, token-based, and public invocations.
+12. Add password reset and email verification if account UX remains in this backend.
+13. Add CPU, process, disk, and output quotas.
+14. Use a read-only function root filesystem where possible.
+15. Add secret/environment-variable management for functions.
+16. Plan an alternative to unrestricted Docker-socket access.
+17. Add dependency and image scanning.
 
 ### Priority 4: Performance and Observability
 
-19. Add warm-container reuse.
-20. Collect resource usage and cold-start metrics.
-21. Add structured logs and platform metrics.
-22. Add dashboards and operational alerts.
-23. Add cleanup and retention jobs.
+18. Publish small warm-pool inventory updates immediately after container
+    release, instead of relying only on periodic full heartbeats.
+19. Add percentile latency histograms and explicit cold-start counters.
+20. Add structured request/job IDs to platform logs.
+21. Add operational alert rules on top of the new Grafana/Prometheus stack.
+22. Consider proactive prewarming later if project scope expands.
+23. Add scheduled cleanup runners for the existing cleanup commands.
 
 ### Priority 5: Evaluation and Project Completion
 
@@ -591,13 +826,14 @@ The backend test suite now covers:
 
 The next milestone should be:
 
-`staged invocation artifact finalization and controlled V2 canary traffic`
+`invocation download bundle and rate limits`
 
-V2 build and invocation dispatch, claims, leases, completion fencing, and
-PostgreSQL projection now work behind creation-time pilot flags. The next
-careful migration step is to stage invocation outputs/results as one committed
-artifact set, then enable V2 for controlled canary traffic with rollback and
-process-kill testing.
+Function replacement, active-image promotion, object-storage-backed logs,
+expired-invocation cleanup, dead-letter cleanup, and registry-image cleanup are
+now in place for the prototype. The next practical product milestone should make
+the platform easier and safer to use: add an invocation ZIP download containing
+manifest, inputs, outputs, and logs, then add rate limits for JWT-authenticated,
+token-based, and public invocation traffic.
 
-Before exposing token-protected or public functions to real users, add
-function-invocation-token management APIs and rate limits.
+Before exposing token-protected or public functions to real users, add rate
+limits and basic abuse controls.

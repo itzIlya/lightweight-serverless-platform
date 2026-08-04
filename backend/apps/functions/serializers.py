@@ -3,10 +3,19 @@ from __future__ import annotations
 import json
 from pathlib import PurePosixPath
 
+from django.conf import settings
+from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework import serializers
 
-from .models import BuildAttempt, BuildPolicy, BuildStatus, Function, FunctionVersion
+from .models import (
+    BuildAttempt,
+    BuildPolicy,
+    BuildStatus,
+    Function,
+    FunctionInvokeToken,
+    FunctionVersion,
+)
 from .services import validate_function_bundle
 
 
@@ -46,6 +55,10 @@ class FunctionVersionSerializer(serializers.ModelSerializer):
             "invocation_output_max_files",
             "invocation_output_max_file_size_mb",
             "invocation_output_max_total_size_mb",
+            "invocation_max_retries",
+            "invocation_retry_backoff_seconds",
+            "retry_invocation_timeouts",
+            "retry_invocation_function_errors",
             "image_ref",
             "build_status",
             "build_request_id",
@@ -103,6 +116,7 @@ class FunctionVersionCreateSerializer(serializers.ModelSerializer):
     config = FlexibleJSONField(required=False, default=dict)
     invocation_input_mime_types = FlexibleJSONField(required=False, default=list)
     declared_output_files = FlexibleJSONField(required=False, default=list)
+    invocation_retry_backoff_seconds = FlexibleJSONField(required=False, default=list)
 
     class Meta:
         model = FunctionVersion
@@ -121,6 +135,10 @@ class FunctionVersionCreateSerializer(serializers.ModelSerializer):
             "invocation_output_max_files",
             "invocation_output_max_file_size_mb",
             "invocation_output_max_total_size_mb",
+            "invocation_max_retries",
+            "invocation_retry_backoff_seconds",
+            "retry_invocation_timeouts",
+            "retry_invocation_function_errors",
         ]
         read_only_fields = ["id"]
 
@@ -184,6 +202,8 @@ class FunctionVersionCreateSerializer(serializers.ModelSerializer):
         max_output_file_size = attrs.get("invocation_output_max_file_size_mb", 10)
         max_output_total_size = attrs.get("invocation_output_max_total_size_mb", 10)
         declared_outputs = attrs.get("declared_output_files", [])
+        invocation_max_retries = attrs.get("invocation_max_retries", 0)
+        invocation_retry_backoff = attrs.get("invocation_retry_backoff_seconds", [])
         if max_files < 0:
             raise serializers.ValidationError(
                 {"invocation_input_max_files": "Must be zero or greater."}
@@ -232,6 +252,23 @@ class FunctionVersionCreateSerializer(serializers.ModelSerializer):
                     )
                 }
             )
+        if invocation_max_retries < 0:
+            raise serializers.ValidationError(
+                {"invocation_max_retries": "Must be zero or greater."}
+            )
+        if not isinstance(invocation_retry_backoff, list):
+            raise serializers.ValidationError(
+                {"invocation_retry_backoff_seconds": "Must be a JSON array."}
+            )
+        for value in invocation_retry_backoff:
+            if not isinstance(value, int) or value < 0:
+                raise serializers.ValidationError(
+                    {
+                        "invocation_retry_backoff_seconds": (
+                            "Each retry backoff value must be a non-negative integer."
+                        )
+                    }
+                )
         return attrs
 
     def validate_source_bundle(self, value):
@@ -244,6 +281,11 @@ class FunctionVersionCreateSerializer(serializers.ModelSerializer):
 
 class FunctionSerializer(serializers.ModelSerializer):
     versions = FunctionVersionSerializer(many=True, read_only=True)
+    active_version = FunctionVersionSerializer(read_only=True)
+    active_image_ref = serializers.SerializerMethodField()
+    build_status = serializers.SerializerMethodField()
+    pending_build = serializers.SerializerMethodField()
+    links = serializers.SerializerMethodField()
 
     class Meta:
         model = Function
@@ -254,11 +296,81 @@ class FunctionSerializer(serializers.ModelSerializer):
             "slug",
             "description",
             "invoke_access",
+            "active_version",
+            "active_image_ref",
+            "build_status",
+            "pending_build",
+            "links",
             "created_at",
             "updated_at",
             "versions",
         ]
-        read_only_fields = ["owner", "slug", "created_at", "updated_at", "versions"]
+        read_only_fields = [
+            "owner",
+            "slug",
+            "active_version",
+            "active_image_ref",
+            "build_status",
+            "pending_build",
+            "links",
+            "created_at",
+            "updated_at",
+            "versions",
+        ]
+
+    def get_active_image_ref(self, obj):
+        active_version = getattr(obj, "active_version", None)
+        return active_version.image_ref if active_version else ""
+
+    def get_build_status(self, obj):
+        pending = self._latest_pending_version(obj)
+        if pending is not None:
+            return pending.build_status
+        active_version = getattr(obj, "active_version", None)
+        if active_version is not None:
+            return active_version.build_status
+        latest = obj.versions.order_by("-created_at", "-id").first()
+        return latest.build_status if latest else "not_built"
+
+    def get_pending_build(self, obj):
+        pending = self._latest_pending_version(obj)
+        if pending is None:
+            return None
+        latest_attempt = pending.build_attempts.order_by("-created_at", "-id").first()
+        return {
+            "version_id": pending.id,
+            "version": pending.version,
+            "build_status": pending.build_status,
+            "build_request_id": str(pending.build_request_id),
+            "attempt": (
+                BuildAttemptSerializer(latest_attempt).data
+                if latest_attempt is not None
+                else None
+            ),
+        }
+
+    def get_links(self, obj):
+        return {
+            "self": f"/api/functions/{obj.id}/",
+            "source": f"/api/functions/{obj.id}/source/",
+            "build_status": f"/api/functions/{obj.id}/build-status/",
+            "invoke": f"/api/functions/{obj.id}/invoke/",
+            "invocations": f"/api/functions/{obj.id}/invocations/",
+            "tokens": f"/api/functions/{obj.id}/tokens/",
+        }
+
+    def _latest_pending_version(self, obj):
+        return (
+            obj.versions.filter(
+                build_status__in=[
+                    BuildStatus.QUEUED,
+                    BuildStatus.BUILDING,
+                    BuildStatus.CANCELLING,
+                ]
+            )
+            .order_by("-created_at", "-id")
+            .first()
+        )
 
 
 class FunctionCreateSerializer(serializers.ModelSerializer):
@@ -289,6 +401,234 @@ class FunctionInvokeSerializer(serializers.Serializer):
                 "Use either version_id or version, not both."
             )
         return attrs
+
+
+class FunctionInvokeTokenSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FunctionInvokeToken
+        fields = [
+            "id",
+            "name",
+            "prefix",
+            "is_active",
+            "expires_at",
+            "revoked_at",
+            "last_used_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class FunctionInvokeTokenCreateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120, trim_whitespace=True)
+    expires_at = serializers.DateTimeField(required=False, allow_null=True)
+
+    def validate_name(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Token name is required.")
+        return value.strip()
+
+    def validate_expires_at(self, value):
+        if value is not None and value <= timezone.now():
+            raise serializers.ValidationError("Expiry must be in the future.")
+        return value
+
+    def validate(self, attrs):
+        function = self.context["function"]
+        active_count = function.invoke_tokens.filter(
+            is_active=True,
+            revoked_at__isnull=True,
+        ).count()
+        if active_count >= settings.MAX_ACTIVE_INVOKE_TOKENS_PER_FUNCTION:
+            raise serializers.ValidationError(
+                {
+                    "tokens": (
+                        "This function has reached the maximum number of "
+                        "active invocation tokens."
+                    )
+                }
+            )
+        if _active_token_name_exists(function, attrs["name"]):
+            raise serializers.ValidationError(
+                {"name": "An active invocation token with this name already exists."}
+            )
+        return attrs
+
+
+class FunctionInvokeTokenUpdateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120, trim_whitespace=True, required=False)
+    expires_at = serializers.DateTimeField(required=False, allow_null=True)
+    is_active = serializers.BooleanField(required=False)
+
+    def validate_name(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Token name is required.")
+        return value.strip()
+
+    def validate_expires_at(self, value):
+        if value is not None and value <= timezone.now():
+            raise serializers.ValidationError("Expiry must be in the future.")
+        return value
+
+    def validate(self, attrs):
+        token = self.context["token"]
+        function = self.context["function"]
+        target_name = attrs.get("name", token.name)
+        target_active = attrs.get("is_active", token.is_active)
+        target_expires_at = attrs.get("expires_at", token.expires_at)
+        if (
+            target_active
+            and target_expires_at is not None
+            and target_expires_at <= timezone.now()
+        ):
+            raise serializers.ValidationError(
+                {"is_active": "Expired invocation tokens cannot be activated."}
+            )
+        if target_active and not token.is_active:
+            active_count = function.invoke_tokens.filter(
+                is_active=True,
+                revoked_at__isnull=True,
+            ).exclude(pk=token.pk).count()
+            if active_count >= settings.MAX_ACTIVE_INVOKE_TOKENS_PER_FUNCTION:
+                raise serializers.ValidationError(
+                    {
+                        "tokens": (
+                            "This function has reached the maximum number of "
+                            "active invocation tokens."
+                        )
+                    }
+                )
+        if target_active and _active_token_name_exists(
+            function,
+            target_name,
+            exclude_pk=token.pk,
+        ):
+            raise serializers.ValidationError(
+                {"name": "An active invocation token with this name already exists."}
+            )
+        return attrs
+
+
+class FunctionInvokeTokenRotateSerializer(serializers.Serializer):
+    expires_at = serializers.DateTimeField(required=False, allow_null=True)
+
+    def validate_expires_at(self, value):
+        if value is not None and value <= timezone.now():
+            raise serializers.ValidationError("Expiry must be in the future.")
+        return value
+
+    def validate(self, attrs):
+        function = self.context["function"]
+        token = self.context["token"]
+        if not token.is_active:
+            active_count = function.invoke_tokens.filter(
+                is_active=True,
+                revoked_at__isnull=True,
+            ).exclude(pk=token.pk).count()
+            if active_count >= settings.MAX_ACTIVE_INVOKE_TOKENS_PER_FUNCTION:
+                raise serializers.ValidationError(
+                    {
+                        "tokens": (
+                            "This function has reached the maximum number of "
+                            "active invocation tokens."
+                        )
+                    }
+                )
+        if _active_token_name_exists(function, token.name, exclude_pk=token.pk):
+            raise serializers.ValidationError(
+                {"name": "An active invocation token with this name already exists."}
+            )
+        return attrs
+
+
+def _active_token_name_exists(function, name: str, *, exclude_pk=None) -> bool:
+    queryset = function.invoke_tokens.filter(
+        name__iexact=name,
+        is_active=True,
+        revoked_at__isnull=True,
+    )
+    if exclude_pk is not None:
+        queryset = queryset.exclude(pk=exclude_pk)
+    return queryset.exists()
+
+
+class FunctionSourceReplacementSerializer(serializers.Serializer):
+    source_bundle = serializers.FileField()
+    runtime = serializers.CharField(required=False)
+    handler = serializers.CharField(required=False)
+    config = FlexibleJSONField(required=False)
+    invocation_input_mime_types = FlexibleJSONField(required=False)
+    invocation_input_max_files = serializers.IntegerField(required=False, min_value=0)
+    invocation_input_max_size_mb = serializers.IntegerField(required=False, min_value=1)
+    invocation_input_max_total_size_mb = serializers.IntegerField(required=False, min_value=1)
+    declared_output_files = FlexibleJSONField(required=False)
+    invocation_output_max_files = serializers.IntegerField(required=False, min_value=0)
+    invocation_output_max_file_size_mb = serializers.IntegerField(required=False, min_value=1)
+    invocation_output_max_total_size_mb = serializers.IntegerField(required=False, min_value=1)
+    invocation_max_retries = serializers.IntegerField(required=False, min_value=0)
+    invocation_retry_backoff_seconds = FlexibleJSONField(required=False)
+    retry_invocation_timeouts = serializers.BooleanField(required=False)
+    retry_invocation_function_errors = serializers.BooleanField(required=False)
+
+    def validate_source_bundle(self, value):
+        try:
+            validate_function_bundle(value)
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+        return value
+
+    def validate_invocation_input_mime_types(self, value):
+        return FunctionVersionCreateSerializer().validate_invocation_input_mime_types(value)
+
+    def validate_declared_output_files(self, value):
+        return FunctionVersionCreateSerializer().validate_declared_output_files(value)
+
+    def validate(self, attrs):
+        active_version = self.context.get("active_version")
+        base = {}
+        if active_version is not None:
+            for field in [
+                "runtime",
+                "handler",
+                "config",
+                "invocation_input_mime_types",
+                "invocation_input_max_files",
+                "invocation_input_max_size_mb",
+                "invocation_input_max_total_size_mb",
+                "declared_output_files",
+                "invocation_output_max_files",
+                "invocation_output_max_file_size_mb",
+                "invocation_output_max_total_size_mb",
+                "invocation_max_retries",
+                "invocation_retry_backoff_seconds",
+                "retry_invocation_timeouts",
+                "retry_invocation_function_errors",
+            ]:
+                base[field] = getattr(active_version, field)
+        else:
+            base.update(
+                {
+                    "runtime": "python3.13",
+                    "handler": "handler.main",
+                    "config": {},
+                    "invocation_input_mime_types": [],
+                    "invocation_input_max_files": 1,
+                    "invocation_input_max_size_mb": 10,
+                    "invocation_input_max_total_size_mb": 10,
+                    "declared_output_files": [],
+                    "invocation_output_max_files": 5,
+                    "invocation_output_max_file_size_mb": 10,
+                    "invocation_output_max_total_size_mb": 10,
+                    "invocation_max_retries": 0,
+                    "invocation_retry_backoff_seconds": [],
+                    "retry_invocation_timeouts": False,
+                    "retry_invocation_function_errors": False,
+                }
+            )
+        base.update(attrs)
+        FunctionVersionCreateSerializer().validate(base)
+        return base
 
 
 class BuildReportSerializer(serializers.Serializer):

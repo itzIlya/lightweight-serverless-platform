@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import hmac
 import json
 import hashlib
 from pathlib import PurePosixPath
@@ -7,6 +9,7 @@ from typing import Iterable
 import uuid
 
 from django.conf import settings
+from django.core.files.base import ContentFile
 from django.core.files.base import File
 from django.db import transaction
 from django.utils import timezone
@@ -15,9 +18,16 @@ from django.utils.text import get_valid_filename
 from .models import (
     Invocation,
     InvocationInputFile,
+    InvocationLogArtifact,
+    InvocationLogStream,
     InvocationOutputFile,
     InvocationStagedCompletion,
     StagedCompletionStatus,
+)
+
+
+LOG_PREVIEW_MAX_CHARS = int(
+    getattr(settings, "INVOCATION_LOG_PREVIEW_MAX_CHARS", 4096)
 )
 
 
@@ -43,6 +53,14 @@ def build_invocation_job(invocation: Invocation) -> dict:
         ),
         "invocation_output_max_total_size_mb": (
             function_version.invocation_output_max_total_size_mb
+        ),
+        "invocation_max_retries": function_version.invocation_max_retries,
+        "invocation_retry_backoff_seconds": (
+            function_version.invocation_retry_backoff_seconds
+        ),
+        "retry_invocation_timeouts": function_version.retry_invocation_timeouts,
+        "retry_invocation_function_errors": (
+            function_version.retry_invocation_function_errors
         ),
         "event": invocation.event,
         "queued_at": invocation.queued_at.isoformat(),
@@ -138,6 +156,59 @@ def store_invocation_files(
         record.file.save(original_name, File(uploaded_file), save=True)
         stored.append(record)
     return stored
+
+
+def log_preview(value: str, *, limit: int = LOG_PREVIEW_MAX_CHARS) -> str:
+    text = str(value or "")
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "\n[log truncated; download the full log artifact]"
+
+
+def store_invocation_log_artifacts(
+    *,
+    invocation: Invocation,
+    stdout: str = "",
+    stderr: str = "",
+    staged_completion: InvocationStagedCompletion | None = None,
+    status: str = StagedCompletionStatus.COMMITTED,
+) -> list[InvocationLogArtifact]:
+    artifacts = []
+    for stream, text in (
+        (InvocationLogStream.STDOUT, stdout),
+        (InvocationLogStream.STDERR, stderr),
+    ):
+        text = str(text or "")
+        if not text:
+            continue
+
+        encoded = text.encode("utf-8")
+        safe_name = f"{stream}.txt"
+        existing = InvocationLogArtifact.objects.filter(
+            invocation=invocation,
+            staged_completion=staged_completion,
+            stream=stream,
+        ).first()
+        if existing is None:
+            artifact = InvocationLogArtifact(
+                invocation=invocation,
+                staged_completion=staged_completion,
+                stream=stream,
+            )
+        else:
+            artifact = existing
+            if artifact.file:
+                artifact.file.delete(save=False)
+
+        artifact.status = status
+        artifact.safe_name = safe_name
+        artifact.content_type = "text/plain; charset=utf-8"
+        artifact.size_bytes = len(encoded)
+        artifact.preview = log_preview(text)
+        artifact.save()
+        artifact.file.save(safe_name, ContentFile(encoded), save=True)
+        artifacts.append(artifact)
+    return artifacts
 
 
 def normalize_output_name(value: str) -> str:
@@ -247,9 +318,12 @@ def store_staged_invocation_output_file(
         raise ValueError("dispatch_attempt must be positive.")
 
     normalized_path = normalize_output_name(original_path)
-    digest = uploaded_file_sha256(uploaded_file)
-    if checksum_sha256.lower() != digest:
-        raise ValueError("Output checksum does not match the uploaded file.")
+    supplied_checksum = str(checksum_sha256 or "").strip().lower()
+    digest = ""
+    if supplied_checksum:
+        digest = uploaded_file_sha256(uploaded_file)
+        if supplied_checksum != digest:
+            raise ValueError("Output checksum does not match the uploaded file.")
 
     with transaction.atomic():
         completion, created = InvocationStagedCompletion.objects.select_for_update().get_or_create(
@@ -270,14 +344,19 @@ def store_staged_invocation_output_file(
             raise ValueError("Completion no longer accepts staged output files.")
 
         existing = completion.output_files.filter(original_path=normalized_path).first()
-        if existing is not None and existing.checksum_sha256 == digest:
+        size = int(getattr(uploaded_file, "size", 0) or 0)
+        if (
+            existing is not None
+            and existing.checksum_sha256 == digest
+            and existing.size_bytes == size
+        ):
             return existing
 
         validate_staged_output_limits(
             invocation,
             completion,
             normalized_path=normalized_path,
-            size=int(getattr(uploaded_file, "size", 0) or 0),
+            size=size,
             replacing=existing,
         )
         if existing is None:
@@ -291,7 +370,7 @@ def store_staged_invocation_output_file(
             existing.file.delete(save=False)
         existing.safe_name = get_valid_filename(normalized_path) or "output"
         existing.content_type = getattr(uploaded_file, "content_type", "") or ""
-        existing.size_bytes = int(getattr(uploaded_file, "size", 0) or 0)
+        existing.size_bytes = size
         existing.position = position
         existing.checksum_sha256 = digest
         existing.save()
@@ -385,8 +464,10 @@ def commit_staged_invocation_completion(
         verify_output_manifest(files, output_manifest)
         completion.terminal_status = terminal_status
         completion.result = completion_payload.get("result") or {}
-        completion.stdout = completion_payload.get("stdout", "")
-        completion.stderr = completion_payload.get("stderr", "")
+        raw_stdout = completion_payload.get("stdout", "")
+        raw_stderr = completion_payload.get("stderr", "")
+        completion.stdout = log_preview(raw_stdout)
+        completion.stderr = log_preview(raw_stderr)
         completion.exit_code = completion_payload.get("exit_code")
         completion.cold_start = bool(completion_payload.get("cold_start", False))
         completion.error_message = completion_payload.get("error_message", "")
@@ -397,6 +478,13 @@ def commit_staged_invocation_completion(
         completion.committed_at = timezone.now()
         completion.save()
         completion.output_files.update(status=StagedCompletionStatus.COMMITTED)
+        store_invocation_log_artifacts(
+            invocation=invocation,
+            staged_completion=completion,
+            stdout=raw_stdout,
+            stderr=raw_stderr,
+            status=StagedCompletionStatus.COMMITTED,
+        )
         return completion
 
 
@@ -404,16 +492,110 @@ def verify_output_manifest(files, manifest: list) -> None:
     expected = {
         item.original_path: {
             "size_bytes": item.size_bytes,
-            "checksum_sha256": item.checksum_sha256,
+            "checksum_sha256": item.checksum_sha256 or "",
         }
         for item in files
     }
     supplied = {
         str(item.get("original_path", "")): {
             "size_bytes": int(item.get("size_bytes", -1)),
-            "checksum_sha256": str(item.get("checksum_sha256", "")).lower(),
+            "checksum_sha256": str(item.get("checksum_sha256", "") or "").lower(),
         }
         for item in manifest
     }
-    if supplied != expected:
+    if set(supplied) != set(expected):
         raise ValueError("Output manifest does not match staged files.")
+    for original_path, expected_item in expected.items():
+        supplied_item = supplied[original_path]
+        if supplied_item["size_bytes"] != expected_item["size_bytes"]:
+            raise ValueError("Output manifest does not match staged files.")
+        if expected_item["checksum_sha256"] or supplied_item["checksum_sha256"]:
+            if supplied_item["checksum_sha256"] != expected_item["checksum_sha256"]:
+                raise ValueError("Output manifest does not match staged files.")
+
+
+RUNNER_OUTPUT_UPLOAD_TOKEN_TTL_SECONDS = 300
+
+
+def issue_runner_output_upload_token(
+    *,
+    request_id,
+    job_id,
+    dispatch_attempt: int,
+    completion_id: str,
+    ttl_seconds: int = RUNNER_OUTPUT_UPLOAD_TOKEN_TTL_SECONDS,
+) -> str:
+    payload = {
+        "request_id": str(request_id),
+        "job_id": str(job_id),
+        "dispatch_attempt": int(dispatch_attempt),
+        "completion_id": str(completion_id),
+        "exp": int(timezone.now().timestamp()) + int(ttl_seconds),
+    }
+    return _sign_runner_output_payload(payload)
+
+
+def verify_runner_output_upload_token(
+    token: str,
+    *,
+    request_id,
+    job_id,
+    dispatch_attempt: int,
+    completion_id: str,
+) -> dict:
+    try:
+        payload_b64, signature = str(token or "").split(".", 1)
+    except ValueError as exc:
+        raise ValueError("Invalid runner output upload token.") from exc
+
+    expected_signature = _runner_output_signature(payload_b64)
+    if not hmac.compare_digest(signature, expected_signature):
+        raise ValueError("Invalid runner output upload token.")
+
+    try:
+        payload_json = base64.urlsafe_b64decode(_pad_base64(payload_b64)).decode(
+            "utf-8"
+        )
+        payload = json.loads(payload_json)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise ValueError("Invalid runner output upload token.") from exc
+
+    now = int(timezone.now().timestamp())
+    if int(payload.get("exp", 0)) < now:
+        raise ValueError("Runner output upload token has expired.")
+
+    expected = {
+        "request_id": str(request_id),
+        "job_id": str(job_id),
+        "dispatch_attempt": int(dispatch_attempt),
+        "completion_id": str(completion_id),
+    }
+    actual = {
+        "request_id": str(payload.get("request_id", "")),
+        "job_id": str(payload.get("job_id", "")),
+        "dispatch_attempt": int(payload.get("dispatch_attempt", 0)),
+        "completion_id": str(payload.get("completion_id", "")),
+    }
+    if actual != expected:
+        raise ValueError("Runner output upload token does not match this upload.")
+    return payload
+
+
+def _sign_runner_output_payload(payload: dict) -> str:
+    payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+    payload_b64 = base64.urlsafe_b64encode(payload_json.encode("utf-8")).decode(
+        "ascii"
+    ).rstrip("=")
+    return f"{payload_b64}.{_runner_output_signature(payload_b64)}"
+
+
+def _runner_output_signature(payload_b64: str) -> str:
+    return hmac.new(
+        settings.WORKER_SHARED_SECRET.encode("utf-8"),
+        payload_b64.encode("ascii"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _pad_base64(value: str) -> bytes:
+    return (value + "=" * (-len(value) % 4)).encode("ascii")

@@ -1,0 +1,204 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "pluginVersion": "11.2.0",
+      "targets": [{"expr": "serverless_backend_up", "refId": "A"}],
+      "title": "Backend Up",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+      "id": 2,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "pluginVersion": "11.2.0",
+      "targets": [{"expr": "serverless_userservice_up", "refId": "A"}],
+      "title": "Userservice Up",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+      "id": 3,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "pluginVersion": "11.2.0",
+      "targets": [{"expr": "serverless_orchestrator_up", "refId": "A"}],
+      "title": "Orchestrator Up",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
+      "id": 10,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "pluginVersion": "11.2.0",
+      "targets": [{"expr": "sum(serverless_worker_up{status=\"online\"})", "refId": "A"}],
+      "title": "Online Workers",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}, {"color": "red", "value": 20}]}}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0},
+      "id": 11,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "pluginVersion": "11.2.0",
+      "targets": [{"expr": "serverless_orchestrator_ready_jobs_total", "refId": "A"}],
+      "title": "Orchestrator Queue",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}, {"color": "red", "value": 20}]}}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0},
+      "id": 12,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "pluginVersion": "11.2.0",
+      "targets": [{"expr": "serverless_orchestrator_ready_jobs_available_total", "refId": "A"}],
+      "title": "Ready To Dispatch",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": {"legend": false, "tooltip": false, "viz": false}, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 4, "scaleDistribution": {"type": "linear"}, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}, "thresholdsStyle": {"mode": "off"}}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "id": 4,
+      "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [{"expr": "sum by (status) (serverless_invocations_total)", "legendFormat": "{{status}}", "refId": "A"}],
+      "title": "Invocation States",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": {"legend": false, "tooltip": false, "viz": false}, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 4, "scaleDistribution": {"type": "linear"}, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}, "thresholdsStyle": {"mode": "off"}}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "id": 5,
+      "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [{"expr": "sum by (type, status, coordination_version) (serverless_jobs_total)", "legendFormat": "{{coordination_version}} {{type}} {{status}}", "refId": "A"}],
+      "title": "Job States",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": {"legend": false, "tooltip": false, "viz": false}, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 4, "scaleDistribution": {"type": "linear"}, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}, "thresholdsStyle": {"mode": "off"}}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 12},
+      "id": 6,
+      "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [{"expr": "serverless_orchestrator_finalizing_count", "legendFormat": "finalizing", "refId": "A"}, {"expr": "serverless_orchestrator_oldest_finalizing_age_ms", "legendFormat": "oldest age ms", "refId": "B"}],
+      "title": "V2 Finalization Health",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": {"legend": false, "tooltip": false, "viz": false}, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 4, "scaleDistribution": {"type": "linear"}, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}, "thresholdsStyle": {"mode": "off"}}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 12},
+      "id": 7,
+      "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [{"expr": "sum by (worker) (serverless_worker_active_jobs{job=\"worker\"})", "legendFormat": "{{worker}} jobs", "refId": "A"}, {"expr": "sum by (worker) (serverless_worker_warm_containers_idle{job=\"worker\"})", "legendFormat": "{{worker}} warm idle", "refId": "B"}, {"expr": "sum by (worker) (serverless_worker_warm_containers_busy{job=\"worker\"})", "legendFormat": "{{worker}} warm busy", "refId": "C"}],
+      "title": "Worker Load And Warm Pool",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": {"legend": false, "tooltip": false, "viz": false}, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 4, "scaleDistribution": {"type": "linear"}, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}, "thresholdsStyle": {"mode": "off"}}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 12},
+      "id": 8,
+      "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [{"expr": "serverless_orchestrator_ready_jobs_total", "legendFormat": "ready total", "refId": "A"}, {"expr": "serverless_orchestrator_ready_jobs_available_total", "legendFormat": "ready now", "refId": "B"}, {"expr": "serverless_orchestrator_stream_lag", "legendFormat": "{{stream}} lag", "refId": "C"}, {"expr": "serverless_orchestrator_stream_pending", "legendFormat": "{{stream}} pending", "refId": "D"}],
+      "title": "Orchestrator Stream Lag",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": {"legend": false, "tooltip": false, "viz": false}, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 4, "scaleDistribution": {"type": "linear"}, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}, "thresholdsStyle": {"mode": "off"}}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 20},
+      "id": 13,
+      "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [{"expr": "serverless_worker_queue_outstanding", "legendFormat": "{{worker}} {{queue_type}} outstanding", "refId": "A"}, {"expr": "serverless_worker_queue_lag", "legendFormat": "{{worker}} {{queue_type}} queued", "refId": "B"}, {"expr": "serverless_worker_queue_pending", "legendFormat": "{{worker}} {{queue_type}} pending", "refId": "C"}],
+      "title": "Worker Queue Depth",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "loki", "uid": "Loki"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": {"legend": false, "tooltip": false, "viz": false}, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 4, "scaleDistribution": {"type": "linear"}, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}, "thresholdsStyle": {"mode": "off"}}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 28},
+      "id": 14,
+      "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [{"expr": "sum by (service) (count_over_time({service=~\"backend|userservice|worker|orchestrator|invocation-finalizer|orchestrator-projector|outbox-relay\"} |~ \"(?i)(error|exception|failed|traceback|EndpointConnectionError|NameResolutionError|finalization failed)\" [$__interval]))", "legendFormat": "{{service}}", "refId": "A"}],
+      "title": "Error Events By Service",
+      "type": "timeseries"
+    },
+    {
+      "gridPos": {"h": 5, "w": 24, "x": 0, "y": 36},
+      "id": 15,
+      "options": {"content": "### Diagnosis order\n1. Check **Error Events By Service** to see which service started failing.\n2. Check **Object Storage / Parspack Errors** when finalization is failing, because result publication depends on artifact storage.\n3. Check **Finalizer Failures** when invocations stay finalizing or recovering.\n4. Check **Worker Timing And Failure Clues** when execution is slow or containers fail.\n5. Use **Recent Detailed Platform Errors** only after the focused panels identify the likely subsystem.", "mode": "markdown"},
+      "pluginVersion": "11.2.0",
+      "title": "How To Read Errors",
+      "type": "text"
+    },
+    {
+      "datasource": {"type": "loki", "uid": "Loki"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 41},
+      "id": 16,
+      "options": {"dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": true, "showLabels": true, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true},
+      "targets": [{"expr": "{service=~\"backend|invocation-finalizer|outbox-relay\"} |~ \"(?i)(EndpointConnectionError|NameResolutionError|c966302\\\\.parspack\\\\.net|parspack|object storage|s3|botocore|boto3)\"", "refId": "A"}],
+      "title": "Object Storage / Parspack Errors",
+      "type": "logs"
+    },
+    {
+      "datasource": {"type": "loki", "uid": "Loki"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 41},
+      "id": 17,
+      "options": {"dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": true, "showLabels": true, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true},
+      "targets": [{"expr": "{service=\"invocation-finalizer\"} |~ \"(?i)(finalization failed|event remains pending|artifact|commit|completion|exception|error)\"", "refId": "A"}],
+      "title": "Finalizer Failures",
+      "type": "logs"
+    },
+    {
+      "datasource": {"type": "loki", "uid": "Loki"},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 49},
+      "id": 18,
+      "options": {"dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": true, "showLabels": true, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true},
+      "targets": [{"expr": "{service=\"worker\"} |~ \"(?i)(invocation worker timing|worker_process_total_ms|executor_duration_ms|runner_total_ms|docker_|warm_|timeout|failed|exception|error)\"", "refId": "A"}],
+      "title": "Worker Timing And Failure Clues",
+      "type": "logs"
+    },
+    {
+      "datasource": {"type": "loki", "uid": "Loki"},
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 57},
+      "id": 9,
+      "options": {"dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": true, "showLabels": true, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true},
+      "targets": [{"expr": "{service=~\"backend|userservice|worker|orchestrator|invocation-finalizer|orchestrator-projector|outbox-relay\"} |~ \"(?i)(error|exception|failed|traceback|EndpointConnectionError|NameResolutionError|finalization failed)\"", "refId": "A"}],
+      "title": "Recent Detailed Platform Errors",
+      "type": "logs"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["serverless-platform"],
+  "templating": {"list": []},
+  "time": {"from": "now-30m", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Serverless Platform Overview",
+  "uid": "serverless-platform-overview",
+  "version": 1,
+  "weekStart": ""
+}

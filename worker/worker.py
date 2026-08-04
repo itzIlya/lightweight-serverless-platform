@@ -2,12 +2,14 @@ import json
 import logging
 import os
 from pathlib import Path
+import signal
 import socket
 import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from backend_client import BackendClient, BackendReportError
 from builder import BuildCancelled, BuildError, DockerBuilder
@@ -78,6 +80,10 @@ class WorkerActivity:
                 "active_invocations": self._active_invocations,
             }
 
+    def has_active_jobs(self) -> bool:
+        with self._lock:
+            return self._active_jobs > 0
+
 
 def utc_now() -> str:
     return datetime.now(UTC).isoformat()
@@ -117,16 +123,36 @@ def heartbeat_loop(
     stop_event: threading.Event | None = None,
     operational_store: WorkerOperationalStateStore | None = None,
     operational_payload: dict | None = None,
+    warm_inventory_provider=None,
+    status_provider=None,
 ) -> None:
     stop_event = stop_event or threading.Event()
     while not stop_event.wait(interval_seconds):
         state = activity.snapshot() if activity is not None else {}
+        worker_status = status_provider() if status_provider is not None else "online"
+        payload = dict(operational_payload or {})
+        payload["status"] = worker_status
+        metadata = dict(payload.get("metadata") or {})
+        backend_metadata = {}
+        if warm_inventory_provider is not None:
+            try:
+                warm_pool = warm_inventory_provider()
+                metadata["warm_pool"] = warm_pool
+                backend_metadata["warm_pool"] = warm_pool
+            except Exception:
+                logger.exception(
+                    "failed to read warm container inventory name=%s",
+                    worker_name,
+                )
+        if metadata:
+            payload["metadata"] = metadata
         if operational_store is not None:
             try:
                 operational_store.record_heartbeat(
                     {
-                        **(operational_payload or {}),
+                        **payload,
                         "name": worker_name,
+                        "status": worker_status,
                         "active_jobs": state.get("active_jobs", 0),
                         "active_builds": state.get("active_builds", 0),
                         "active_invocations": state.get("active_invocations", 0),
@@ -141,13 +167,143 @@ def heartbeat_loop(
             backend.heartbeat_worker(
                 {
                     "name": worker_name,
+                    "status": worker_status,
                     "active_jobs": state.get("active_jobs", 0),
                     "active_builds": state.get("active_builds", 0),
                     "active_invocations": state.get("active_invocations", 0),
+                    "metadata": backend_metadata,
                 }
             )
         except Exception:
             logger.exception("failed to send worker heartbeat name=%s", worker_name)
+
+
+def warm_pool_heartbeat_metadata(executor: DockerExecutor) -> dict:
+    if not executor.warm_enabled or executor.warm_pool is None:
+        return {
+            "enabled": False,
+            "containers": [],
+        }
+    return {
+        "enabled": True,
+        "containers": executor.warm_pool.inventory(),
+    }
+
+
+def start_metrics_server(
+    *,
+    worker_name: str,
+    activity: WorkerActivity,
+    status_provider,
+    warm_inventory_provider,
+    port: int,
+):
+    if port <= 0:
+        return None
+
+    class WorkerMetricsHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/health/":
+                return self.respond_text("worker_metrics_up 1\n", content_type="text/plain")
+            if self.path != "/metrics/":
+                self.send_response(404)
+                self.end_headers()
+                return
+            body = worker_prometheus_metrics(
+                worker_name=worker_name,
+                status=status_provider(),
+                activity=activity.snapshot(),
+                warm_pool=warm_inventory_provider() or {},
+            )
+            return self.respond_text(body)
+
+        def respond_text(self, body_text: str, *, content_type: str | None = None):
+            body = body_text.encode("utf-8")
+            self.send_response(200)
+            self.send_header(
+                "Content-Type",
+                content_type or "text/plain; version=0.0.4; charset=utf-8",
+            )
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, format, *args):
+            logger.debug("worker metrics " + format, *args)
+
+    server = ThreadingHTTPServer(("0.0.0.0", port), WorkerMetricsHandler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    logger.info("worker metrics server started worker=%s port=%s", worker_name, port)
+    return server
+
+
+def worker_prometheus_metrics(
+    *,
+    worker_name: str,
+    status: str,
+    activity: dict,
+    warm_pool: dict,
+) -> str:
+    labels = {"worker": worker_name, "status": status}
+    lines = [
+        "# HELP serverless_worker_metrics_up Worker metrics endpoint availability.",
+        "# TYPE serverless_worker_metrics_up gauge",
+    ]
+    emit_worker_metric(lines, "serverless_worker_metrics_up", 1, labels)
+    emit_worker_metric(lines, "serverless_worker_active_jobs", activity.get("active_jobs", 0), labels)
+    emit_worker_metric(
+        lines,
+        "serverless_worker_active_invocations",
+        activity.get("active_invocations", 0),
+        labels,
+    )
+    emit_worker_metric(
+        lines,
+        "serverless_worker_active_builds",
+        activity.get("active_builds", 0),
+        labels,
+    )
+    emit_worker_metric(
+        lines,
+        "serverless_worker_warm_pool_enabled",
+        1 if warm_pool.get("enabled") else 0,
+        labels,
+    )
+    for item in warm_pool.get("containers") or []:
+        item_labels = {
+            **labels,
+            "function_version_id": item.get("function_version_id", ""),
+            "handler": item.get("handler", ""),
+        }
+        emit_worker_metric(
+            lines,
+            "serverless_worker_warm_containers_idle",
+            item.get("idle_count", 0),
+            item_labels,
+        )
+        emit_worker_metric(
+            lines,
+            "serverless_worker_warm_containers_busy",
+            item.get("busy_count", 0),
+            item_labels,
+        )
+    return "\n".join(lines) + "\n"
+
+
+def emit_worker_metric(
+    lines: list[str],
+    name: str,
+    value,
+    labels: dict[str, object],
+) -> None:
+    label_text = "{" + ",".join(
+        f'{key}="{escape_metric_label(value)}"' for key, value in sorted(labels.items())
+    ) + "}"
+    lines.append(f"{name}{label_text} {float(value)}")
+
+
+def escape_metric_label(value) -> str:
+    return str(value).replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
 
 
 def worker_processing_queue_name(worker_queue_name: str) -> str:
@@ -692,6 +848,7 @@ def process_v2_invocation_job(
     request_id = job["request_id"]
     completion_id = f"{job_id}:{dispatch_attempt}:invocation"
     job["completion_id"] = completion_id
+    failure_kind = ""
     try:
         with LeaseRenewer(
             orchestrator,
@@ -702,6 +859,7 @@ def process_v2_invocation_job(
             result = executor.run(job)
             if lease.lost.is_set():
                 return False
+            failure_kind = classify_invocation_failure(result)
     except BackendReportError:
         logger.exception(
             "V2 invocation staged-output upload failed; leaving job recoverable job_id=%s",
@@ -711,6 +869,9 @@ def process_v2_invocation_job(
     except Exception as exc:
         if not isinstance(exc, ExecutionError):
             logger.exception("unexpected V2 invocation failure job_id=%s", job_id)
+        failure_kind = "platform"
+        if "timed out" in str(exc).lower():
+            failure_kind = "timeout"
         result = ExecutionResult(
             status="failed",
             result={},
@@ -740,6 +901,7 @@ def process_v2_invocation_job(
                 "exit_code": result.exit_code,
                 "cold_start": result.cold_start,
                 "error_message": result.error_message,
+                "failure_kind": failure_kind,
                 "duration_ms": result.duration_ms,
                 "finished_at": utc_now(),
                 "output_manifest": result.output_manifest,
@@ -766,6 +928,19 @@ def process_v2_invocation_job(
         json.dumps(timing, sort_keys=True),
     )
     return bool(response.get("completed"))
+
+
+def classify_invocation_failure(result: ExecutionResult) -> str:
+    if result.status == "succeeded":
+        return ""
+    message = str(result.error_message or "").lower()
+    if "timed out" in message:
+        return "timeout"
+    if "output" in message:
+        return "output"
+    if result.exit_code is not None:
+        return "function"
+    return "platform"
 
 
 def run_claimed_job(
@@ -903,11 +1078,16 @@ def main() -> None:
         )
     )
     idle_sleep_seconds = float(os.getenv("WORKER_IDLE_SLEEP_SECONDS", "0.2"))
+    metrics_port = int(os.getenv("WORKER_METRICS_PORT", "9102"))
 
     client = redis.Redis.from_url(redis_url, decode_responses=True)
     backend = BackendClient(backend_base_url, worker_token)
     orchestrator = OrchestratorClient(orchestrator_base_url, worker_token)
+    invocation_executor = DockerExecutor(backend_client=backend)
+    invocation_executor_factory = lambda backend_client=None: invocation_executor
     activity = WorkerActivity()
+    shutdown_event = threading.Event()
+    heartbeat_stop_event = threading.Event()
     hostname = socket.gethostname()
     operational_payload = {
         "name": worker_name,
@@ -925,6 +1105,25 @@ def main() -> None:
         client,
         lease_ttl_ms=max(int(worker_stale_after_seconds * 1000), 1000),
     )
+
+    def worker_status() -> str:
+        return "draining" if shutdown_event.is_set() else "online"
+
+    def request_shutdown(signum, _frame) -> None:
+        if not shutdown_event.is_set():
+            logger.info(
+                "worker shutdown requested signal=%s; entering drain mode worker=%s",
+                signum,
+                worker_name,
+            )
+        shutdown_event.set()
+
+    for signum in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(signum, request_shutdown)
+        except (ValueError, OSError):
+            logger.debug("could not install signal handler signum=%s", signum)
+
     ensure_v2_stream_group(client, v2_invocation_stream)
     ensure_v2_stream_group(client, v2_build_stream)
 
@@ -959,17 +1158,29 @@ def main() -> None:
             "worker_name": worker_name,
             "interval_seconds": heartbeat_interval_seconds,
             "activity": activity,
+            "stop_event": heartbeat_stop_event,
             "operational_store": worker_state,
             "operational_payload": operational_payload,
+            "warm_inventory_provider": (
+                lambda: warm_pool_heartbeat_metadata(invocation_executor)
+            ),
+            "status_provider": worker_status,
         },
         daemon=True,
     ).start()
+    start_metrics_server(
+        worker_name=worker_name,
+        activity=activity,
+        status_provider=worker_status,
+        warm_inventory_provider=lambda: warm_pool_heartbeat_metadata(invocation_executor),
+        port=metrics_port,
+    )
 
     logger.info(
         (
             "worker started; worker=%s invocation_queue=%s build_queue=%s "
             "processing_queue=%s max_concurrency=%s max_invocation_concurrency=%s "
-            "max_build_concurrency=%s"
+            "max_build_concurrency=%s warm_containers=%s"
         ),
         worker_name,
         invocation_queue_name,
@@ -978,10 +1189,14 @@ def main() -> None:
         max_concurrency,
         max_invocation_concurrency,
         max_build_concurrency,
+        invocation_executor.warm_enabled,
     )
 
     with ThreadPoolExecutor(max_workers=max_concurrency) as pool:
-        while True:
+        while not shutdown_event.is_set() or activity.has_active_jobs():
+            if shutdown_event.is_set():
+                time.sleep(idle_sleep_seconds)
+                continue
             can_run_invocation = activity.can_start_invocation(
                 max_concurrency=max_concurrency,
                 max_invocation_concurrency=max_invocation_concurrency,
@@ -1064,6 +1279,7 @@ def main() -> None:
                     orchestrator=orchestrator,
                     worker_name=worker_name,
                     activity=activity,
+                    executor_factory=invocation_executor_factory,
                 )
                 continue
 
@@ -1115,7 +1331,35 @@ def main() -> None:
                 hostname=hostname,
                 max_build_concurrency=max_build_concurrency,
                 activity=activity,
+                executor_factory=invocation_executor_factory,
             )
+
+    heartbeat_stop_event.set()
+    try:
+        worker_state.record_heartbeat(
+            {
+                **operational_payload,
+                "status": "offline",
+                "active_jobs": 0,
+                "active_builds": 0,
+                "active_invocations": 0,
+            }
+        )
+    except Exception:
+        logger.exception("failed to mark worker offline in orchestrator state")
+    try:
+        backend.heartbeat_worker(
+            {
+                "name": worker_name,
+                "status": "offline",
+                "active_jobs": 0,
+                "active_builds": 0,
+                "active_invocations": 0,
+                "metadata": {},
+            }
+        )
+    except Exception:
+        logger.exception("failed to mark worker offline in backend projection")
 
 
 if __name__ == "__main__":

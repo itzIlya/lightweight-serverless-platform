@@ -38,6 +38,7 @@ redis.call('HSET', KEYS[1],
     'status', 'queued',
     'dispatch_attempt', '0',
     'recovery_count', '0',
+    'retry_count', '0',
     'available_at_ms', ARGV[3],
     'created_at_ms', ARGV[4],
     'updated_at_ms', ARGV[4])
@@ -213,6 +214,43 @@ redis.call('HDEL', KEYS[1],
     'assigned_worker', 'worker_queue', 'lease_expires_at_ms',
     'completion_id', 'completion_payload', 'completion_status', 'artifact_commit_id')
 return {'ok', 'queued', tostring(attempt), tostring(recovery)}
+"""
+
+
+RETRY_INVOCATION_SCRIPT = r"""
+if redis.call('EXISTS', KEYS[1]) == 0 then
+    return {'missing', ''}
+end
+local status = redis.call('HGET', KEYS[1], 'status') or ''
+local attempt = tonumber(redis.call('HGET', KEYS[1], 'dispatch_attempt') or '0')
+local existing_completion = redis.call('HGET', KEYS[1], 'retry_completion_id') or ''
+if status == 'queued' and existing_completion == ARGV[3] then
+    return {'already', status, tostring(attempt)}
+end
+if status == 'succeeded' or status == 'failed' or status == 'cancelled' or status == 'dead_lettered' then
+    return {'terminal', status, tostring(attempt)}
+end
+if status ~= 'running' then
+    return {'invalid_state', status, tostring(attempt)}
+end
+local worker = redis.call('HGET', KEYS[1], 'assigned_worker') or ''
+if worker ~= ARGV[1] or attempt ~= tonumber(ARGV[2]) then
+    return {'stale', status, tostring(attempt)}
+end
+local retry = redis.call('HINCRBY', KEYS[1], 'retry_count', 1)
+redis.call('HINCRBY', KEYS[2], 'invocation_retries', 1)
+redis.call('HSET', KEYS[1],
+    'status', 'queued',
+    'available_at_ms', ARGV[4],
+    'retry_completion_id', ARGV[3],
+    'retry_reason', ARGV[5],
+    'last_error', ARGV[5],
+    'completion_payload', ARGV[6],
+    'updated_at_ms', ARGV[7])
+redis.call('HDEL', KEYS[1],
+    'assigned_worker', 'worker_queue', 'worker_stream', 'lease_expires_at_ms',
+    'completion_id', 'completion_status', 'artifact_commit_id', 'delivery_stream_id')
+return {'ok', 'queued', tostring(attempt), tostring(retry)}
 """
 
 
@@ -411,6 +449,30 @@ class V2JobStateStore:
             _now_ms(now_ms),
         )
 
+    def retry_invocation(
+        self,
+        job_id: str,
+        *,
+        worker_name: str,
+        dispatch_attempt: int,
+        completion_id: str,
+        available_at_ms: int,
+        reason: str,
+        completion_payload: dict,
+        now_ms: int | None = None,
+    ) -> TransitionResult:
+        return self._run_with_keys(
+            RETRY_INVOCATION_SCRIPT,
+            [self.key(job_id), self.metrics_key],
+            worker_name,
+            dispatch_attempt,
+            completion_id,
+            available_at_ms,
+            reason,
+            json.dumps(completion_payload, separators=(",", ":"), sort_keys=True),
+            _now_ms(now_ms),
+        )
+
     def cancel(
         self,
         job_id: str,
@@ -450,6 +512,7 @@ class V2JobStateStore:
             "coordination_version",
             "dispatch_attempt",
             "recovery_count",
+            "retry_count",
             "max_recovery_attempts",
             "available_at_ms",
             "created_at_ms",

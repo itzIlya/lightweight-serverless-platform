@@ -1,0 +1,24 @@
+services:
+  prometheus:
+    image: docker.arvancloud.ir/prom/prometheus:v2.55.1
+
+  grafana:
+    image: docker.arvancloud.ir/grafana/grafana:11.2.2
+
+  loki:
+    image: docker.arvancloud.ir/grafana/loki:3.2.1
+
+  alloy:
+    image: docker.arvancloud.ir/grafana/alloy:v1.4.3
+
+  redis-exporter:
+    image: docker.arvancloud.ir/oliver006/redis_exporter:v1.67.0
+
+  postgres-exporter:
+    image: docker.arvancloud.ir/prometheuscommunity/postgres-exporter:v0.15.0
+
+  userservice-postgres-exporter:
+    image: docker.arvancloud.ir/prometheuscommunity/postgres-exporter:v0.15.0
+
+  cadvisor:
+    image: docker.arvancloud.ir/gcr.io/cadvisor/cadvisor:v0.49.1

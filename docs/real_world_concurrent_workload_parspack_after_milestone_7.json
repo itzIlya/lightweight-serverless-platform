@@ -1,0 +1,41 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "username": "workload_ef2cc72f",
+  "function_id": 69,
+  "function_slug": "concurrent-sleep-ef2cc72f",
+  "version_id": 80,
+  "image_ref": "localhost:5000/functions/concurrent-sleep-ef2cc72f:v80-v1",
+  "invocation_count": 8,
+  "sleep_seconds": 1.0,
+  "sequential_sleep_seconds": 8.0,
+  "client_submit_elapsed_seconds": 0.359,
+  "client_poll_elapsed_seconds": 15.609,
+  "client_wall_elapsed_seconds": 15.968,
+  "statuses": [
+    "succeeded"
+  ],
+  "duration_ms_min": 4552,
+  "duration_ms_max": 6234,
+  "duration_ms_median": 5925,
+  "invocation_ids": [
+    664,
+    663,
+    665,
+    666,
+    667,
+    668,
+    669,
+    670
+  ],
+  "request_ids": [
+    "a411bd3c-f251-4a4c-bfa7-317c474ba3e3",
+    "78887478-77cf-4238-92e9-3cf5a45250ff",
+    "0835d6e5-f385-4b99-83d8-c83423c6b4b6",
+    "b8ad83a8-7d98-48e9-ae10-08673a271226",
+    "37d91527-8ba0-488e-93e1-9f998954ccf6",
+    "2a382516-ad45-484b-9e3e-054016633443",
+    "14d2b588-9cf7-44fd-b844-47a15affe96a",
+    "2cfb1625-bc5d-4d6f-973b-84d7472165f5"
+  ],
+  "read_token_returned": true
+}

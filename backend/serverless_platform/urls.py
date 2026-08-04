@@ -3,6 +3,8 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from apps.health.views import health_check
+from apps.health.metrics import metrics
+from apps.accounts.views import clear_userservice_jwks_cache
 from apps.functions.views import (
     BuildAttemptViewSet,
     FunctionVersionViewSet,
@@ -19,6 +21,7 @@ from apps.invocations.views import (
     InvocationViewSet,
     report_invocation,
     stage_invocation_output,
+    stage_invocation_output_direct,
     commit_staged_invocation,
     upload_invocation_output,
 )
@@ -31,6 +34,7 @@ from apps.jobs.views import (
     requeue_scheduler_job,
 )
 from apps.workers.views import WorkerNodeViewSet, heartbeat_worker, register_worker
+from .openapi import openapi_schema, swagger_docs
 
 
 router = DefaultRouter()
@@ -44,6 +48,14 @@ router.register(r"workers", WorkerNodeViewSet, basename="worker")
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("health/", health_check),
+    path("metrics/", metrics),
+    path("api/schema/", openapi_schema, name="openapi-schema"),
+    path("api/docs/", swagger_docs, name="swagger-docs"),
+    path(
+        "api/internal/auth/userservice-jwks-cache/clear/",
+        clear_userservice_jwks_cache,
+        name="clear-userservice-jwks-cache",
+    ),
     path(
         "api/internal/builds/<uuid:build_request_id>/source/",
         download_build_source,
@@ -133,6 +145,11 @@ urlpatterns = [
         "api/internal/invocations/<uuid:request_id>/staged-outputs/",
         stage_invocation_output,
         name="stage-invocation-output",
+    ),
+    path(
+        "api/internal/invocations/<uuid:request_id>/runner-staged-outputs/",
+        stage_invocation_output_direct,
+        name="stage-invocation-output-direct",
     ),
     path(
         "api/internal/invocations/<uuid:request_id>/staged-completions/<str:completion_id>/commit/",

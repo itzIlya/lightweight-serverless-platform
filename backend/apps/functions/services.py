@@ -7,8 +7,9 @@ import uuid
 import zipfile
 
 from django.conf import settings
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
+from urllib import error, parse, request
 
 from apps.workers.models import WorkerNode, WorkerStatus
 
@@ -18,6 +19,9 @@ from .models import (
     BuildLeaseStatus,
     BuildPolicy,
     BuildStatus,
+    Function,
+    FunctionImage,
+    FunctionImageStatus,
     FunctionVersion,
 )
 
@@ -110,6 +114,28 @@ def create_build_attempt(
     return attempt
 
 
+def select_active_version(function: Function) -> FunctionVersion | None:
+    if function.active_version_id:
+        return function.active_version
+    return (
+        function.versions.filter(
+            build_status=BuildStatus.BUILT,
+        )
+        .exclude(image_ref="")
+        .order_by("-created_at", "-id")
+        .first()
+    )
+
+
+def next_replacement_version_name(function: Function) -> str:
+    index = function.versions.count() + 1
+    while True:
+        candidate = f"r{index}"
+        if not function.versions.filter(version=candidate).exists():
+            return candidate
+        index += 1
+
+
 def sync_version_from_attempt(
     version: FunctionVersion,
     attempt: BuildAttempt,
@@ -134,6 +160,244 @@ def sync_version_from_attempt(
             "updated_at",
         ]
     )
+    if attempt.image_ref:
+        if attempt.status == BuildStatus.BUILT:
+            promote_active_version(version)
+        elif attempt.status in {BuildStatus.FAILED, BuildStatus.CANCELLED}:
+            schedule_image_deletion(
+                function=version.function,
+                function_version=version,
+                image_ref=attempt.image_ref,
+                reason=f"build {attempt.status}",
+            )
+
+
+def promote_active_version(version: FunctionVersion) -> None:
+    function = Function.objects.select_related("active_version").get(pk=version.function_id)
+    old_image_ref = function.active_version.image_ref if function.active_version_id else ""
+    Function.objects.filter(pk=function.pk).update(
+        active_version=version,
+        updated_at=timezone.now(),
+    )
+    mark_image_active(version)
+    if old_image_ref and old_image_ref != version.image_ref:
+        schedule_image_deletion(
+            function=function,
+            function_version=function.active_version,
+            image_ref=old_image_ref,
+            reason="replaced by successful rebuild",
+        )
+
+
+def mark_image_active(version: FunctionVersion) -> FunctionImage:
+    image = track_function_image(
+        function=version.function,
+        function_version=version,
+        image_ref=version.image_ref,
+        status=FunctionImageStatus.ACTIVE,
+        reason="active build",
+    )
+    FunctionImage.objects.filter(
+        function=version.function,
+        status=FunctionImageStatus.ACTIVE,
+    ).exclude(pk=image.pk).exclude(image_ref=version.image_ref).update(
+        status=FunctionImageStatus.PENDING_DELETE,
+        reason="superseded by active build",
+        delete_after=timezone.now(),
+        updated_at=timezone.now(),
+    )
+    return image
+
+
+def track_function_image(
+    *,
+    function: Function | None,
+    function_version: FunctionVersion | None,
+    image_ref: str,
+    status: str = FunctionImageStatus.CANDIDATE,
+    reason: str = "",
+    delete_after=None,
+) -> FunctionImage | None:
+    image_ref = str(image_ref or "").strip()
+    if not image_ref:
+        return None
+    image, _ = FunctionImage.objects.get_or_create(
+        image_ref=image_ref,
+        defaults={
+            "function": function,
+            "function_version": function_version,
+        },
+    )
+    image.function = function or image.function
+    image.function_version = function_version or image.function_version
+    image.status = status
+    image.reason = reason
+    image.delete_after = delete_after
+    if status != FunctionImageStatus.DELETE_FAILED:
+        image.last_error = ""
+    image.save(
+        update_fields=[
+            "function",
+            "function_version",
+            "status",
+            "reason",
+            "delete_after",
+            "last_error",
+            "updated_at",
+        ]
+    )
+    return image
+
+
+def schedule_image_deletion(
+    *,
+    function: Function | None,
+    function_version: FunctionVersion | None,
+    image_ref: str,
+    reason: str,
+    delete_after=None,
+) -> FunctionImage | None:
+    return track_function_image(
+        function=function,
+        function_version=function_version,
+        image_ref=image_ref,
+        status=FunctionImageStatus.PENDING_DELETE,
+        reason=reason,
+        delete_after=delete_after or timezone.now(),
+    )
+
+
+def schedule_function_images_for_deletion(function: Function, *, reason: str) -> int:
+    seen = set()
+    count = 0
+    for version in function.versions.exclude(image_ref="").order_by("id"):
+        if version.image_ref in seen:
+            continue
+        seen.add(version.image_ref)
+        schedule_image_deletion(
+            function=function,
+            function_version=version,
+            image_ref=version.image_ref,
+            reason=reason,
+        )
+        count += 1
+    return count
+
+
+MANIFEST_ACCEPT = ", ".join(
+    [
+        "application/vnd.docker.distribution.manifest.v2+json",
+        "application/vnd.oci.image.manifest.v1+json",
+    ]
+)
+
+
+def repository_and_tag(image_ref: str) -> tuple[str, str]:
+    without_registry = image_ref.split("/", 1)[1]
+    repository, tag = without_registry.rsplit(":", 1)
+    if not repository or not tag:
+        raise ValueError("Image reference must include repository and tag.")
+    return repository, tag
+
+
+def delete_registry_image(
+    image_ref: str,
+    *,
+    registry_base_url: str,
+    urlopen=request.urlopen,
+) -> bool:
+    repository, tag = repository_and_tag(image_ref)
+    repository_path = "/".join(parse.quote(part, safe="") for part in repository.split("/"))
+    manifest_url = (
+        f"{registry_base_url.rstrip('/')}/v2/{repository_path}/manifests/"
+        f"{parse.quote(tag, safe='')}"
+    )
+    head = request.Request(
+        manifest_url,
+        method="HEAD",
+        headers={"Accept": MANIFEST_ACCEPT},
+    )
+    try:
+        with urlopen(head, timeout=10) as response:
+            digest = response.headers.get("Docker-Content-Digest", "")
+    except error.HTTPError as exc:
+        if exc.code == 404:
+            return False
+        raise
+    if not digest:
+        raise RuntimeError("Registry did not return a manifest digest.")
+    delete_url = (
+        f"{registry_base_url.rstrip('/')}/v2/{repository_path}/manifests/"
+        f"{parse.quote(digest, safe=':')}"
+    )
+    delete = request.Request(delete_url, method="DELETE")
+    try:
+        with urlopen(delete, timeout=10):
+            return True
+    except error.HTTPError as exc:
+        if exc.code == 404:
+            return False
+        raise
+
+
+def cleanup_pending_function_images(
+    *,
+    registry_base_url: str | None = None,
+    batch_size: int = 100,
+    now=None,
+    delete_image=delete_registry_image,
+) -> dict:
+    now = now or timezone.now()
+    registry_base_url = registry_base_url or getattr(
+        settings,
+        "REGISTRY_INTERNAL_BASE_URL",
+        "http://registry:5000",
+    )
+    result = {"checked": 0, "deleted": 0, "failed": 0, "skipped_active": 0}
+    images = list(
+        FunctionImage.objects.select_related("function", "function__active_version")
+        .filter(status=FunctionImageStatus.PENDING_DELETE)
+        .filter(models.Q(delete_after__isnull=True) | models.Q(delete_after__lte=now))
+        .order_by("created_at")[: max(int(batch_size), 1)]
+    )
+    for image in images:
+        result["checked"] += 1
+        if _image_is_currently_active(image):
+            image.status = FunctionImageStatus.ACTIVE
+            image.reason = "still active; cleanup skipped"
+            image.delete_after = None
+            image.save(update_fields=["status", "reason", "delete_after", "updated_at"])
+            result["skipped_active"] += 1
+            continue
+        try:
+            delete_image(image.image_ref, registry_base_url=registry_base_url)
+        except Exception as exc:
+            image.status = FunctionImageStatus.DELETE_FAILED
+            image.delete_attempts += 1
+            image.last_error = str(exc)
+            image.save(
+                update_fields=[
+                    "status",
+                    "delete_attempts",
+                    "last_error",
+                    "updated_at",
+                ]
+            )
+            result["failed"] += 1
+            continue
+        image.status = FunctionImageStatus.DELETED
+        image.deleted_at = now
+        image.last_error = ""
+        image.save(update_fields=["status", "deleted_at", "last_error", "updated_at"])
+        result["deleted"] += 1
+    return result
+
+
+def _image_is_currently_active(image: FunctionImage) -> bool:
+    function = image.function
+    if function is None or not function.active_version_id:
+        return False
+    return function.active_version.image_ref == image.image_ref
 
 
 def get_build_policy() -> BuildPolicy:

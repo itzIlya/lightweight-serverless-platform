@@ -1,9 +1,16 @@
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.test import override_settings
+import base64
+import importlib.util
+import jwt
+import unittest
+from unittest.mock import patch
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import Account, AccountRole
+from apps.functions.models import Function
 
 
 def authenticate_with_jwt(client, user) -> None:
@@ -61,3 +68,65 @@ class AccountAuthTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["username"], "me")
         self.assertEqual(response.data["role"], AccountRole.USER)
+
+
+def _b64url_uint(value: int) -> str:
+    raw = value.to_bytes((value.bit_length() + 7) // 8, "big")
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _rsa_jwk(key, kid="test-key") -> dict:
+    numbers = key.public_key().public_numbers()
+    return {
+        "kty": "RSA",
+        "use": "sig",
+        "kid": kid,
+        "alg": "RS256",
+        "n": _b64url_uint(numbers.n),
+        "e": _b64url_uint(numbers.e),
+    }
+
+
+@override_settings(
+    USERSERVICE_JWKS_URL="http://userservice.test/jwks/",
+    USERSERVICE_JWT_ISSUER="serverless-userservice",
+    USERSERVICE_JWT_AUDIENCE="serverless-platform",
+)
+@unittest.skipUnless(
+    importlib.util.find_spec("cryptography"),
+    "cryptography is required for RS256 userservice JWT tests",
+)
+class ExternalUserServiceJWTTests(APITestCase):
+    def test_backend_accepts_userservice_jwt_and_creates_shadow_owner(self):
+        from cryptography.hazmat.primitives.asymmetric import rsa
+
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        token = jwt.encode(
+            {
+                "iss": "serverless-userservice",
+                "aud": "serverless-platform",
+                "sub": "user-subject-123",
+                "username": "external-owner",
+                "email": "owner@example.com",
+                "role": AccountRole.USER,
+                "token_type": "access",
+                "exp": 4102444800,
+            },
+            key,
+            algorithm="RS256",
+            headers={"kid": "test-key"},
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        with patch("apps.accounts.external_auth._get_jwks", return_value=[_rsa_jwk(key)]):
+            response = self.client.post(
+                "/api/functions/",
+                data={"name": "External Auth Function"},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 201)
+        function = Function.objects.get()
+        account = Account.objects.get(user=function.owner)
+        self.assertEqual(account.external_subject, "user-subject-123")
+        self.assertEqual(account.role, AccountRole.USER)

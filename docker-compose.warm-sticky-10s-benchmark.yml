@@ -1,0 +1,5 @@
+services:
+  worker:
+    environment:
+      WORKER_HEARTBEAT_SECONDS: 10
+      ORCHESTRATOR_WORKER_STALE_AFTER_SECONDS: 30

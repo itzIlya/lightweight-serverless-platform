@@ -1,0 +1,24 @@
+services:
+  prometheus:
+    image: mirror-docker.runflare.com/prom/prometheus:v2.55.1
+
+  grafana:
+    image: mirror-docker.runflare.com/grafana/grafana:11.2.2
+
+  loki:
+    image: mirror-docker.runflare.com/grafana/loki:3.2.1
+
+  alloy:
+    image: mirror-docker.runflare.com/grafana/alloy:v1.4.3
+
+  redis-exporter:
+    image: mirror-docker.runflare.com/oliver006/redis_exporter:v1.67.0
+
+  postgres-exporter:
+    image: mirror-docker.runflare.com/prometheuscommunity/postgres-exporter:v0.15.0
+
+  userservice-postgres-exporter:
+    image: mirror-docker.runflare.com/prometheuscommunity/postgres-exporter:v0.15.0
+
+  cadvisor:
+    image: mirror-docker.runflare.com/cadvisor/cadvisor:v0.49.1

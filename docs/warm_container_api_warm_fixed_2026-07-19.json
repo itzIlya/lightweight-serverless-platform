@@ -1,0 +1,284 @@
+{
+  "created_at": "2026-07-19T11:30:18.482678+00:00",
+  "base_url": "http://localhost:8000",
+  "username": "sweep_f2150e8f",
+  "function_id": 33,
+  "version_id": 40,
+  "image_ref": "localhost:5000/functions/invocation-profile-f2150e8f:v40-v1",
+  "count_per_level": 6,
+  "sleep_seconds": 0.0,
+  "cooldown_seconds": 0.0,
+  "concurrency_levels": [
+    1
+  ],
+  "scenarios": [
+    {
+      "name": "concurrency_1",
+      "count": 6,
+      "sleep_seconds": 0.0,
+      "concurrency": 1,
+      "client_wall_ms": 11968,
+      "invocations": [
+        {
+          "id": 358,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "a07c69ca-7d72-427d-88f1-d52475ea9fac",
+          "status": "succeeded",
+          "event": {
+            "index": 0,
+            "sleep_seconds": 0.0
+          },
+          "result": {
+            "index": 0,
+            "request_id": "a07c69ca-7d72-427d-88f1-d52475ea9fac",
+            "sleep_seconds": 0.0,
+            "user_code_elapsed_ms": 0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 0, \"sleep_seconds\": 0.0, \"user_code_elapsed_ms\": 0, \"request_id\": \"a07c69ca-7d72-427d-88f1-d52475ea9fac\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 11, \"runner_module_imports_ms\": 341, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 353}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": true,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T11:30:06.225648Z",
+          "started_at": "2026-07-19T11:30:06.472523Z",
+          "finished_at": "2026-07-19T11:30:07.868455Z",
+          "duration_ms": 1224,
+          "function_version": 40,
+          "client_submit_ms": 93,
+          "client_poll_until_terminal_ms": 1703,
+          "queue_to_started_ms": 246,
+          "started_to_finished_ms": 1395,
+          "queued_to_finished_ms": 1642,
+          "user_code_elapsed_ms": 0,
+          "worker_overhead_vs_user_code_ms": 1224
+        },
+        {
+          "id": 359,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "9ab5837e-b7df-446a-b4d7-efff27447b3b",
+          "status": "succeeded",
+          "event": {
+            "index": 1,
+            "sleep_seconds": 0.0
+          },
+          "result": {
+            "index": 1,
+            "request_id": "9ab5837e-b7df-446a-b4d7-efff27447b3b",
+            "sleep_seconds": 0.0,
+            "user_code_elapsed_ms": 0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 1, \"sleep_seconds\": 0.0, \"user_code_elapsed_ms\": 0, \"request_id\": \"9ab5837e-b7df-446a-b4d7-efff27447b3b\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 0, \"runner_module_imports_ms\": 372, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 373}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": false,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T11:30:08.010604Z",
+          "started_at": "2026-07-19T11:30:08.570795Z",
+          "finished_at": "2026-07-19T11:30:09.949546Z",
+          "duration_ms": 1047,
+          "function_version": 40,
+          "client_submit_ms": 77,
+          "client_poll_until_terminal_ms": 2422,
+          "queue_to_started_ms": 560,
+          "started_to_finished_ms": 1378,
+          "queued_to_finished_ms": 1938,
+          "user_code_elapsed_ms": 0,
+          "worker_overhead_vs_user_code_ms": 1047
+        },
+        {
+          "id": 360,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "9391de76-45ad-420c-bedc-a1ce0a1c9fda",
+          "status": "succeeded",
+          "event": {
+            "index": 2,
+            "sleep_seconds": 0.0
+          },
+          "result": {
+            "index": 2,
+            "request_id": "9391de76-45ad-420c-bedc-a1ce0a1c9fda",
+            "sleep_seconds": 0.0,
+            "user_code_elapsed_ms": 0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 2, \"sleep_seconds\": 0.0, \"user_code_elapsed_ms\": 0, \"request_id\": \"9391de76-45ad-420c-bedc-a1ce0a1c9fda\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 0, \"runner_module_imports_ms\": 326, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 327}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": false,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T11:30:10.535064Z",
+          "started_at": "2026-07-19T11:30:10.975426Z",
+          "finished_at": "2026-07-19T11:30:11.965027Z",
+          "duration_ms": 806,
+          "function_version": 40,
+          "client_submit_ms": 109,
+          "client_poll_until_terminal_ms": 1828,
+          "queue_to_started_ms": 440,
+          "started_to_finished_ms": 989,
+          "queued_to_finished_ms": 1429,
+          "user_code_elapsed_ms": 0,
+          "worker_overhead_vs_user_code_ms": 806
+        },
+        {
+          "id": 361,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "72313bb6-dcfe-4bce-aae7-1cb8e783b32d",
+          "status": "succeeded",
+          "event": {
+            "index": 3,
+            "sleep_seconds": 0.0
+          },
+          "result": {
+            "index": 3,
+            "request_id": "72313bb6-dcfe-4bce-aae7-1cb8e783b32d",
+            "sleep_seconds": 0.0,
+            "user_code_elapsed_ms": 0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 3, \"sleep_seconds\": 0.0, \"user_code_elapsed_ms\": 0, \"request_id\": \"72313bb6-dcfe-4bce-aae7-1cb8e783b32d\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 1, \"runner_module_imports_ms\": 453, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 456}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": false,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T11:30:12.442650Z",
+          "started_at": "2026-07-19T11:30:12.676748Z",
+          "finished_at": "2026-07-19T11:30:13.869106Z",
+          "duration_ms": 865,
+          "function_version": 40,
+          "client_submit_ms": 61,
+          "client_poll_until_terminal_ms": 1827,
+          "queue_to_started_ms": 234,
+          "started_to_finished_ms": 1192,
+          "queued_to_finished_ms": 1426,
+          "user_code_elapsed_ms": 0,
+          "worker_overhead_vs_user_code_ms": 865
+        },
+        {
+          "id": 362,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "50db75f0-1244-4842-93a2-663a91dc5da0",
+          "status": "succeeded",
+          "event": {
+            "index": 4,
+            "sleep_seconds": 0.0
+          },
+          "result": {
+            "index": 4,
+            "request_id": "50db75f0-1244-4842-93a2-663a91dc5da0",
+            "sleep_seconds": 0.0,
+            "user_code_elapsed_ms": 0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 4, \"sleep_seconds\": 0.0, \"user_code_elapsed_ms\": 0, \"request_id\": \"50db75f0-1244-4842-93a2-663a91dc5da0\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 0, \"runner_module_imports_ms\": 323, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 324}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": false,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T11:30:14.346614Z",
+          "started_at": "2026-07-19T11:30:14.637542Z",
+          "finished_at": "2026-07-19T11:30:15.515295Z",
+          "duration_ms": 692,
+          "function_version": 40,
+          "client_submit_ms": 93,
+          "client_poll_until_terminal_ms": 1750,
+          "queue_to_started_ms": 290,
+          "started_to_finished_ms": 877,
+          "queued_to_finished_ms": 1168,
+          "user_code_elapsed_ms": 0,
+          "worker_overhead_vs_user_code_ms": 692
+        },
+        {
+          "id": 363,
+          "input_files": [],
+          "output_files": [],
+          "request_id": "3c5e6652-262c-4d7a-84aa-070d4ae4f4de",
+          "status": "succeeded",
+          "event": {
+            "index": 5,
+            "sleep_seconds": 0.0
+          },
+          "result": {
+            "index": 5,
+            "request_id": "3c5e6652-262c-4d7a-84aa-070d4ae4f4de",
+            "sleep_seconds": 0.0,
+            "user_code_elapsed_ms": 0
+          },
+          "stdout": "__FUNCTION_RESULT__={\"index\": 5, \"sleep_seconds\": 0.0, \"user_code_elapsed_ms\": 0, \"request_id\": \"3c5e6652-262c-4d7a-84aa-070d4ae4f4de\"}\n__FUNCTION_TIMING__={\"runner_environment_read_ms\": 0, \"runner_event_load_ms\": 0, \"runner_handler_execution_ms\": 0, \"runner_handler_import_ms\": 0, \"runner_module_imports_ms\": 425, \"runner_result_serialize_ms\": 0, \"runner_result_write_ms\": 0, \"runner_setup_ms\": 0, \"runner_total_ms\": 426}",
+          "stderr": "",
+          "exit_code": 0,
+          "cold_start": false,
+          "retry_count": 0,
+          "error_message": "",
+          "queued_at": "2026-07-19T11:30:16.197365Z",
+          "started_at": "2026-07-19T11:30:16.480948Z",
+          "finished_at": "2026-07-19T11:30:17.715162Z",
+          "duration_ms": 986,
+          "function_version": 40,
+          "client_submit_ms": 94,
+          "client_poll_until_terminal_ms": 1905,
+          "queue_to_started_ms": 283,
+          "started_to_finished_ms": 1234,
+          "queued_to_finished_ms": 1517,
+          "user_code_elapsed_ms": 0,
+          "worker_overhead_vs_user_code_ms": 986
+        }
+      ]
+    }
+  ],
+  "scenario_summary": {
+    "concurrency_1": {
+      "client_wall_ms": 11968,
+      "statuses": [
+        "succeeded"
+      ],
+      "client_submit_ms": {
+        "min": 61,
+        "median": 93,
+        "max": 109
+      },
+      "queue_to_started_ms": {
+        "min": 234,
+        "median": 286,
+        "max": 560
+      },
+      "duration_ms": {
+        "min": 692,
+        "median": 925,
+        "max": 1224
+      },
+      "started_to_finished_ms": {
+        "min": 877,
+        "median": 1213,
+        "max": 1395
+      },
+      "queued_to_finished_ms": {
+        "min": 1168,
+        "median": 1473,
+        "max": 1938
+      },
+      "user_code_elapsed_ms": {
+        "min": 0,
+        "median": 0,
+        "max": 0
+      },
+      "worker_overhead_vs_user_code_ms": {
+        "min": 692,
+        "median": 925,
+        "max": 1224
+      }
+    }
+  },
+  "worker_timing_summary": {
+    "concurrency_1": {}
+  },
+  "worker_timing_collection": {
+    "detail": "Command '['docker', 'compose', 'logs', '--no-color', 'worker']' returned non-zero exit status 1."
+  }
+}

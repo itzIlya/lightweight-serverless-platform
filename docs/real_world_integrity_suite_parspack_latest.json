@@ -1,0 +1,21 @@
+{
+    "status":  "passed",
+    "username":  "integrity_efe72229e7",
+    "function_id":  68,
+    "old_image":  "localhost:5000/functions/integrity-function-c37e1119:v78-v1",
+    "new_image":  "localhost:5000/functions/integrity-function-c37e1119:v79-r2",
+    "completed_v1_invocations":  5,
+    "completed_v2_invocations":  3,
+    "function_invocation_history_count":  8,
+    "downloaded_output":  "v2 report for file-call",
+    "wrong_read_token_status":  403,
+    "wall_seconds":  49.578,
+    "storage_backend":  "parspack_s3",
+    "parspack_smoke":  "save/read/delete passed",
+    "image_cleanup_stage_1":  "old image deleted; active image survived and invoked successfully",
+    "old_image_manifest_after_cleanup":  404,
+    "new_image_manifest_before_function_delete":  200,
+    "post_cleanup_invocation_status":  "succeeded",
+    "function_delete_status":  204,
+    "new_image_manifest_after_function_delete_cleanup":  404
+}

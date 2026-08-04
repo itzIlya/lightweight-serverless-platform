@@ -36,7 +36,12 @@ from .serializers import (
     BuildReportSerializer,
     FunctionCreateSerializer,
     FunctionInvokeSerializer,
+    FunctionInvokeTokenCreateSerializer,
+    FunctionInvokeTokenRotateSerializer,
+    FunctionInvokeTokenSerializer,
+    FunctionInvokeTokenUpdateSerializer,
     FunctionSerializer,
+    FunctionSourceReplacementSerializer,
     FunctionVersionCreateSerializer,
     FunctionVersionSerializer,
 )
@@ -48,11 +53,17 @@ from .services import (
     enforce_build_submission_limits,
     get_locked_build_policy,
     get_build_policy,
+    next_replacement_version_name,
     release_build_lease,
+    schedule_function_images_for_deletion,
+    select_active_version,
     sync_version_from_attempt,
 )
 from apps.invocations.models import InvocationInputFile
 from apps.invocations.serializers import InvocationInputFileSerializer
+from apps.invocations.management.commands.cleanup_expired_invocations import (
+    _delete_invocation_artifact_files,
+)
 
 
 class QueueUnavailable(APIException):
@@ -68,11 +79,11 @@ class BuildLimitExceeded(APIException):
 
 
 class FunctionViewSet(viewsets.ModelViewSet):
-    queryset = Function.objects.select_related("owner").prefetch_related("versions")
+    queryset = Function.objects.select_related("owner", "active_version").prefetch_related("versions")
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
-        queryset = Function.objects.select_related("owner").prefetch_related("versions")
+        queryset = Function.objects.select_related("owner", "active_version").prefetch_related("versions")
         if self.action == "invoke":
             return queryset
         if is_platform_admin(self.request.user):
@@ -93,6 +104,299 @@ class FunctionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+
+    def perform_destroy(self, instance):
+        with transaction.atomic():
+            function = (
+                Function.objects.select_for_update()
+                .prefetch_related("versions")
+                .get(pk=instance.pk)
+            )
+            schedule_function_images_for_deletion(
+                function,
+                reason="function deleted",
+            )
+            for invocation in (
+                Invocation.objects.select_for_update()
+                .filter(function_version__function=function)
+                .prefetch_related(
+                    "input_files",
+                    "output_files",
+                    "log_artifacts",
+                    "staged_completions__output_files",
+                    "staged_completions__log_artifacts",
+                )
+            ):
+                _delete_invocation_artifact_files(invocation)
+            for version in function.versions.all():
+                if version.source_bundle:
+                    version.source_bundle.delete(save=False)
+            function.delete()
+
+    @action(detail=True, methods=["get"], url_path="invocations")
+    def invocations(self, request, pk=None):
+        function = self.get_object()
+        queryset = (
+            Invocation.objects.filter(function_version__function=function)
+            .select_related("function_version", "function_version__function")
+            .prefetch_related("input_files", "output_files", "log_artifacts")
+        )
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        try:
+            limit = int(request.query_params.get("limit", "50"))
+        except ValueError:
+            limit = 50
+        limit = max(1, min(limit, 100))
+        queryset = queryset.order_by("-queued_at", "-id")[:limit]
+        return Response(InvocationSerializer(queryset, many=True).data)
+
+    @action(detail=True, methods=["get"], url_path="build-status")
+    def build_status(self, request, pk=None):
+        function = self.get_object()
+        active_version = select_active_version(function)
+        pending_version = (
+            function.versions.filter(
+                build_status__in=[
+                    BuildStatus.QUEUED,
+                    BuildStatus.BUILDING,
+                    BuildStatus.CANCELLING,
+                ]
+            )
+            .order_by("-created_at", "-id")
+            .first()
+        )
+        latest_version = function.versions.order_by("-created_at", "-id").first()
+        status_version = pending_version or active_version or latest_version
+        latest_attempt = (
+            status_version.build_attempts.order_by("-created_at", "-id").first()
+            if status_version is not None
+            else None
+        )
+        state = status_version.build_status if status_version is not None else "not_built"
+        active_states = {
+            BuildStatus.QUEUED,
+            BuildStatus.BUILDING,
+            BuildStatus.CANCELLING,
+        }
+        can_invoke = (
+            active_version is not None
+            and active_version.build_status == BuildStatus.BUILT
+            and bool(active_version.image_ref)
+        )
+        return Response(
+            {
+                "resource": "build",
+                "function_id": function.id,
+                "state": state,
+                "frontend_state": state,
+                "is_terminal": state not in active_states,
+                "poll_after_seconds": 1 if state in active_states else None,
+                "can_cancel": state in active_states,
+                "can_invoke": can_invoke,
+                "links": {
+                    "function": f"/api/functions/{function.id}/",
+                    "build_status": f"/api/functions/{function.id}/build-status/",
+                    "invoke": f"/api/functions/{function.id}/invoke/",
+                    "invocations": f"/api/functions/{function.id}/invocations/",
+                },
+                "active_version": (
+                    FunctionVersionSerializer(active_version).data
+                    if active_version is not None
+                    else None
+                ),
+                "pending_version": (
+                    FunctionVersionSerializer(pending_version).data
+                    if pending_version is not None
+                    else None
+                ),
+                "latest_version": (
+                    FunctionVersionSerializer(latest_version).data
+                    if latest_version is not None
+                    else None
+                ),
+                "latest_attempt": (
+                    BuildAttemptSerializer(latest_attempt).data
+                    if latest_attempt is not None
+                    else None
+                ),
+            }
+        )
+
+    @action(detail=True, methods=["get", "post"], url_path="tokens")
+    def tokens(self, request, pk=None):
+        function = self.get_object()
+        if request.method.lower() == "get":
+            tokens = function.invoke_tokens.select_related("created_by").all()
+            return Response(FunctionInvokeTokenSerializer(tokens, many=True).data)
+
+        serializer = FunctionInvokeTokenCreateSerializer(
+            data=request.data,
+            context={"function": function},
+        )
+        serializer.is_valid(raise_exception=True)
+        token, raw_token = FunctionInvokeToken.create_token(
+            function=function,
+            name=serializer.validated_data["name"],
+            created_by=request.user,
+            expires_at=serializer.validated_data.get("expires_at"),
+        )
+        return Response(
+            {
+                "token": FunctionInvokeTokenSerializer(token).data,
+                "raw_token": raw_token,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=["get", "patch", "delete"],
+        url_path=r"tokens/(?P<token_id>[^/.]+)",
+    )
+    def token_detail(self, request, pk=None, token_id=None):
+        function = self.get_object()
+        token = get_object_or_404(function.invoke_tokens, pk=token_id)
+
+        if request.method.lower() == "get":
+            return Response(FunctionInvokeTokenSerializer(token).data)
+
+        if request.method.lower() == "delete":
+            token.revoke()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        serializer = FunctionInvokeTokenUpdateSerializer(
+            data=request.data,
+            partial=True,
+            context={"function": function, "token": token},
+        )
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        if "name" in values:
+            token.name = values["name"]
+        if "expires_at" in values:
+            token.expires_at = values["expires_at"]
+        if "is_active" in values:
+            token.is_active = values["is_active"]
+            token.revoked_at = None if values["is_active"] else timezone.now()
+        token.save(
+            update_fields=[
+                "name",
+                "expires_at",
+                "is_active",
+                "revoked_at",
+                "updated_at",
+            ]
+        )
+        return Response(FunctionInvokeTokenSerializer(token).data)
+
+    @action(detail=True, methods=["post"], url_path=r"tokens/(?P<token_id>[^/.]+)/revoke")
+    def revoke_token(self, request, pk=None, token_id=None):
+        function = self.get_object()
+        token = get_object_or_404(function.invoke_tokens, pk=token_id)
+        token.revoke()
+        return Response(FunctionInvokeTokenSerializer(token).data)
+
+    @action(detail=True, methods=["post"], url_path=r"tokens/(?P<token_id>[^/.]+)/rotate")
+    def rotate_token(self, request, pk=None, token_id=None):
+        function = self.get_object()
+        token = get_object_or_404(function.invoke_tokens, pk=token_id)
+        serializer = FunctionInvokeTokenRotateSerializer(
+            data=request.data,
+            context={"function": function, "token": token},
+        )
+        serializer.is_valid(raise_exception=True)
+        raw_token = token.rotate(expires_at=serializer.validated_data.get("expires_at"))
+        return Response(
+            {
+                "token": FunctionInvokeTokenSerializer(token).data,
+                "raw_token": raw_token,
+            }
+        )
+
+    @action(detail=True, methods=["post"], url_path="source")
+    def replace_source(self, request, pk=None):
+        function = self.get_object()
+        active_version = select_active_version(function)
+        serializer = FunctionSourceReplacementSerializer(
+            data=request.data,
+            context={"active_version": active_version},
+        )
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            with transaction.atomic():
+                function = (
+                    Function.objects.select_for_update()
+                    .get(pk=function.pk)
+                )
+                active_build_exists = function.versions.filter(
+                    build_status__in=[
+                        BuildStatus.QUEUED,
+                        BuildStatus.BUILDING,
+                        BuildStatus.CANCELLING,
+                    ]
+                ).exists()
+                if active_build_exists:
+                    raise ValidationError(
+                        {"build": "This function already has a build in progress."}
+                    )
+
+                values = dict(serializer.validated_data)
+                version = FunctionVersion.objects.create(
+                    function=function,
+                    version=next_replacement_version_name(function),
+                    runtime=values["runtime"],
+                    handler=values["handler"],
+                    source_bundle=values["source_bundle"],
+                    config=values["config"],
+                    invocation_input_mime_types=values["invocation_input_mime_types"],
+                    invocation_input_max_files=values["invocation_input_max_files"],
+                    invocation_input_max_size_mb=values["invocation_input_max_size_mb"],
+                    invocation_input_max_total_size_mb=values[
+                        "invocation_input_max_total_size_mb"
+                    ],
+                    declared_output_files=values["declared_output_files"],
+                    invocation_output_max_files=values["invocation_output_max_files"],
+                    invocation_output_max_file_size_mb=values[
+                        "invocation_output_max_file_size_mb"
+                    ],
+                    invocation_output_max_total_size_mb=values[
+                        "invocation_output_max_total_size_mb"
+                    ],
+                )
+
+                policy = get_locked_build_policy()
+                try:
+                    enforce_build_submission_limits(version=version, policy=policy)
+                except BuildAdmissionError as exc:
+                    response = {"detail": str(exc)}
+                    if exc.retry_after_seconds is not None:
+                        response["retry_after_seconds"] = exc.retry_after_seconds
+                    raise BuildLimitExceeded(response) from exc
+
+                attempt = create_build_attempt(version)
+                enqueue_build_attempt(attempt)
+        except BuildLimitExceeded:
+            raise
+        except ValidationError:
+            raise
+        except Exception as exc:
+            raise QueueUnavailable(str(exc)) from exc
+
+        return Response(
+            {
+                "candidate_version": FunctionVersionSerializer(version).data,
+                "build_attempt": BuildAttemptSerializer(attempt).data,
+                "active_version": (
+                    FunctionVersionSerializer(function.active_version).data
+                    if function.active_version_id
+                    else None
+                ),
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
 
     @action(detail=True, methods=["get", "post"], url_path="versions")
     def versions(self, request, pk=None):
@@ -172,13 +476,20 @@ class FunctionViewSet(viewsets.ModelViewSet):
                 function=function,
                 token_hash=token_hash,
             )
-            .only("id", "token_hash", "is_active", "expires_at", "last_used_at")
+            .only(
+                "id",
+                "token_hash",
+                "is_active",
+                "expires_at",
+                "revoked_at",
+                "last_used_at",
+            )
             .first()
         )
         if token is None or not constant_time_compare(token.token_hash, token_hash):
             raise PermissionDenied("Invalid invocation token.")
         if not token.is_usable():
-            raise PermissionDenied("Invocation token is inactive or expired.")
+            raise PermissionDenied("Invalid invocation token.")
 
         token.last_used_at = timezone.now()
         token.save(update_fields=["last_used_at", "updated_at"])
@@ -201,7 +512,9 @@ class FunctionViewSet(viewsets.ModelViewSet):
                     {"version": "Version does not belong to this function."}
                 ) from exc
 
-        version = versions.order_by("-created_at").first()
+        version = select_active_version(function)
+        if version is None:
+            version = versions.order_by("-created_at").first()
         if version is None:
             raise ValidationError("Function has no versions to invoke.")
         return version

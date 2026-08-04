@@ -12,7 +12,14 @@ import redis
 from backend_client import BackendClient
 from orchestrator_state import V2JobStateStore
 from orchestrator_workers import WorkerOperationalStateStore
-from scheduler import choose_worker, worker_queue_for_job, workers_with_queue_lengths
+from scheduler import (
+    choose_worker,
+    remember_local_invocation_dispatch,
+    remember_local_warm_reservation,
+    remember_recent_invocation_route,
+    worker_queue_for_job,
+    workers_with_queue_lengths,
+)
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -52,8 +59,9 @@ class ShadowOrchestrator:
         self.worker_store = worker_store or WorkerOperationalStateStore(redis_client)
         self.decision_prefix = decision_prefix.rstrip(":")
         self.round_robin_state: dict[str, int] = {}
-        self.recent_invocations: dict[str, dict] = {}
         self.local_invocation_loads: dict[str, list[float]] = {}
+        self.local_warm_reservations: dict[str, list[float]] = {}
+        self.local_recent_invocation_routes: dict[str, dict] = {}
 
     def ensure_group(self) -> None:
         try:
@@ -109,8 +117,9 @@ class ShadowOrchestrator:
         worker = choose_worker(
             workers,
             job,
-            recent_invocations=self.recent_invocations,
             local_invocation_loads=self.local_invocation_loads,
+            local_warm_reservations=self.local_warm_reservations,
+            local_recent_invocation_routes=self.local_recent_invocation_routes,
             round_robin_state=self.round_robin_state,
         )
 
@@ -130,6 +139,25 @@ class ShadowOrchestrator:
             )
             decision = "dispatch" if transition.accepted else transition.code
             shadow_status = transition.status
+            if transition.accepted:
+                remember_local_warm_reservation(
+                    job,
+                    worker,
+                    local_warm_reservations=self.local_warm_reservations,
+                    local_load_ttl_seconds=10.0,
+                )
+                remember_local_invocation_dispatch(
+                    job,
+                    worker,
+                    local_invocation_loads=self.local_invocation_loads,
+                    local_load_ttl_seconds=10.0,
+                )
+                remember_recent_invocation_route(
+                    job,
+                    worker,
+                    local_recent_invocation_routes=self.local_recent_invocation_routes,
+                    local_load_ttl_seconds=10.0,
+                )
 
         comparison = {
             "event_id": str(fields.get("event_id", "")),

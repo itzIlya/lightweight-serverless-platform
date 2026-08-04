@@ -79,7 +79,14 @@ def heartbeat_worker(request):
         if key in request.data:
             metadata[key] = int(request.data.get(key) or 0)
 
-    worker.status = WorkerStatus.ONLINE
+    reported_status = request.data.get("status") or WorkerStatus.ONLINE
+    if reported_status not in WorkerStatus.values:
+        return Response(
+            {"detail": "Invalid worker status."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    worker.status = reported_status
     worker.last_seen_at = timezone.now()
     worker.metadata = metadata
     worker.save(update_fields=["status", "last_seen_at", "metadata", "updated_at"])

@@ -11,10 +11,15 @@ from scheduler import (
     choose_build_worker,
     choose_invocation_worker,
     choose_worker,
+    invocation_route_key,
+    invocation_warm_key,
     make_delivery_message,
     parse_delivery_message,
     process_job_id,
     recover_stale_workers,
+    remember_local_warm_reservation,
+    worker_idle_warm_count,
+    worker_recovery_queues,
 )
 
 
@@ -63,12 +68,46 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(worker["name"], "worker-a")
         self.assertEqual(next_worker["name"], "worker-b")
 
-    def test_choose_invocation_worker_uses_recent_light_worker(self):
+    def warm_metadata(self, *, idle_count=1, image_ref="image:v1"):
+        return {
+            "active_jobs": 0,
+            "active_builds": 0,
+            "max_invocation_concurrency": 4,
+            "warm_pool": {
+                "enabled": True,
+                "containers": [
+                    {
+                        "function_version_id": "10",
+                        "image_ref": image_ref,
+                        "handler": "handler.main",
+                        "memory_mb": 128,
+                        "output_tmpfs_size_bytes": 10 * 1024 * 1024,
+                        "idle_count": idle_count,
+                        "busy_count": 0,
+                    }
+                ],
+            },
+        }
+
+    def warm_job(self, *, image_ref="image:v1"):
+        return {
+            "payload": {
+                "type": "function.invoke",
+                "function_version_id": 10,
+                "image_ref": image_ref,
+                "handler": "handler.main",
+                "config": {"memory_mb": 128},
+                "invocation_output_max_total_size_mb": 10,
+            }
+        }
+
+    def test_choose_invocation_worker_prefers_exact_idle_warm_container(self):
         worker = choose_invocation_worker(
             [
                 {
                     "name": "worker-a",
-                    "metadata": {"active_jobs": 0, "active_builds": 0},
+                    "max_concurrency": 4,
+                    "metadata": self.warm_metadata(),
                     "queued_invocations": 1,
                     "queued_builds": 0,
                 },
@@ -79,22 +118,14 @@ class SchedulerTests(unittest.TestCase):
                     "queued_builds": 0,
                 },
             ],
-            {"payload": {"type": "function.invoke", "function_version_id": 10}},
-            recent_invocations={
-                "10": {
-                    "worker_name": "worker-a",
-                    "last_seen": 100,
-                }
-            },
-            affinity_ttl_seconds=10,
-            sticky_max_invocation_load=2,
+            self.warm_job(),
             round_robin_state={},
             now=105,
         )
 
         self.assertEqual(worker["name"], "worker-a")
 
-    def test_choose_invocation_worker_ignores_expired_recent_worker(self):
+    def test_choose_invocation_worker_falls_back_to_least_loaded_without_warm_match(self):
         worker = choose_invocation_worker(
             [
                 {
@@ -111,27 +142,19 @@ class SchedulerTests(unittest.TestCase):
                 },
             ],
             {"payload": {"type": "function.invoke", "function_version_id": 10}},
-            recent_invocations={
-                "10": {
-                    "worker_name": "worker-a",
-                    "last_seen": 100,
-                }
-            },
-            affinity_ttl_seconds=10,
-            sticky_max_invocation_load=2,
             round_robin_state={},
             now=111,
         )
 
         self.assertEqual(worker["name"], "worker-b")
 
-    def test_choose_invocation_worker_ignores_overloaded_recent_worker(self):
+    def test_choose_invocation_worker_ignores_warm_image_mismatch(self):
         worker = choose_invocation_worker(
             [
                 {
                     "name": "worker-a",
-                    "metadata": {"active_jobs": 2, "active_builds": 0},
-                    "queued_invocations": 1,
+                    "metadata": self.warm_metadata(image_ref="image:old"),
+                    "queued_invocations": 2,
                     "queued_builds": 0,
                 },
                 {
@@ -141,20 +164,270 @@ class SchedulerTests(unittest.TestCase):
                     "queued_builds": 0,
                 },
             ],
-            {"payload": {"type": "function.invoke", "function_version_id": 10}},
-            recent_invocations={
-                "10": {
-                    "worker_name": "worker-a",
-                    "last_seen": 100,
-                }
-            },
-            affinity_ttl_seconds=10,
-            sticky_max_invocation_load=2,
+            self.warm_job(image_ref="image:v1"),
             round_robin_state={},
             now=105,
         )
 
         self.assertEqual(worker["name"], "worker-b")
+
+    def test_choose_invocation_worker_ignores_warm_worker_with_active_build(self):
+        worker = choose_invocation_worker(
+            [
+                {
+                    "name": "worker-a",
+                    "metadata": {
+                        **self.warm_metadata(),
+                        "active_jobs": 1,
+                        "active_builds": 1,
+                    },
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+                {
+                    "name": "worker-b",
+                    "metadata": {"active_jobs": 0, "active_builds": 0},
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+            ],
+            self.warm_job(),
+            round_robin_state={},
+            now=105,
+        )
+
+        self.assertEqual(worker["name"], "worker-b")
+
+    def test_choose_invocation_worker_uses_predictive_sticky_route_as_hint(self):
+        job = self.warm_job()
+        worker = choose_invocation_worker(
+            [
+                {
+                    "name": "worker-a",
+                    "max_concurrency": 4,
+                    "metadata": {
+                        "active_jobs": 0,
+                        "active_builds": 0,
+                        "max_invocation_concurrency": 4,
+                    },
+                    "queued_invocations": 1,
+                    "queued_builds": 0,
+                },
+                {
+                    "name": "worker-b",
+                    "max_concurrency": 4,
+                    "metadata": {
+                        "active_jobs": 0,
+                        "active_builds": 0,
+                        "max_invocation_concurrency": 4,
+                    },
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+            ],
+            job,
+            local_recent_invocation_routes={
+                invocation_route_key(job): {
+                    "worker_name": "worker-a",
+                    "updated_at": 99,
+                }
+            },
+            local_load_ttl_seconds=10,
+            round_robin_state={},
+            now=100,
+        )
+
+        self.assertEqual(worker["name"], "worker-a")
+
+    def test_choose_invocation_worker_does_not_let_predictive_sticky_hide_pressure(self):
+        job = self.warm_job()
+        worker = choose_invocation_worker(
+            [
+                {
+                    "name": "worker-a",
+                    "max_concurrency": 4,
+                    "metadata": {
+                        "active_jobs": 0,
+                        "active_builds": 0,
+                        "max_invocation_concurrency": 4,
+                    },
+                    "queued_invocations": 2,
+                    "queued_builds": 0,
+                },
+                {
+                    "name": "worker-b",
+                    "max_concurrency": 4,
+                    "metadata": {
+                        "active_jobs": 0,
+                        "active_builds": 0,
+                        "max_invocation_concurrency": 4,
+                    },
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+            ],
+            job,
+            local_recent_invocation_routes={
+                invocation_route_key(job): {
+                    "worker_name": "worker-a",
+                    "updated_at": 99,
+                }
+            },
+            local_load_ttl_seconds=10,
+            predictive_sticky_load_slack=1,
+            round_robin_state={},
+            now=100,
+        )
+
+        self.assertEqual(worker["name"], "worker-b")
+
+    def test_choose_invocation_worker_limits_predictive_sticky_local_burst(self):
+        job = self.warm_job()
+        worker = choose_invocation_worker(
+            [
+                {
+                    "name": "worker-a",
+                    "max_concurrency": 4,
+                    "metadata": {
+                        "active_jobs": 0,
+                        "active_builds": 0,
+                        "max_invocation_concurrency": 4,
+                    },
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+                {
+                    "name": "worker-b",
+                    "max_concurrency": 4,
+                    "metadata": {
+                        "active_jobs": 0,
+                        "active_builds": 0,
+                        "max_invocation_concurrency": 4,
+                    },
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+            ],
+            job,
+            local_invocation_loads={"worker-a": [99, 99]},
+            local_recent_invocation_routes={
+                invocation_route_key(job): {
+                    "worker_name": "worker-a",
+                    "updated_at": 99,
+                }
+            },
+            local_load_ttl_seconds=10,
+            predictive_sticky_max_local_dispatches=1,
+            round_robin_state={},
+            now=100,
+        )
+
+        self.assertEqual(worker["name"], "worker-b")
+
+    def test_choose_invocation_worker_prefers_known_warm_over_predictive_sticky(self):
+        job = self.warm_job()
+        worker = choose_invocation_worker(
+            [
+                {
+                    "name": "worker-a",
+                    "max_concurrency": 4,
+                    "metadata": {
+                        "active_jobs": 0,
+                        "active_builds": 0,
+                        "max_invocation_concurrency": 4,
+                    },
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+                {
+                    "name": "worker-b",
+                    "metadata": self.warm_metadata(),
+                    "queued_invocations": 1,
+                    "queued_builds": 0,
+                },
+            ],
+            job,
+            local_recent_invocation_routes={
+                invocation_route_key(job): {
+                    "worker_name": "worker-a",
+                    "updated_at": 99,
+                }
+            },
+            local_load_ttl_seconds=10,
+            round_robin_state={},
+            now=100,
+        )
+
+        self.assertEqual(worker["name"], "worker-b")
+
+    def test_choose_invocation_worker_ignores_stale_predictive_sticky_route(self):
+        job = self.warm_job()
+        worker = choose_invocation_worker(
+            [
+                {
+                    "name": "worker-a",
+                    "max_concurrency": 4,
+                    "metadata": {
+                        "active_jobs": 0,
+                        "active_builds": 0,
+                        "max_invocation_concurrency": 4,
+                    },
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+                {
+                    "name": "worker-b",
+                    "max_concurrency": 4,
+                    "metadata": {
+                        "active_jobs": 0,
+                        "active_builds": 0,
+                        "max_invocation_concurrency": 4,
+                    },
+                    "queued_invocations": 0,
+                    "queued_builds": 0,
+                },
+            ],
+            job,
+            local_recent_invocation_routes={
+                invocation_route_key(job): {
+                    "worker_name": "worker-b",
+                    "updated_at": 80,
+                }
+            },
+            local_load_ttl_seconds=10,
+            round_robin_state={},
+            now=100,
+        )
+
+        self.assertEqual(worker["name"], "worker-a")
+
+    def test_local_warm_reservation_prevents_overbooking_one_idle_container(self):
+        job = self.warm_job()
+        worker = {
+            "name": "worker-a",
+            "metadata": self.warm_metadata(idle_count=1),
+            "queued_invocations": 0,
+            "queued_builds": 0,
+        }
+        reservations = {}
+
+        remember_local_warm_reservation(
+            job,
+            worker,
+            local_warm_reservations=reservations,
+            local_load_ttl_seconds=10,
+        )
+
+        self.assertEqual(
+            worker_idle_warm_count(
+                worker,
+                invocation_warm_key(job),
+                local_warm_reservations=reservations,
+                local_load_ttl_seconds=10,
+                now=105,
+            ),
+            0,
+        )
 
     def test_choose_invocation_worker_uses_local_dispatch_load_for_bursts(self):
         worker = choose_invocation_worker(
@@ -194,21 +467,18 @@ class SchedulerTests(unittest.TestCase):
                 },
             ],
             {"payload": {"type": "function.invoke", "function_version_id": 10}},
-            recent_invocations={},
             local_invocation_loads={
                 "worker-a": [99, 99, 99, 99],
                 "worker-b": [99],
             },
             local_load_ttl_seconds=10,
-            affinity_ttl_seconds=10,
-            sticky_max_invocation_load=2,
             round_robin_state={},
             now=100,
         )
 
         self.assertEqual(worker["name"], "worker-c")
 
-    def test_choose_invocation_worker_does_not_stick_to_locally_loaded_worker(self):
+    def test_choose_invocation_worker_honors_local_dispatch_load_for_repeat_calls(self):
         worker = choose_invocation_worker(
             [
                 {
@@ -235,16 +505,8 @@ class SchedulerTests(unittest.TestCase):
                 },
             ],
             {"payload": {"type": "function.invoke", "function_version_id": 10}},
-            recent_invocations={
-                "10": {
-                    "worker_name": "worker-a",
-                    "last_seen": 99,
-                }
-            },
             local_invocation_loads={"worker-a": [99, 99, 99]},
             local_load_ttl_seconds=10,
-            affinity_ttl_seconds=10,
-            sticky_max_invocation_load=2,
             round_robin_state={},
             now=100,
         )
@@ -268,9 +530,6 @@ class SchedulerTests(unittest.TestCase):
                 },
             ],
             {"payload": {"type": "function.invoke", "function_version_id": 10}},
-            recent_invocations={},
-            affinity_ttl_seconds=10,
-            sticky_max_invocation_load=2,
             round_robin_state={},
             now=105,
         )
@@ -294,9 +553,6 @@ class SchedulerTests(unittest.TestCase):
                 },
             ],
             {"payload": {"type": "function.invoke", "function_version_id": 10}},
-            recent_invocations={},
-            affinity_ttl_seconds=10,
-            sticky_max_invocation_load=2,
             round_robin_state={},
             now=105,
         )
@@ -320,9 +576,6 @@ class SchedulerTests(unittest.TestCase):
                 },
             ],
             {"payload": {"type": "function.invoke", "function_version_id": 10}},
-            recent_invocations={},
-            affinity_ttl_seconds=10,
-            sticky_max_invocation_load=2,
             round_robin_state={},
             now=105,
         )
@@ -437,6 +690,49 @@ class SchedulerTests(unittest.TestCase):
             "job-1",
             worker_name="worker-a",
             queue_name="worker:worker-a:builds",
+        )
+
+    def test_process_job_expires_stale_workers_before_placement(self):
+        backend = Mock()
+        redis_client = Mock()
+        backend.get_job.return_value = {
+            "job_id": "job-1",
+            "type": "build",
+            "status": "queued",
+            "payload": {
+                "job_id": "job-1",
+                "type": "function.build",
+                "build_request_id": "build-1",
+            },
+        }
+        backend.list_workers.return_value = [
+            {
+                "name": "worker-a",
+                "invocation_queue_name": "worker:worker-a:invocations",
+                "build_queue_name": "worker:worker-a:builds",
+            }
+        ]
+        backend.dispatch_job.return_value = {
+            "dispatched": True,
+            "job": {
+                "payload": {
+                    "dispatch_attempt": 1,
+                }
+            },
+        }
+
+        dispatched = process_job_id(
+            job_id="job-1",
+            backend=backend,
+            redis_client=redis_client,
+            pending_queue="scheduler-pending-builds",
+            requeue_delay_seconds=0,
+            stale_after_seconds=30,
+        )
+
+        self.assertTrue(dispatched)
+        backend.expire_stale_workers.assert_called_once_with(
+            stale_after_seconds=30,
         )
 
     def test_process_job_requeues_when_no_workers_are_available(self):
@@ -593,6 +889,88 @@ class SchedulerTests(unittest.TestCase):
         redis_client.rpush.assert_called_once_with(
             "scheduler-pending-invocations",
             "job-1",
+        )
+
+    def test_recover_stale_workers_requeues_delivery_queue_jobs(self):
+        backend = Mock()
+        redis_client = Mock()
+        backend.expire_stale_workers.return_value = {
+            "expired": [
+                {
+                    "name": "worker-a",
+                    "queue_name": "worker:worker-a:jobs",
+                    "invocation_queue_name": "worker:worker-a:invocations",
+                    "build_queue_name": "worker:worker-a:builds",
+                    "processing_queue_name": "worker:worker-a:processing",
+                }
+            ]
+        }
+        delivery_message = make_delivery_message("job-1", 1)
+        redis_client.lrange.side_effect = [
+            [],
+            [],
+            [delivery_message],
+            [],
+        ]
+        backend.get_job.return_value = {
+            "job_id": "job-1",
+            "status": "dispatched",
+            "payload": {"type": "function.build"},
+        }
+        backend.requeue_job.return_value = {
+            "requeued": True,
+            "job": {
+                "queue_name": "scheduler-pending-builds",
+                "payload": {"type": "function.build"},
+            },
+        }
+
+        recovered = recover_stale_workers(
+            backend=backend,
+            redis_client=redis_client,
+            pending_queue="scheduler-pending-jobs",
+            pending_queues={
+                "function.invoke": "scheduler-pending-invocations",
+                "function.build": "scheduler-pending-builds",
+            },
+            stale_after_seconds=30,
+        )
+
+        self.assertEqual(recovered, 1)
+        self.assertEqual(
+            [call.args[0] for call in redis_client.lrange.call_args_list],
+            [
+                "worker:worker-a:processing",
+                "worker:worker-a:invocations",
+                "worker:worker-a:builds",
+                "worker:worker-a:jobs",
+            ],
+        )
+        redis_client.lrem.assert_called_once_with(
+            "worker:worker-a:builds",
+            1,
+            delivery_message,
+        )
+        redis_client.rpush.assert_called_once_with(
+            "scheduler-pending-builds",
+            "job-1",
+        )
+
+    def test_worker_recovery_queues_are_unique_and_ordered(self):
+        self.assertEqual(
+            worker_recovery_queues(
+                {
+                    "queue_name": "worker:worker-a:jobs",
+                    "invocation_queue_name": "worker:worker-a:jobs",
+                    "build_queue_name": "worker:worker-a:builds",
+                    "processing_queue_name": "worker:worker-a:processing",
+                }
+            ),
+            [
+                "worker:worker-a:processing",
+                "worker:worker-a:jobs",
+                "worker:worker-a:builds",
+            ],
         )
 
     def test_recover_stale_workers_removes_dead_lettered_processing_job(self):

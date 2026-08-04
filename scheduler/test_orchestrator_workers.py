@@ -66,6 +66,53 @@ class WorkerOperationalStateStoreTests(unittest.TestCase):
         self.assertEqual(worker["metadata"]["active_jobs"], 2)
         self.assertEqual(worker["metadata"]["active_builds"], 1)
 
+    def test_draining_heartbeat_removes_worker_from_online_placement(self):
+        payload = self.payload()
+        payload["status"] = "draining"
+
+        self.store.record_heartbeat(payload, now_ms=1000)
+
+        self.assertEqual(self.store.get_worker("worker-a")["status"], "draining")
+        self.assertEqual(self.store.list_online_workers(now_ms=1000), [])
+
+    def test_offline_heartbeat_removes_worker_from_online_placement(self):
+        self.store.record_heartbeat(self.payload(), now_ms=1000)
+        payload = self.payload()
+        payload["status"] = "offline"
+
+        self.store.record_heartbeat(payload, now_ms=1100)
+
+        self.assertEqual(self.store.get_worker("worker-a")["status"], "offline")
+        self.assertEqual(self.store.list_online_workers(now_ms=1100), [])
+
+    def test_heartbeat_preserves_warm_pool_metadata(self):
+        payload = self.payload()
+        payload["metadata"] = {
+            "warm_pool": {
+                "enabled": True,
+                "containers": [
+                    {
+                        "function_version_id": "10",
+                        "image_ref": "image:v1",
+                        "handler": "handler.main",
+                        "memory_mb": 128,
+                        "output_tmpfs_size_bytes": 10 * 1024 * 1024,
+                        "idle_count": 1,
+                        "busy_count": 0,
+                    }
+                ],
+            }
+        }
+
+        self.store.record_heartbeat(payload, now_ms=1000)
+        worker = self.store.get_worker("worker-a")
+
+        self.assertEqual(
+            worker["metadata"]["warm_pool"]["containers"][0]["image_ref"],
+            "image:v1",
+        )
+        self.assertEqual(worker["metadata"]["warm_pool"]["containers"][0]["idle_count"], 1)
+
     def test_heartbeat_refreshes_lease_and_capacity_idempotently(self):
         self.store.record_heartbeat(self.payload(), now_ms=1000)
         updated = self.payload()

@@ -8,7 +8,7 @@ RECORD_HEARTBEAT_SCRIPT = r"""
 redis.call('HSET', KEYS[1],
     'name', ARGV[1],
     'hostname', ARGV[2],
-    'status', 'online',
+    'status', ARGV[16],
     'max_concurrency', ARGV[3],
     'max_build_concurrency', ARGV[4],
     'max_invocation_concurrency', ARGV[5],
@@ -22,7 +22,11 @@ redis.call('HSET', KEYS[1],
     'metadata', ARGV[13],
     'last_seen_ms', ARGV[14],
     'lease_expires_at_ms', ARGV[15])
-redis.call('ZADD', KEYS[2], ARGV[15], ARGV[1])
+if ARGV[16] == 'online' then
+    redis.call('ZADD', KEYS[2], ARGV[15], ARGV[1])
+else
+    redis.call('ZREM', KEYS[2], ARGV[1])
+end
 return ARGV[15]
 """
 
@@ -85,6 +89,7 @@ class WorkerOperationalStateStore:
                 json.dumps(metadata, separators=(",", ":"), sort_keys=True),
                 now_ms,
                 lease_expires_at_ms,
+                payload.get("status", "online"),
             )
         )
 

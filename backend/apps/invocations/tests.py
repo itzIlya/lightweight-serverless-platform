@@ -10,7 +10,13 @@ from unittest.mock import patch
 
 from apps.functions.models import Function, FunctionVersion
 
-from .models import Invocation, InvocationInputFile, InvocationOutputFile, InvocationStatus
+from .models import (
+    Invocation,
+    InvocationInputFile,
+    InvocationLogArtifact,
+    InvocationOutputFile,
+    InvocationStatus,
+)
 
 
 def function_bundle() -> SimpleUploadedFile:
@@ -351,3 +357,119 @@ class InvocationOutputFileTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 403)
+
+
+class InvocationLogArtifactTests(APITestCase):
+    def setUp(self):
+        self.owner = get_user_model().objects.create_user(username="log-owner")
+        self.other = get_user_model().objects.create_user(username="log-other")
+        authenticate_with_jwt(self.client, self.owner)
+        function = Function.objects.create(
+            owner=self.owner,
+            name="Logger",
+            slug="logger",
+        )
+        self.version = FunctionVersion.objects.create(
+            function=function,
+            version="v1",
+            source_bundle=function_bundle(),
+            image_ref="localhost:5000/functions/logger:v1-v1",
+            build_status="built",
+        )
+        self.invocation = Invocation.objects.create(
+            function_version=self.version,
+            event={"name": "Ilya"},
+            status=InvocationStatus.RUNNING,
+        )
+        self.read_token = self.invocation.issue_read_token()
+
+    def report(self, *, stdout="hello stdout", stderr="hello stderr"):
+        return self.client.patch(
+            reverse("report-invocation", args=[self.invocation.request_id]),
+            data={
+                "status": InvocationStatus.SUCCEEDED,
+                "result": {"ok": True},
+                "stdout": stdout,
+                "stderr": stderr,
+                "exit_code": 0,
+            },
+            format="json",
+            HTTP_X_INTERNAL_TOKEN="change-me",
+        )
+
+    def test_internal_report_stores_log_artifacts_without_public_log_listing(self):
+        response = self.report()
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(InvocationLogArtifact.objects.count(), 2)
+        stdout_log = InvocationLogArtifact.objects.get(stream="stdout")
+        stderr_log = InvocationLogArtifact.objects.get(stream="stderr")
+        self.assertEqual(stdout_log.preview, "hello stdout")
+        self.assertEqual(stderr_log.preview, "hello stderr")
+        self.assertTrue(stdout_log.file.storage.exists(stdout_log.file.name))
+        self.assertEqual(response.data["stdout"], "hello stdout")
+        self.assertEqual(response.data["stderr"], "hello stderr")
+        self.assertEqual(response.data["exit_code"], 0)
+        self.assertNotIn("log_files", response.data)
+
+        detail_response = self.client.get(
+            reverse("invocation-detail", args=[self.invocation.id]),
+        )
+
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(detail_response.data["frontend_state"], InvocationStatus.SUCCEEDED)
+        self.assertTrue(detail_response.data["is_terminal"])
+        self.assertTrue(detail_response.data["result_available"])
+        self.assertTrue(detail_response.data["can_download"])
+        self.assertTrue(detail_response.data["can_read_outputs"])
+        self.assertEqual(detail_response.data["log_delivery"], "zip_only")
+        self.assertEqual(
+            detail_response.data["links"]["download"],
+            f"/api/invocations/{self.invocation.id}/download/",
+        )
+        self.assertEqual(detail_response.data["stdout"], "hello stdout")
+        self.assertEqual(detail_response.data["stderr"], "hello stderr")
+        self.assertEqual(detail_response.data["exit_code"], 0)
+        self.assertNotIn("log_files", detail_response.data)
+
+    def test_read_token_can_download_invocation_bundle_with_logs(self):
+        self.report(stdout="bundle stdout", stderr="bundle stderr")
+        self.client.credentials()
+
+        response = self.client.get(
+            reverse("invocation-download", args=[self.invocation.id]),
+            HTTP_X_INVOCATION_READ_TOKEN=self.read_token,
+        )
+        body = b"".join(response.streaming_content)
+
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(body)) as archive:
+            self.assertIn("manifest.json", archive.namelist())
+            self.assertIn("logs/stdout.txt", archive.namelist())
+            self.assertIn("logs/stderr.txt", archive.namelist())
+            self.assertEqual(archive.read("logs/stdout.txt"), b"bundle stdout")
+            manifest = archive.read("manifest.json").decode("utf-8")
+            self.assertIn('"function_version_id"', manifest)
+            self.assertNotIn("source_bundle", manifest)
+
+    def test_standalone_log_endpoints_are_not_public_api(self):
+        self.report()
+
+        list_response = self.client.get(f"/api/invocations/{self.invocation.id}/logs/")
+        download_response = self.client.get(
+            f"/api/invocations/{self.invocation.id}/logs/1/download/"
+        )
+
+        self.assertEqual(list_response.status_code, 404)
+        self.assertEqual(download_response.status_code, 404)
+
+    def test_large_logs_keep_preview_in_database_and_full_file_in_storage(self):
+        long_stdout = "x" * 5000
+
+        self.report(stdout=long_stdout, stderr="")
+        self.invocation.refresh_from_db()
+        log_file = InvocationLogArtifact.objects.get(stream="stdout")
+
+        self.assertLess(len(self.invocation.stdout), len(long_stdout))
+        self.assertIn("truncated", self.invocation.stdout)
+        self.assertEqual(log_file.size_bytes, len(long_stdout.encode("utf-8")))

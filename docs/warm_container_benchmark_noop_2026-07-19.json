@@ -1,0 +1,651 @@
+{
+  "created_at": "2026-07-19T11:16:36.810993+00:00",
+  "image_ref": "localhost:5000/functions/invocation-profile-e4f8c469:v32-v1",
+  "handler": "handler.main",
+  "count": 6,
+  "sleep_seconds": 0.0,
+  "cold": {
+    "runs": [
+      {
+        "request_id": "warm-bench-5e2c8de8d74e",
+        "status": "succeeded",
+        "cold_start": true,
+        "duration_ms": 3287,
+        "timing_ms": {
+          "sandbox_prepare_ms": 16,
+          "docker_volume_create_ms": 126,
+          "docker_container_create_ms": 824,
+          "docker_input_copy_ms": 302,
+          "docker_container_start_ms": 742,
+          "docker_wait_ms": 976,
+          "docker_logs_read_ms": 215,
+          "docker_export_copy_ms": 82,
+          "result_read_ms": 0,
+          "output_validation_ms": 0,
+          "output_upload_ms": 0,
+          "executor_duration_ms": 3287,
+          "docker_cleanup_ms": 249,
+          "executor_wall_with_cleanup_ms": 3537
+        },
+        "result": {
+          "index": 0,
+          "sleep_seconds": 0.0,
+          "user_code_elapsed_ms": 0,
+          "request_id": "warm-bench-5e2c8de8d74e"
+        },
+        "error_message": ""
+      },
+      {
+        "request_id": "warm-bench-da424b2f1ef1",
+        "status": "succeeded",
+        "cold_start": true,
+        "duration_ms": 4874,
+        "timing_ms": {
+          "sandbox_prepare_ms": 28,
+          "docker_volume_create_ms": 66,
+          "docker_container_create_ms": 922,
+          "docker_input_copy_ms": 307,
+          "docker_container_start_ms": 1144,
+          "docker_wait_ms": 1842,
+          "docker_logs_read_ms": 428,
+          "docker_export_copy_ms": 129,
+          "result_read_ms": 0,
+          "output_validation_ms": 0,
+          "output_upload_ms": 0,
+          "executor_duration_ms": 4874,
+          "docker_cleanup_ms": 236,
+          "executor_wall_with_cleanup_ms": 5110
+        },
+        "result": {
+          "index": 1,
+          "sleep_seconds": 0.0,
+          "user_code_elapsed_ms": 0,
+          "request_id": "warm-bench-da424b2f1ef1"
+        },
+        "error_message": ""
+      },
+      {
+        "request_id": "warm-bench-ef43145f02fd",
+        "status": "succeeded",
+        "cold_start": true,
+        "duration_ms": 4189,
+        "timing_ms": {
+          "sandbox_prepare_ms": 9,
+          "docker_volume_create_ms": 110,
+          "docker_container_create_ms": 623,
+          "docker_input_copy_ms": 249,
+          "docker_container_start_ms": 1035,
+          "docker_wait_ms": 1855,
+          "docker_logs_read_ms": 210,
+          "docker_export_copy_ms": 93,
+          "result_read_ms": 0,
+          "output_validation_ms": 0,
+          "output_upload_ms": 0,
+          "executor_duration_ms": 4189,
+          "docker_cleanup_ms": 320,
+          "executor_wall_with_cleanup_ms": 4523
+        },
+        "result": {
+          "index": 2,
+          "sleep_seconds": 0.0,
+          "user_code_elapsed_ms": 0,
+          "request_id": "warm-bench-ef43145f02fd"
+        },
+        "error_message": ""
+      },
+      {
+        "request_id": "warm-bench-7c52c3232b75",
+        "status": "succeeded",
+        "cold_start": true,
+        "duration_ms": 4032,
+        "timing_ms": {
+          "sandbox_prepare_ms": 22,
+          "docker_volume_create_ms": 133,
+          "docker_container_create_ms": 808,
+          "docker_input_copy_ms": 134,
+          "docker_container_start_ms": 903,
+          "docker_wait_ms": 1533,
+          "docker_logs_read_ms": 288,
+          "docker_export_copy_ms": 207,
+          "result_read_ms": 0,
+          "output_validation_ms": 0,
+          "output_upload_ms": 0,
+          "executor_duration_ms": 4032,
+          "docker_cleanup_ms": 241,
+          "executor_wall_with_cleanup_ms": 4274
+        },
+        "result": {
+          "index": 3,
+          "sleep_seconds": 0.0,
+          "user_code_elapsed_ms": 0,
+          "request_id": "warm-bench-7c52c3232b75"
+        },
+        "error_message": ""
+      },
+      {
+        "request_id": "warm-bench-cfc1e04ac0a3",
+        "status": "succeeded",
+        "cold_start": true,
+        "duration_ms": 3041,
+        "timing_ms": {
+          "sandbox_prepare_ms": 14,
+          "docker_volume_create_ms": 54,
+          "docker_container_create_ms": 817,
+          "docker_input_copy_ms": 173,
+          "docker_container_start_ms": 662,
+          "docker_wait_ms": 1099,
+          "docker_logs_read_ms": 113,
+          "docker_export_copy_ms": 104,
+          "result_read_ms": 0,
+          "output_validation_ms": 0,
+          "output_upload_ms": 0,
+          "executor_duration_ms": 3041,
+          "docker_cleanup_ms": 183,
+          "executor_wall_with_cleanup_ms": 3225
+        },
+        "result": {
+          "index": 4,
+          "sleep_seconds": 0.0,
+          "user_code_elapsed_ms": 0,
+          "request_id": "warm-bench-cfc1e04ac0a3"
+        },
+        "error_message": ""
+      },
+      {
+        "request_id": "warm-bench-7d4d9e3b34c6",
+        "status": "succeeded",
+        "cold_start": true,
+        "duration_ms": 3607,
+        "timing_ms": {
+          "sandbox_prepare_ms": 14,
+          "docker_volume_create_ms": 42,
+          "docker_container_create_ms": 558,
+          "docker_input_copy_ms": 140,
+          "docker_container_start_ms": 1018,
+          "docker_wait_ms": 1282,
+          "docker_logs_read_ms": 297,
+          "docker_export_copy_ms": 251,
+          "result_read_ms": 0,
+          "output_validation_ms": 0,
+          "output_upload_ms": 0,
+          "executor_duration_ms": 3607,
+          "docker_cleanup_ms": 205,
+          "executor_wall_with_cleanup_ms": 3813
+        },
+        "result": {
+          "index": 5,
+          "sleep_seconds": 0.0,
+          "user_code_elapsed_ms": 0,
+          "request_id": "warm-bench-7d4d9e3b34c6"
+        },
+        "error_message": ""
+      }
+    ],
+    "summary": {
+      "count": 6,
+      "statuses": [
+        "succeeded"
+      ],
+      "cold_starts": 6,
+      "warm_reuses": 0,
+      "duration_ms": {
+        "min": 3041,
+        "median": 3819,
+        "p90": 4189,
+        "max": 4874
+      },
+      "timing_ms": {
+        "docker_cleanup_ms": {
+          "min": 183,
+          "median": 238,
+          "p90": 249,
+          "max": 320
+        },
+        "docker_container_create_ms": {
+          "min": 558,
+          "median": 812,
+          "p90": 824,
+          "max": 922
+        },
+        "docker_container_start_ms": {
+          "min": 662,
+          "median": 960,
+          "p90": 1035,
+          "max": 1144
+        },
+        "docker_export_copy_ms": {
+          "min": 82,
+          "median": 116,
+          "p90": 207,
+          "max": 251
+        },
+        "docker_input_copy_ms": {
+          "min": 134,
+          "median": 211,
+          "p90": 302,
+          "max": 307
+        },
+        "docker_logs_read_ms": {
+          "min": 113,
+          "median": 251,
+          "p90": 297,
+          "max": 428
+        },
+        "docker_volume_create_ms": {
+          "min": 42,
+          "median": 88,
+          "p90": 126,
+          "max": 133
+        },
+        "docker_wait_ms": {
+          "min": 976,
+          "median": 1407,
+          "p90": 1842,
+          "max": 1855
+        },
+        "executor_duration_ms": {
+          "min": 3041,
+          "median": 3819,
+          "p90": 4189,
+          "max": 4874
+        },
+        "executor_wall_with_cleanup_ms": {
+          "min": 3225,
+          "median": 4043,
+          "p90": 4523,
+          "max": 5110
+        },
+        "output_upload_ms": {
+          "min": 0,
+          "median": 0,
+          "p90": 0,
+          "max": 0
+        },
+        "output_validation_ms": {
+          "min": 0,
+          "median": 0,
+          "p90": 0,
+          "max": 0
+        },
+        "result_read_ms": {
+          "min": 0,
+          "median": 0,
+          "p90": 0,
+          "max": 0
+        },
+        "sandbox_prepare_ms": {
+          "min": 9,
+          "median": 15,
+          "p90": 22,
+          "max": 28
+        }
+      }
+    }
+  },
+  "warm": {
+    "runs": [
+      {
+        "request_id": "warm-bench-267088e5b7be",
+        "status": "succeeded",
+        "cold_start": true,
+        "duration_ms": 2463,
+        "timing_ms": {
+          "warm_container_create_ms": 1227,
+          "sandbox_prepare_ms": 7,
+          "warm_sandbox_cleanup_before_ms": 271,
+          "docker_input_copy_ms": 38,
+          "warm_runner_exec_ms": 805,
+          "docker_export_copy_ms": 110,
+          "result_read_ms": 0,
+          "output_validation_ms": 0,
+          "output_upload_ms": 0,
+          "warm_sandbox_cleanup_after_ms": 575,
+          "executor_duration_ms": 2463,
+          "warm_pool_release_ms": 0,
+          "executor_wall_with_cleanup_ms": 3039
+        },
+        "result": {
+          "index": 0,
+          "sleep_seconds": 0.0,
+          "user_code_elapsed_ms": 0,
+          "request_id": "warm-bench-267088e5b7be"
+        },
+        "error_message": ""
+      },
+      {
+        "request_id": "warm-bench-fcb41b9bc163",
+        "status": "succeeded",
+        "cold_start": false,
+        "duration_ms": 2572,
+        "timing_ms": {
+          "warm_container_reused": 1,
+          "sandbox_prepare_ms": 12,
+          "warm_sandbox_cleanup_before_ms": 537,
+          "docker_input_copy_ms": 154,
+          "warm_runner_exec_ms": 1696,
+          "docker_export_copy_ms": 169,
+          "result_read_ms": 0,
+          "output_validation_ms": 0,
+          "output_upload_ms": 0,
+          "warm_sandbox_cleanup_after_ms": 1163,
+          "executor_duration_ms": 2572,
+          "warm_pool_release_ms": 0,
+          "executor_wall_with_cleanup_ms": 3736
+        },
+        "result": {
+          "index": 1,
+          "sleep_seconds": 0.0,
+          "user_code_elapsed_ms": 0,
+          "request_id": "warm-bench-fcb41b9bc163"
+        },
+        "error_message": ""
+      },
+      {
+        "request_id": "warm-bench-fc86a286a545",
+        "status": "succeeded",
+        "cold_start": false,
+        "duration_ms": 2700,
+        "timing_ms": {
+          "warm_container_reused": 1,
+          "sandbox_prepare_ms": 2,
+          "warm_sandbox_cleanup_before_ms": 592,
+          "docker_input_copy_ms": 133,
+          "warm_runner_exec_ms": 1850,
+          "docker_export_copy_ms": 115,
+          "result_read_ms": 0,
+          "output_validation_ms": 0,
+          "output_upload_ms": 0,
+          "warm_sandbox_cleanup_after_ms": 463,
+          "executor_duration_ms": 2700,
+          "warm_pool_release_ms": 0,
+          "executor_wall_with_cleanup_ms": 3163
+        },
+        "result": {
+          "index": 2,
+          "sleep_seconds": 0.0,
+          "user_code_elapsed_ms": 0,
+          "request_id": "warm-bench-fc86a286a545"
+        },
+        "error_message": ""
+      },
+      {
+        "request_id": "warm-bench-cd64a13514b5",
+        "status": "succeeded",
+        "cold_start": false,
+        "duration_ms": 2634,
+        "timing_ms": {
+          "warm_container_reused": 1,
+          "sandbox_prepare_ms": 1,
+          "warm_sandbox_cleanup_before_ms": 627,
+          "docker_input_copy_ms": 119,
+          "warm_runner_exec_ms": 1752,
+          "docker_export_copy_ms": 132,
+          "result_read_ms": 0,
+          "output_validation_ms": 0,
+          "output_upload_ms": 0,
+          "warm_sandbox_cleanup_after_ms": 488,
+          "executor_duration_ms": 2634,
+          "warm_pool_release_ms": 0,
+          "executor_wall_with_cleanup_ms": 3123
+        },
+        "result": {
+          "index": 3,
+          "sleep_seconds": 0.0,
+          "user_code_elapsed_ms": 0,
+          "request_id": "warm-bench-cd64a13514b5"
+        },
+        "error_message": ""
+      },
+      {
+        "request_id": "warm-bench-7c744719e993",
+        "status": "succeeded",
+        "cold_start": false,
+        "duration_ms": 1938,
+        "timing_ms": {
+          "warm_container_reused": 1,
+          "sandbox_prepare_ms": 5,
+          "warm_sandbox_cleanup_before_ms": 448,
+          "docker_input_copy_ms": 79,
+          "warm_runner_exec_ms": 1334,
+          "docker_export_copy_ms": 68,
+          "result_read_ms": 0,
+          "output_validation_ms": 0,
+          "output_upload_ms": 0,
+          "warm_sandbox_cleanup_after_ms": 412,
+          "executor_duration_ms": 1938,
+          "warm_pool_release_ms": 0,
+          "executor_wall_with_cleanup_ms": 2351
+        },
+        "result": {
+          "index": 4,
+          "sleep_seconds": 0.0,
+          "user_code_elapsed_ms": 0,
+          "request_id": "warm-bench-7c744719e993"
+        },
+        "error_message": ""
+      },
+      {
+        "request_id": "warm-bench-35d9460fddf7",
+        "status": "succeeded",
+        "cold_start": false,
+        "duration_ms": 1922,
+        "timing_ms": {
+          "warm_container_reused": 1,
+          "sandbox_prepare_ms": 2,
+          "warm_sandbox_cleanup_before_ms": 320,
+          "docker_input_copy_ms": 147,
+          "warm_runner_exec_ms": 1337,
+          "docker_export_copy_ms": 102,
+          "result_read_ms": 11,
+          "output_validation_ms": 0,
+          "output_upload_ms": 0,
+          "warm_sandbox_cleanup_after_ms": 340,
+          "executor_duration_ms": 1922,
+          "warm_pool_release_ms": 0,
+          "executor_wall_with_cleanup_ms": 2262
+        },
+        "result": {
+          "index": 5,
+          "sleep_seconds": 0.0,
+          "user_code_elapsed_ms": 0,
+          "request_id": "warm-bench-35d9460fddf7"
+        },
+        "error_message": ""
+      }
+    ],
+    "summary": {
+      "count": 6,
+      "statuses": [
+        "succeeded"
+      ],
+      "cold_starts": 1,
+      "warm_reuses": 5,
+      "duration_ms": {
+        "min": 1922,
+        "median": 2517,
+        "p90": 2634,
+        "max": 2700
+      },
+      "timing_ms": {
+        "docker_export_copy_ms": {
+          "min": 68,
+          "median": 112,
+          "p90": 132,
+          "max": 169
+        },
+        "docker_input_copy_ms": {
+          "min": 38,
+          "median": 126,
+          "p90": 147,
+          "max": 154
+        },
+        "executor_duration_ms": {
+          "min": 1922,
+          "median": 2517,
+          "p90": 2634,
+          "max": 2700
+        },
+        "executor_wall_with_cleanup_ms": {
+          "min": 2262,
+          "median": 3081,
+          "p90": 3163,
+          "max": 3736
+        },
+        "output_upload_ms": {
+          "min": 0,
+          "median": 0,
+          "p90": 0,
+          "max": 0
+        },
+        "output_validation_ms": {
+          "min": 0,
+          "median": 0,
+          "p90": 0,
+          "max": 0
+        },
+        "result_read_ms": {
+          "min": 0,
+          "median": 0,
+          "p90": 0,
+          "max": 11
+        },
+        "sandbox_prepare_ms": {
+          "min": 1,
+          "median": 3,
+          "p90": 7,
+          "max": 12
+        },
+        "warm_container_create_ms": {
+          "min": 1227,
+          "median": 1227,
+          "p90": 1227,
+          "max": 1227
+        },
+        "warm_container_reused": {
+          "min": 1,
+          "median": 1,
+          "p90": 1,
+          "max": 1
+        },
+        "warm_pool_release_ms": {
+          "min": 0,
+          "median": 0,
+          "p90": 0,
+          "max": 0
+        },
+        "warm_runner_exec_ms": {
+          "min": 805,
+          "median": 1516,
+          "p90": 1752,
+          "max": 1850
+        },
+        "warm_sandbox_cleanup_after_ms": {
+          "min": 340,
+          "median": 475,
+          "p90": 575,
+          "max": 1163
+        },
+        "warm_sandbox_cleanup_before_ms": {
+          "min": 271,
+          "median": 492,
+          "p90": 592,
+          "max": 627
+        }
+      }
+    },
+    "steady_state_summary": {
+      "count": 5,
+      "statuses": [
+        "succeeded"
+      ],
+      "cold_starts": 0,
+      "warm_reuses": 5,
+      "duration_ms": {
+        "min": 1922,
+        "median": 2572,
+        "p90": 2700,
+        "max": 2700
+      },
+      "timing_ms": {
+        "docker_export_copy_ms": {
+          "min": 68,
+          "median": 115,
+          "p90": 169,
+          "max": 169
+        },
+        "docker_input_copy_ms": {
+          "min": 79,
+          "median": 133,
+          "p90": 154,
+          "max": 154
+        },
+        "executor_duration_ms": {
+          "min": 1922,
+          "median": 2572,
+          "p90": 2700,
+          "max": 2700
+        },
+        "executor_wall_with_cleanup_ms": {
+          "min": 2262,
+          "median": 3123,
+          "p90": 3736,
+          "max": 3736
+        },
+        "output_upload_ms": {
+          "min": 0,
+          "median": 0,
+          "p90": 0,
+          "max": 0
+        },
+        "output_validation_ms": {
+          "min": 0,
+          "median": 0,
+          "p90": 0,
+          "max": 0
+        },
+        "result_read_ms": {
+          "min": 0,
+          "median": 0,
+          "p90": 11,
+          "max": 11
+        },
+        "sandbox_prepare_ms": {
+          "min": 1,
+          "median": 2,
+          "p90": 12,
+          "max": 12
+        },
+        "warm_container_reused": {
+          "min": 1,
+          "median": 1,
+          "p90": 1,
+          "max": 1
+        },
+        "warm_pool_release_ms": {
+          "min": 0,
+          "median": 0,
+          "p90": 0,
+          "max": 0
+        },
+        "warm_runner_exec_ms": {
+          "min": 1334,
+          "median": 1696,
+          "p90": 1850,
+          "max": 1850
+        },
+        "warm_sandbox_cleanup_after_ms": {
+          "min": 340,
+          "median": 463,
+          "p90": 1163,
+          "max": 1163
+        },
+        "warm_sandbox_cleanup_before_ms": {
+          "min": 320,
+          "median": 537,
+          "p90": 627,
+          "max": 627
+        }
+      }
+    }
+  }
+}
