@@ -11,6 +11,14 @@ def env_bool(name: str, default: str = "false") -> bool:
     return os.getenv(name, default).lower() in {"1", "true", "yes"}
 
 
+def env_list(name: str, default: str = "") -> list[str]:
+    return [
+        item.strip()
+        for item in os.getenv(name, default).split(",")
+        if item.strip()
+    ]
+
+
 def normalize_endpoint_url(value: str) -> str:
     value = str(value or "").strip()
     if value and "://" not in value:
@@ -60,6 +68,7 @@ if OBJECT_STORAGE_ENABLED:
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "serverless_platform.cors.FrontendCorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -67,6 +76,26 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+CORS_ALLOWED_ORIGINS = env_list(
+    "CORS_ALLOWED_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000",
+)
+CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS")
+CORS_ALLOW_CREDENTIALS = env_bool("CORS_ALLOW_CREDENTIALS")
+CORS_ALLOWED_METHODS = env_list(
+    "CORS_ALLOWED_METHODS",
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+)
+CORS_ALLOWED_HEADERS = env_list(
+    "CORS_ALLOWED_HEADERS",
+    "authorization,content-type,x-function-token,x-invocation-read-token,x-requested-with",
+)
+CORS_EXPOSE_HEADERS = env_list(
+    "CORS_EXPOSE_HEADERS",
+    "content-disposition,content-length,retry-after",
+)
+CORS_PREFLIGHT_MAX_AGE = int(os.getenv("CORS_PREFLIGHT_MAX_AGE", "86400"))
 
 ROOT_URLCONF = "serverless_platform.urls"
 
@@ -198,6 +227,21 @@ V1_COORDINATION_ENDPOINTS_ENABLED = os.getenv(
     "V1_COORDINATION_ENDPOINTS_ENABLED",
     "true",
 ).lower() in {"1", "true", "yes"}
+SYNC_INVOCATION_TIMEOUT_SECONDS = float(
+    os.getenv("SYNC_INVOCATION_TIMEOUT_SECONDS", "15")
+)
+SYNC_INVOCATION_POLL_INTERVAL_SECONDS = float(
+    os.getenv("SYNC_INVOCATION_POLL_INTERVAL_SECONDS", "0.1")
+)
+SYNC_INVOCATION_MAX_RESULT_BYTES = int(
+    os.getenv("SYNC_INVOCATION_MAX_RESULT_BYTES", "262144")
+)
+SYNC_INVOCATION_MAX_STDOUT_BYTES = int(
+    os.getenv("SYNC_INVOCATION_MAX_STDOUT_BYTES", "65536")
+)
+SYNC_INVOCATION_MAX_STDERR_BYTES = int(
+    os.getenv("SYNC_INVOCATION_MAX_STDERR_BYTES", "65536")
+)
 JOB_QUEUE_NAME = os.getenv(
     "JOB_QUEUE_NAME",
     os.getenv(

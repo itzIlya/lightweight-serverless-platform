@@ -111,6 +111,20 @@ def _userservice_schema(request) -> dict:
                     "responses": _json_response("200", "Token pair", "RefreshResponse"),
                 }
             },
+            "/api/auth/logout/": {
+                "post": {
+                    "tags": ["Auth"],
+                    "summary": "Logout from the frontend session",
+                    "description": (
+                        "Tokens are stateless in this prototype. The frontend "
+                        "should delete the access and refresh tokens after this "
+                        "call. Server-side refresh-token revocation can be added "
+                        "later."
+                    ),
+                    "security": [],
+                    "responses": _json_response("200", "Logout acknowledgement", "LogoutResponse"),
+                }
+            },
             "/api/auth/me/": {
                 "get": {
                     "tags": ["Auth"],
@@ -150,6 +164,8 @@ def _userservice_schema(request) -> dict:
                     "properties": {
                         "username": {"type": "string"},
                         "email": {"type": "string", "format": "email"},
+                        "first_name": {"type": "string"},
+                        "last_name": {"type": "string"},
                         "password": {"type": "string", "format": "password", "minLength": 8},
                     },
                 },
@@ -173,6 +189,8 @@ def _userservice_schema(request) -> dict:
                         "subject": {"type": "string", "format": "uuid"},
                         "username": {"type": "string"},
                         "email": {"type": "string", "format": "email"},
+                        "first_name": {"type": "string"},
+                        "last_name": {"type": "string"},
                         "role": {"type": "string", "enum": ["user", "admin"]},
                     },
                 },
@@ -189,6 +207,13 @@ def _userservice_schema(request) -> dict:
                     "properties": {
                         "access": {"type": "string"},
                         "refresh": {"type": "string"},
+                    },
+                },
+                "LogoutResponse": {
+                    "type": "object",
+                    "properties": {
+                        "logged_out": {"type": "boolean"},
+                        "detail": {"type": "string"},
                     },
                 },
                 "PublicKey": {

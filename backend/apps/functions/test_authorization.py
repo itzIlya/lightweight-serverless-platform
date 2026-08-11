@@ -11,7 +11,7 @@ from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import Account, AccountRole
-from apps.invocations.models import Invocation
+from apps.invocations.models import Invocation, InvocationAuthType
 from apps.workers.models import WorkerNode
 
 from .models import (
@@ -277,6 +277,36 @@ class FunctionInvokeTokenManagementTests(APITestCase):
         self.assertEqual(response.status_code, 202, response.content)
         token = FunctionInvokeToken.objects.get()
         self.assertIsNotNone(token.last_used_at)
+        invocation = Invocation.objects.get()
+        self.assertEqual(invocation.invocation_auth_type, InvocationAuthType.FUNCTION_TOKEN)
+        self.assertEqual(invocation.invocation_token, token)
+        enqueue.assert_called_once()
+
+    @patch("apps.functions.views.enqueue_invocation")
+    def test_token_invocation_history_exposes_token_metadata_to_owner(self, enqueue):
+        authenticate_with_jwt(self.client, self.owner)
+        create_response = self.create_token_via_api(name="partner-client")
+        raw_token = create_response.data["raw_token"]
+        token = FunctionInvokeToken.objects.get()
+        self.client.credentials()
+        invoke_response = self.client.post(
+            reverse("function-invoke", args=[self.function.id]),
+            data={"event": {"hello": "token"}},
+            format="json",
+            HTTP_X_FUNCTION_TOKEN=raw_token,
+        )
+        authenticate_with_jwt(self.client, self.owner)
+
+        history_response = self.client.get(
+            reverse("function-invocations", args=[self.function.id])
+        )
+
+        self.assertEqual(invoke_response.status_code, 202, invoke_response.content)
+        self.assertEqual(history_response.status_code, 200, history_response.content)
+        self.assertEqual(history_response.data[0]["invocation_auth_type"], InvocationAuthType.FUNCTION_TOKEN)
+        self.assertEqual(history_response.data[0]["invocation_token"], token.id)
+        self.assertEqual(history_response.data[0]["invocation_token_name"], "partner-client")
+        self.assertEqual(history_response.data[0]["invocation_token_prefix"], token.prefix)
         enqueue.assert_called_once()
 
     @patch("apps.functions.views.enqueue_invocation")

@@ -280,6 +280,7 @@ class FunctionVersionCreateSerializer(serializers.ModelSerializer):
 
 
 class FunctionSerializer(serializers.ModelSerializer):
+    resource = serializers.SerializerMethodField()
     versions = FunctionVersionSerializer(many=True, read_only=True)
     active_version = FunctionVersionSerializer(read_only=True)
     active_image_ref = serializers.SerializerMethodField()
@@ -291,6 +292,7 @@ class FunctionSerializer(serializers.ModelSerializer):
         model = Function
         fields = [
             "id",
+            "resource",
             "owner",
             "name",
             "slug",
@@ -307,6 +309,7 @@ class FunctionSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             "owner",
+            "resource",
             "slug",
             "active_version",
             "active_image_ref",
@@ -317,6 +320,9 @@ class FunctionSerializer(serializers.ModelSerializer):
             "updated_at",
             "versions",
         ]
+
+    def get_resource(self, obj):
+        return "function"
 
     def get_active_image_ref(self, obj):
         active_version = getattr(obj, "active_version", None)
@@ -355,6 +361,7 @@ class FunctionSerializer(serializers.ModelSerializer):
             "source": f"/api/functions/{obj.id}/source/",
             "build_status": f"/api/functions/{obj.id}/build-status/",
             "invoke": f"/api/functions/{obj.id}/invoke/",
+            "invoke_sync": f"/api/functions/{obj.id}/invoke-sync/",
             "invocations": f"/api/functions/{obj.id}/invocations/",
             "tokens": f"/api/functions/{obj.id}/tokens/",
         }

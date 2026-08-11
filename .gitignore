@@ -28,3 +28,6 @@ Thumbs.db
 # Logs
 *.log
 "@ | Set-Content -Encoding UTF8 .gitignore
+
+# Secrets
+secrets.txt

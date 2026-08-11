@@ -112,6 +112,13 @@ def _serverless_backend_schema(request) -> dict:
                     "parameters": [_path_int("function_id")],
                     "responses": _json_response("200", "Function", "Function"),
                 },
+                "patch": {
+                    "tags": ["Functions"],
+                    "summary": "Update function metadata",
+                    "parameters": [_path_int("function_id")],
+                    "requestBody": _json_body("FunctionCreate"),
+                    "responses": _json_response("200", "Updated function", "Function"),
+                },
                 "delete": {
                     "tags": ["Functions"],
                     "summary": "Delete a function, artifacts, and scheduled images",
@@ -134,6 +141,16 @@ def _serverless_backend_schema(request) -> dict:
                                 "type": "string",
                                 "example": "[\"report.txt\"]",
                             },
+                            "invocation_input_mime_types": {
+                                "type": "string",
+                                "example": "[\"image/png\",\"application/pdf\"]",
+                            },
+                            "invocation_input_max_files": {"type": "integer", "example": 1},
+                            "invocation_input_max_size_mb": {"type": "integer", "example": 10},
+                            "invocation_input_max_total_size_mb": {"type": "integer", "example": 10},
+                            "invocation_output_max_files": {"type": "integer", "example": 5},
+                            "invocation_output_max_file_size_mb": {"type": "integer", "example": 10},
+                            "invocation_output_max_total_size_mb": {"type": "integer", "example": 10},
                         },
                         required=["source_bundle"],
                     ),
@@ -197,6 +214,39 @@ def _serverless_backend_schema(request) -> dict:
                         },
                     },
                     "responses": _json_response("202", "Invocation queued", "InvokeResponse"),
+                }
+            },
+            "/api/functions/{function_id}/invoke-sync/": {
+                "post": {
+                    "tags": ["Invocations"],
+                    "summary": "Synchronously invoke a function",
+                    "description": (
+                        "Runs through the V2 invocation path and waits briefly for a "
+                        "terminal result. Only functions without declared output files "
+                        "and requests without input files are eligible. If execution is "
+                        "still running when the sync wait expires, the API returns 202 "
+                        "with polling links."
+                    ),
+                    "parameters": [
+                        _path_int("function_id"),
+                        {
+                            "name": "X-Function-Token",
+                            "in": "header",
+                            "required": False,
+                            "schema": {"type": "string"},
+                        },
+                    ],
+                    "requestBody": _json_body("InvokeRequest"),
+                    "responses": {
+                        **_json_response("200", "Invocation completed", "InvokeResponse"),
+                        **_json_response("202", "Invocation still running", "InvokeResponse"),
+                        "400": {
+                            "description": "Sync invocation is not eligible for this request"
+                        },
+                        "413": {
+                            "description": "Sync response exceeded configured response limits"
+                        },
+                    },
                 }
             },
             "/api/functions/{function_id}/tokens/": {
@@ -304,7 +354,21 @@ def _serverless_backend_schema(request) -> dict:
                     "tags": ["Invocations"],
                     "summary": "Download invocation ZIP bundle",
                     "parameters": [_path_int("invocation_id"), _read_token_header()],
-                    "responses": {"200": {"description": "ZIP containing manifest, inputs, outputs, stdout, and stderr"}},
+                    "responses": {
+                        "200": {
+                            "description": "ZIP containing manifest, inputs, outputs, stdout, and stderr"
+                        },
+                        "409": {
+                            "description": "Invocation artifacts are not ready yet",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/ArtifactsNotReady"
+                                    }
+                                }
+                            },
+                        },
+                    },
                 }
             },
             "/api/workers/": {
@@ -373,6 +437,7 @@ def _schemas() -> dict:
             "type": "object",
             "properties": {
                 "id": {"type": "integer"},
+                "resource": {"type": "string", "example": "function"},
                 "name": {"type": "string"},
                 "slug": {"type": "string"},
                 "description": {"type": "string"},
@@ -395,6 +460,13 @@ def _schemas() -> dict:
                 "handler": {"type": "string"},
                 "config": {"type": "object"},
                 "declared_output_files": {"type": "array", "items": {"type": "string"}},
+                "invocation_input_mime_types": {"type": "array", "items": {"type": "string"}},
+                "invocation_input_max_files": {"type": "integer"},
+                "invocation_input_max_size_mb": {"type": "integer"},
+                "invocation_input_max_total_size_mb": {"type": "integer"},
+                "invocation_output_max_files": {"type": "integer"},
+                "invocation_output_max_file_size_mb": {"type": "integer"},
+                "invocation_output_max_total_size_mb": {"type": "integer"},
                 "build_status": {"type": "string", "enum": ["pending", "queued", "building", "cancelling", "built", "failed", "cancelled"]},
                 "image_ref": {"type": "string"},
             },
@@ -402,6 +474,14 @@ def _schemas() -> dict:
         "SourceReplacementResponse": {
             "type": "object",
             "properties": {
+                "resource": {"type": "string", "example": "source_replacement"},
+                "state": {"type": "string", "example": "queued"},
+                "frontend_state": {"type": "string", "example": "queued"},
+                "is_terminal": {"type": "boolean", "example": False},
+                "poll_after_seconds": {"type": "integer", "nullable": True, "example": 1},
+                "can_cancel": {"type": "boolean"},
+                "can_invoke": {"type": "boolean"},
+                "links": {"$ref": "#/components/schemas/Links"},
                 "candidate_version": {"$ref": "#/components/schemas/FunctionVersion"},
                 "build_attempt": {"$ref": "#/components/schemas/BuildAttempt"},
                 "active_version": {"nullable": True, "$ref": "#/components/schemas/FunctionVersion"},
@@ -463,6 +543,7 @@ def _schemas() -> dict:
             "type": "object",
             "properties": {
                 "id": {"type": "integer"},
+                "resource": {"type": "string", "example": "invocation"},
                 "request_id": {"type": "string", "format": "uuid"},
                 "function_version": {"type": "integer"},
                 "status": {"type": "string", "enum": ["queued", "running", "succeeded", "failed", "timeout", "cancelled"]},
@@ -481,6 +562,13 @@ def _schemas() -> dict:
                 "cold_start": {"type": "boolean"},
                 "error_message": {"type": "string"},
                 "duration_ms": {"type": "integer", "nullable": True},
+                "invocation_auth_type": {
+                    "type": "string",
+                    "enum": ["owner_jwt", "function_token", "public"],
+                },
+                "invocation_token": {"type": "integer", "nullable": True},
+                "invocation_token_name": {"type": "string"},
+                "invocation_token_prefix": {"type": "string"},
                 "input_files": {"type": "array", "items": {"$ref": "#/components/schemas/InvocationInputFile"}},
                 "output_files": {"type": "array", "items": {"$ref": "#/components/schemas/InvocationOutputFile"}},
                 "outputs_url": {"type": "string"},
@@ -513,6 +601,14 @@ def _schemas() -> dict:
             },
         },
         "InvocationOutputFileList": {"type": "array", "items": {"$ref": "#/components/schemas/InvocationOutputFile"}},
+        "ArtifactsNotReady": {
+            "type": "object",
+            "properties": {
+                "detail": {"type": "string"},
+                "frontend_state": {"type": "string", "example": "running"},
+                "poll_after_seconds": {"type": "integer", "example": 1},
+            },
+        },
         "FunctionInvokeToken": {
             "type": "object",
             "properties": {

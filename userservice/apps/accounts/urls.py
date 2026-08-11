@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     JWKSView,
+    LogoutView,
     MeView,
     PublicKeyView,
     RegisterView,
@@ -14,6 +15,7 @@ urlpatterns = [
     path("register/", RegisterView.as_view(), name="userservice-register"),
     path("token/", TokenObtainView.as_view(), name="userservice-token"),
     path("token/refresh/", TokenRefreshView.as_view(), name="userservice-token-refresh"),
+    path("logout/", LogoutView.as_view(), name="userservice-logout"),
     path("me/", MeView.as_view(), name="userservice-me"),
     path("public-key/", PublicKeyView.as_view(), name="userservice-public-key"),
     path("jwks/", JWKSView.as_view(), name="userservice-jwks"),

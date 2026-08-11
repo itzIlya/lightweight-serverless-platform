@@ -3,6 +3,7 @@ from rest_framework import serializers
 from .models import (
     Invocation,
     InvocationAttempt,
+    InvocationAuthType,
     InvocationInputFile,
     InvocationLogArtifact,
     InvocationOutputFile,
@@ -12,6 +13,7 @@ from .models import (
 
 
 class InvocationSerializer(serializers.ModelSerializer):
+    resource = serializers.SerializerMethodField()
     input_files = serializers.SerializerMethodField()
     output_files = serializers.SerializerMethodField()
     frontend_state = serializers.SerializerMethodField()
@@ -26,10 +28,15 @@ class InvocationSerializer(serializers.ModelSerializer):
     links = serializers.SerializerMethodField()
     log_delivery = serializers.SerializerMethodField()
     attempts = serializers.SerializerMethodField()
+    invocation_token_name = serializers.SerializerMethodField()
+    invocation_token_prefix = serializers.SerializerMethodField()
 
     class Meta:
         model = Invocation
         exclude = ["read_token_hash", "read_token_prefix"]
+
+    def get_resource(self, obj):
+        return "invocation"
 
     def get_input_files(self, obj):
         return InvocationInputFileSerializer(obj.input_files.all(), many=True).data
@@ -88,6 +95,16 @@ class InvocationSerializer(serializers.ModelSerializer):
 
     def get_attempts(self, obj):
         return InvocationAttemptSerializer(obj.attempts.all(), many=True).data
+
+    def get_invocation_token_name(self, obj):
+        if obj.invocation_auth_type != InvocationAuthType.FUNCTION_TOKEN:
+            return ""
+        return obj.invocation_token.name if obj.invocation_token_id else ""
+
+    def get_invocation_token_prefix(self, obj):
+        if obj.invocation_auth_type != InvocationAuthType.FUNCTION_TOKEN:
+            return ""
+        return obj.invocation_token.prefix if obj.invocation_token_id else ""
 
 
 class InvocationAttemptSerializer(serializers.ModelSerializer):

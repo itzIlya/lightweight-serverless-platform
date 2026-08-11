@@ -460,6 +460,23 @@ class FunctionSourceReplacementTests(APITestCase):
             },
         )
 
+    def test_create_function_returns_frontend_next_action_links(self):
+        response = self.client.post(
+            reverse("function-list"),
+            data={
+                "name": "Fresh Function",
+                "description": "Created from frontend flow",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["resource"], "function")
+        self.assertEqual(response.data["build_status"], "not_built")
+        self.assertEqual(response.data["links"]["source"], f"/api/functions/{response.data['id']}/source/")
+        self.assertEqual(response.data["links"]["build_status"], f"/api/functions/{response.data['id']}/build-status/")
+        self.assertEqual(response.data["links"]["invoke"], f"/api/functions/{response.data['id']}/invoke/")
+
     @patch("apps.functions.views.enqueue_build_attempt")
     def test_source_replacement_creates_candidate_without_switching_active(self, enqueue):
         response = self.client.post(
@@ -469,6 +486,16 @@ class FunctionSourceReplacementTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 202, response.content)
+        self.assertEqual(response.data["resource"], "source_replacement")
+        self.assertEqual(response.data["frontend_state"], BuildStatus.QUEUED)
+        self.assertFalse(response.data["is_terminal"])
+        self.assertEqual(response.data["poll_after_seconds"], 1)
+        self.assertTrue(response.data["can_cancel"])
+        self.assertTrue(response.data["can_invoke"])
+        self.assertEqual(
+            response.data["links"]["build_status"],
+            f"/api/functions/{self.function.id}/build-status/",
+        )
         candidate = FunctionVersion.objects.exclude(pk=self.active_version.pk).get()
         attempt = BuildAttempt.objects.get(function_version=candidate)
         self.function.refresh_from_db()

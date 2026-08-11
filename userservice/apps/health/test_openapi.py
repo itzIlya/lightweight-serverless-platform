@@ -10,6 +10,7 @@ class UserserviceOpenAPITests(TestCase):
         self.assertEqual(schema["openapi"], "3.0.3")
         self.assertIn("/api/auth/register/", schema["paths"])
         self.assertIn("/api/auth/token/refresh/", schema["paths"])
+        self.assertIn("/api/auth/logout/", schema["paths"])
         self.assertIn("/api/auth/jwks/", schema["paths"])
         self.assertIn("BearerAuth", schema["components"]["securitySchemes"])
 

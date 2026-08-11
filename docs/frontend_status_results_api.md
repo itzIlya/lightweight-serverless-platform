@@ -35,6 +35,75 @@ GET /api/docs/
 imports. `/api/docs/` loads Swagger UI from a CDN when internet access is
 available; the JSON schema still works offline.
 
+## Golden Frontend Path
+
+The main user journey should use this sequence:
+
+```text
+1. POST /api/functions/
+2. POST /api/functions/{function_id}/source/
+3. GET  /api/functions/{function_id}/build-status/
+4. POST /api/functions/{function_id}/invoke/
+5. GET  /api/invocations/{invocation_id}/
+6. GET  /api/invocations/{invocation_id}/download/
+```
+
+Each response includes either direct `links` for the next step or a
+`poll_after_seconds` hint. The frontend should prefer those response fields over
+hardcoded timing or internal job-state assumptions.
+
+### 1. Create Function
+
+```text
+POST /api/functions/
+Authorization: Bearer <jwt-access-token>
+```
+
+Response includes:
+
+```json
+{
+  "resource": "function",
+  "id": 1,
+  "build_status": "not_built",
+  "links": {
+    "source": "/api/functions/1/source/",
+    "build_status": "/api/functions/1/build-status/",
+    "invoke": "/api/functions/1/invoke/",
+    "invocations": "/api/functions/1/invocations/",
+    "tokens": "/api/functions/1/tokens/"
+  }
+}
+```
+
+### 2. Upload Source
+
+```text
+POST /api/functions/{function_id}/source/
+Authorization: Bearer <jwt-access-token>
+Content-Type: multipart/form-data
+```
+
+Use field `source_bundle` for the ZIP file. The response is `202 Accepted` and
+includes:
+
+```json
+{
+  "resource": "source_replacement",
+  "frontend_state": "queued",
+  "is_terminal": false,
+  "poll_after_seconds": 1,
+  "can_cancel": true,
+  "can_invoke": false,
+  "links": {
+    "build_status": "/api/functions/1/build-status/",
+    "cancel_build": "/api/versions/2/cancel-build/"
+  }
+}
+```
+
+Then poll `links.build_status`.
+
 ## Build Status
 
 ```text
@@ -207,6 +276,19 @@ logs/
 ```
 
 The ZIP is the only user-facing way to download full stdout/stderr logs.
+
+If the ZIP is requested before artifacts are ready, the backend returns:
+
+```json
+{
+  "detail": "Invocation artifacts are not ready yet.",
+  "frontend_state": "running",
+  "poll_after_seconds": 1
+}
+```
+
+with HTTP `409 Conflict`. The frontend should keep polling the invocation detail
+endpoint and retry the ZIP only when `can_download=true`.
 
 ## Invocation History
 

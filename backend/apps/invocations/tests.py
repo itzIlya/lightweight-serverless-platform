@@ -75,6 +75,17 @@ class InvocationInputFileTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.data["resource"], "invocation")
+        self.assertEqual(response.data["frontend_state"], InvocationStatus.QUEUED)
+        self.assertFalse(response.data["is_terminal"])
+        self.assertFalse(response.data["result_available"])
+        self.assertFalse(response.data["can_download"])
+        self.assertEqual(response.data["poll_after_seconds"], 1)
+        self.assertEqual(
+            response.data["links"]["self"],
+            f"/api/invocations/{response.data['id']}/",
+        )
+        self.assertIn("read_token", response.data)
         self.assertIn("input_files", response.data)
         self.assertEqual(len(response.data["input_files"]), 1)
         invocation = Invocation.objects.get(id=response.data["id"])
@@ -451,6 +462,13 @@ class InvocationLogArtifactTests(APITestCase):
             manifest = archive.read("manifest.json").decode("utf-8")
             self.assertIn('"function_version_id"', manifest)
             self.assertNotIn("source_bundle", manifest)
+
+    def test_invocation_bundle_download_is_not_available_while_running(self):
+        response = self.client.get(reverse("invocation-download", args=[self.invocation.id]))
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["detail"], "Invocation artifacts are not ready yet.")
+        self.assertEqual(response.data["poll_after_seconds"], 1)
 
     def test_standalone_log_endpoints_are_not_public_api(self):
         self.report()

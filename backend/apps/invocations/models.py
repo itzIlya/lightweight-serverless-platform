@@ -19,6 +19,12 @@ class InvocationStatus(models.TextChoices):
     CANCELLED = "cancelled", "Cancelled"
 
 
+class InvocationAuthType(models.TextChoices):
+    OWNER_JWT = "owner_jwt", "Owner JWT"
+    FUNCTION_TOKEN = "function_token", "Function token"
+    PUBLIC = "public", "Public"
+
+
 class InvocationAttemptStatus(models.TextChoices):
     QUEUED = "queued", "Queued"
     RUNNING = "running", "Running"
@@ -56,6 +62,18 @@ class Invocation(models.Model):
     cold_start = models.BooleanField(default=False)
     retry_count = models.PositiveIntegerField(default=0)
     error_message = models.TextField(blank=True)
+    invocation_auth_type = models.CharField(
+        max_length=30,
+        choices=InvocationAuthType.choices,
+        default=InvocationAuthType.OWNER_JWT,
+    )
+    invocation_token = models.ForeignKey(
+        "functions.FunctionInvokeToken",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="invocations",
+    )
     queued_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)

@@ -68,12 +68,17 @@ The platform currently includes:
 - User-facing function summaries that expose the active image, current build
   status, pending build, and per-function invocation history without requiring
   the frontend to understand every internal version row
-- Frontend-facing response helpers for build and invocation reads, including
-  `frontend_state`, `can_*` flags, polling hints, and stable `links`
+- Frontend-facing response helpers across the main user path, including
+  `resource`, `frontend_state`, `can_*` flags, polling hints, stable `links`,
+  and ZIP-not-ready semantics
 - Curated OpenAPI 3.0 schema and Swagger docs endpoints for both backend and
   userservice
 - Separate userservice for account login, refresh, JWT issuing, and public-key
   discovery, with backend-side userservice JWT verification
+- Browser-facing CORS configuration for backend and userservice, including
+  frontend auth headers and download response headers
+- Frontend auth-flow documentation for login, refresh, logout, token storage,
+  backend calls, and expired-token handling
 - Owner-scoped functions, versions, builds, and invocations
 - Function invocation-token management APIs for non-owner callers
 - Build and invocation status, logs, timing, and result capture
@@ -103,6 +108,8 @@ Implemented:
 - REST serializers, views, and routes
 - `userservice` for registration, login, JWT refresh, current-user lookup,
   public-key discovery, and JWKS discovery
+- Userservice logout acknowledgement endpoint for the current stateless JWT
+  prototype flow
 - Userservice OpenAPI schema and Swagger docs at `/api/schema/` and `/api/docs/`
 - Backend compatibility bridge for userservice-issued RS256 JWTs
 - Backend OpenAPI schema and Swagger docs at `/api/schema/` and `/api/docs/`
@@ -190,8 +197,8 @@ Implemented:
 - Optional runner direct-upload fast path that sends declared outputs straight
   to the backend with a scoped upload token and skips Docker output export/copy
 - Public owner/admin APIs to list and download invocation outputs
-- Frontend-facing build-status endpoint, invocation polling hints, action flags,
-  output links, and invocation ZIP download semantics
+- Frontend-facing create-function, source-upload, build-status, invocation
+  polling, result, output-link, and invocation ZIP download semantics
 - Invocation read tokens returned by invoke responses so token/public callers can
   read only their own result and output files
 - Invocation access modes:
@@ -504,6 +511,7 @@ Available endpoints:
 - Userservice: `POST /api/auth/register/`
 - Userservice: `POST /api/auth/token/`
 - Userservice: `POST /api/auth/token/refresh/`
+- Userservice: `POST /api/auth/logout/`
 - Userservice: `GET /api/auth/me/`
 - Userservice: `GET /api/auth/public-key/`
 - Userservice: `GET /api/auth/jwks/`
@@ -585,15 +593,27 @@ Latest verification:
 - Compile check passed for backend, worker, and scheduler
 - Compile check passed for userservice
 - Backend and userservice migration drift checks passed: `No changes detected`
-- OpenAPI/frontend-contract focused backend test run passed: `24` tests across
-  backend schema docs, function build/source responses, invocation log/result
-  contract, and V2 invocation reads
+- OpenAPI/frontend-contract focused backend test run passed: `31` tests across
+  backend schema docs, function create/build/source responses, invocation
+  queued/result/download contract, and V2 invocation reads
 - Userservice OpenAPI focused test run passed: `2` tests
 - Compile checks passed for the touched backend and userservice API/docs modules
 - Live schema smoke passed for `http://localhost:8000/api/schema/` and
   `http://localhost:8100/api/schema/`
 - Live Swagger docs smoke passed for `http://localhost:8000/api/docs/` and
   `http://localhost:8100/api/docs/`
+- Live backend schema smoke confirmed function/invocation `resource` fields and
+  invocation ZIP `409` not-ready response documentation
+- Parspack object-storage smoke retest passed on 2026-08-04 from inside the
+  backend container: direct storage save/read/delete worked, repeated tiny
+  writes worked, no recent Loki Parspack/DNS errors were found, and invocation
+  log-artifact storage wrote and verified committed stdout/stderr files
+- Backend CORS/auth focused test run passed: `6` tests across CORS preflight,
+  OpenAPI docs, and userservice JWT compatibility
+- Userservice CORS/auth focused test run passed: `8` tests across CORS
+  preflight, OpenAPI docs, register/login/refresh/logout, `/me`, and JWKS
+- Live browser-style CORS preflight smoke passed for backend and userservice
+- Live userservice logout smoke passed at `http://localhost:8100/api/auth/logout/`
 - Live userservice-to-backend auth smoke passed: userservice registered a user,
   issued an RS256 JWT, backend verified it through JWKS, created a local shadow
   account, and created function `70`
@@ -644,7 +664,8 @@ Latest verification:
 
 The backend test suite now covers:
 - JWT registration, login, refresh support, and `/api/auth/me/`
-- Userservice RS256 JWT issuing, refresh, `/me`, public key and JWKS discovery
+- Userservice RS256 JWT issuing, refresh, logout acknowledgement, `/me`, public
+  key and JWKS discovery
 - Backend verification of userservice RS256 JWTs using JWKS, including shadow
   user/account creation for the current compatibility phase
 - JWT-authenticated function, build, and invocation API access
@@ -685,9 +706,14 @@ The backend test suite now covers:
   `is_terminal`, `poll_after_seconds`, `result_available`, `can_download`,
   `can_read_outputs`, `outputs_url`, `download_url`, `links`, stdout/stderr
   previews, and no standalone user-facing log listing/download endpoints
+- Frontend golden-path API contract documented for create function, upload
+  source, poll build, invoke, poll invocation, read result/stdout/stderr/exit
+  status, and download the invocation ZIP
 - Backend and userservice OpenAPI schema/docs endpoints, including frontend
   schemas for functions, builds, invocation tokens, invocations, outputs,
   downloads, userservice auth, public keys, and JWKS
+- Backend and userservice CORS middleware for configured frontend origins,
+  bearer JWTs, invocation tokens, read tokens, and download headers
 - Worker-side output validation for unsafe names, reserved names, file-count
   limit, per-file size limit, total-size limit, and no-upload-on-failure
 - Worker tmpfs output mount, export-copy wrapper, Docker archive extraction

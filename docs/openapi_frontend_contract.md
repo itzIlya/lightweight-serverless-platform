@@ -38,12 +38,16 @@ Use this schema for:
 - register
 - login
 - refresh
+- logout
 - current user
 - public key
 - JWKS discovery
 
 The userservice issues RS256 JWTs. The backend verifies those JWTs through the
 userservice public key/JWKS endpoints.
+
+The detailed browser auth/CORS flow is documented in
+`docs/frontend_auth_flow.md`.
 
 ## Frontend State Rules
 

@@ -54,6 +54,21 @@ class TokenRefreshView(APIView):
         return Response(serializer.save())
 
 
+class LogoutView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        return Response(
+            {
+                "logged_out": True,
+                "detail": (
+                    "Tokens are stateless in this prototype. Delete the access "
+                    "and refresh tokens on the client."
+                ),
+            }
+        )
+
+
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
 

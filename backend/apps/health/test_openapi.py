@@ -11,9 +11,13 @@ class BackendOpenAPITests(TestCase):
         self.assertIn("/api/functions/{function_id}/invoke/", schema["paths"])
         self.assertIn("/api/invocations/{invocation_id}/download/", schema["paths"])
         self.assertIn("Invocation", schema["components"]["schemas"])
+        self.assertIn("SourceReplacementResponse", schema["components"]["schemas"])
         invocation = schema["components"]["schemas"]["Invocation"]
+        self.assertIn("resource", invocation["properties"])
         self.assertIn("frontend_state", invocation["properties"])
         self.assertIn("can_download", invocation["properties"])
+        download = schema["paths"]["/api/invocations/{invocation_id}/download/"]["get"]
+        self.assertIn("409", download["responses"])
 
     def test_swagger_docs_page_points_to_schema(self):
         response = self.client.get("/api/docs/")

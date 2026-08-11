@@ -12,8 +12,16 @@ from .models import (
 
 @admin.register(Invocation)
 class InvocationAdmin(admin.ModelAdmin):
-    list_display = ("request_id", "function_version", "status", "cold_start", "queued_at")
-    list_filter = ("status", "cold_start")
+    list_display = (
+        "request_id",
+        "function_version",
+        "status",
+        "invocation_auth_type",
+        "invocation_token",
+        "cold_start",
+        "queued_at",
+    )
+    list_filter = ("status", "invocation_auth_type", "cold_start")
     search_fields = ("request_id", "function_version__function__slug")
 
 

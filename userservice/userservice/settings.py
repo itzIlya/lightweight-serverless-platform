@@ -6,6 +6,18 @@ import os
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def env_bool(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).lower() in {"1", "true", "yes"}
+
+
+def env_list(name: str, default: str = "") -> list[str]:
+    return [
+        item.strip()
+        for item in os.getenv(name, default).split(",")
+        if item.strip()
+    ]
+
+
 SECRET_KEY = os.getenv("USERSERVICE_SECRET_KEY", "dev-userservice-secret-key")
 DEBUG = os.getenv("DEBUG", "1") == "1"
 ALLOWED_HOSTS = [
@@ -28,6 +40,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "userservice.cors.FrontendCorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -35,6 +48,26 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+CORS_ALLOWED_ORIGINS = env_list(
+    "CORS_ALLOWED_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000",
+)
+CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS")
+CORS_ALLOW_CREDENTIALS = env_bool("CORS_ALLOW_CREDENTIALS")
+CORS_ALLOWED_METHODS = env_list(
+    "CORS_ALLOWED_METHODS",
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+)
+CORS_ALLOWED_HEADERS = env_list(
+    "CORS_ALLOWED_HEADERS",
+    "authorization,content-type,x-requested-with",
+)
+CORS_EXPOSE_HEADERS = env_list(
+    "CORS_EXPOSE_HEADERS",
+    "content-disposition,content-length,retry-after",
+)
+CORS_PREFLIGHT_MAX_AGE = int(os.getenv("CORS_PREFLIGHT_MAX_AGE", "86400"))
 
 ROOT_URLCONF = "userservice.urls"
 

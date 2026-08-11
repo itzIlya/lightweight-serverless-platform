@@ -13,11 +13,16 @@ from rest_framework.response import Response
 
 from apps.accounts.services import is_platform_admin
 from apps.invocations.models import Invocation
+from apps.invocations.models import InvocationAuthType
 from apps.invocations.serializers import InvocationSerializer
 from apps.invocations.services import (
     enqueue_invocation,
     store_invocation_files,
     validate_invocation_files,
+)
+from apps.invocations.sync import (
+    SyncInvocationResponseTooLarge,
+    wait_for_sync_invocation,
 )
 from apps.jobs.services import mark_build_jobs_from_status
 from apps.jobs.models import Job, JobStatus
@@ -72,6 +77,12 @@ class QueueUnavailable(APIException):
     default_code = "queue_unavailable"
 
 
+class SyncInvocationResponseTooLargeError(APIException):
+    status_code = status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+    default_detail = "Synchronous invocation response is too large."
+    default_code = "sync_invocation_response_too_large"
+
+
 class BuildLimitExceeded(APIException):
     status_code = status.HTTP_429_TOO_MANY_REQUESTS
     default_detail = "Build limit exceeded."
@@ -84,7 +95,7 @@ class FunctionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = Function.objects.select_related("owner", "active_version").prefetch_related("versions")
-        if self.action == "invoke":
+        if self.action in {"invoke", "invoke_sync"}:
             return queryset
         if is_platform_admin(self.request.user):
             return queryset
@@ -98,12 +109,26 @@ class FunctionViewSet(viewsets.ModelViewSet):
         return FunctionSerializer
 
     def get_permissions(self):
-        if self.action == "invoke":
+        if self.action in {"invoke", "invoke_sync"}:
             return [AllowAny()]
         return super().get_permissions()
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        function = (
+            Function.objects.select_related("owner", "active_version")
+            .prefetch_related("versions")
+            .get(pk=serializer.instance.pk)
+        )
+        return Response(
+            FunctionSerializer(function).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     def perform_destroy(self, instance):
         with transaction.atomic():
@@ -387,6 +412,20 @@ class FunctionViewSet(viewsets.ModelViewSet):
 
         return Response(
             {
+                "resource": "source_replacement",
+                "state": version.build_status,
+                "frontend_state": version.build_status,
+                "is_terminal": False,
+                "poll_after_seconds": 1,
+                "can_cancel": True,
+                "can_invoke": bool(function.active_version_id),
+                "links": {
+                    "function": f"/api/functions/{function.id}/",
+                    "build_status": f"/api/functions/{function.id}/build-status/",
+                    "invoke": f"/api/functions/{function.id}/invoke/",
+                    "invocations": f"/api/functions/{function.id}/invocations/",
+                    "cancel_build": f"/api/versions/{version.id}/cancel-build/",
+                },
                 "candidate_version": FunctionVersionSerializer(version).data,
                 "build_attempt": BuildAttemptSerializer(attempt).data,
                 "active_version": (
@@ -414,8 +453,36 @@ class FunctionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="invoke")
     def invoke(self, request, pk=None):
-        function = self.get_object()
-        self._authorize_invocation(request, function)
+        invocation, read_token, _version = self._create_invocation_from_request(
+            request,
+            self.get_object(),
+        )
+        output = dict(InvocationSerializer(invocation).data)
+        output["read_token"] = read_token
+        return Response(output, status=status.HTTP_202_ACCEPTED)
+
+    @action(detail=True, methods=["post"], url_path="invoke-sync")
+    def invoke_sync(self, request, pk=None):
+        invocation, read_token, _version = self._create_invocation_from_request(
+            request,
+            self.get_object(),
+            synchronous=True,
+        )
+        try:
+            wait_result = wait_for_sync_invocation(invocation)
+        except SyncInvocationResponseTooLarge as exc:
+            raise SyncInvocationResponseTooLargeError(str(exc)) from exc
+
+        output = dict(wait_result.data)
+        output["read_token"] = read_token
+        if wait_result.completed:
+            return Response(output, status=status.HTTP_200_OK)
+        output["detail"] = "Invocation is still running. Continue polling."
+        output["poll_after_seconds"] = output.get("poll_after_seconds") or 1
+        return Response(output, status=status.HTTP_202_ACCEPTED)
+
+    def _create_invocation_from_request(self, request, function, *, synchronous=False):
+        invocation_auth = self._authorize_invocation(request, function)
         serializer = FunctionInvokeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         version = self._select_version(function, serializer.validated_data)
@@ -427,6 +494,8 @@ class FunctionViewSet(viewsets.ModelViewSet):
         uploaded_files = request.FILES.getlist("files") or request.FILES.getlist(
             "input_files"
         )
+        if synchronous:
+            self._validate_sync_invocation_eligibility(version, uploaded_files)
         try:
             validate_invocation_files(version, uploaded_files)
         except ValueError as exc:
@@ -437,6 +506,8 @@ class FunctionViewSet(viewsets.ModelViewSet):
                 invocation = Invocation.objects.create(
                     function_version=version,
                     event=serializer.validated_data.get("event", {}),
+                    invocation_auth_type=invocation_auth["type"],
+                    invocation_token=invocation_auth.get("token"),
                 )
                 read_token = invocation.issue_read_token()
                 if uploaded_files:
@@ -445,13 +516,31 @@ class FunctionViewSet(viewsets.ModelViewSet):
         except Exception as exc:
             raise QueueUnavailable(str(exc)) from exc
 
-        output = dict(InvocationSerializer(invocation).data)
-        output["read_token"] = read_token
-        return Response(output, status=status.HTTP_202_ACCEPTED)
+        return invocation, read_token, version
+
+    def _validate_sync_invocation_eligibility(self, version, uploaded_files):
+        if version.declared_output_files:
+            raise ValidationError(
+                {
+                    "detail": (
+                        "Synchronous invocation is only available for functions "
+                        "without declared output files."
+                    )
+                }
+            )
+        if uploaded_files:
+            raise ValidationError(
+                {
+                    "detail": (
+                        "Synchronous invocation does not accept input files. "
+                        "Use async invocation for file inputs."
+                    )
+                }
+            )
 
     def _authorize_invocation(self, request, function):
         if function.invoke_access == InvokeAccess.PUBLIC:
-            return
+            return {"type": InvocationAuthType.PUBLIC}
 
         user = request.user
         is_owner_or_admin = (
@@ -459,7 +548,7 @@ class FunctionViewSet(viewsets.ModelViewSet):
             and (function.owner_id == user.id or is_platform_admin(user))
         )
         if is_owner_or_admin:
-            return
+            return {"type": InvocationAuthType.OWNER_JWT}
 
         if function.invoke_access == InvokeAccess.PRIVATE:
             raise NotAuthenticated(
@@ -493,6 +582,7 @@ class FunctionViewSet(viewsets.ModelViewSet):
 
         token.last_used_at = timezone.now()
         token.save(update_fields=["last_used_at", "updated_at"])
+        return {"type": InvocationAuthType.FUNCTION_TOKEN, "token": token}
 
     def _select_version(self, function, data):
         versions = function.versions.all()

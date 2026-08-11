@@ -113,6 +113,15 @@ class InvocationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
     def download(self, request, pk=None):
         invocation = self.get_object()
         _authorize_invocation_read(request, invocation)
+        if not invocation_outputs_are_published(invocation):
+            return Response(
+                {
+                    "detail": "Invocation artifacts are not ready yet.",
+                    "frontend_state": "running",
+                    "poll_after_seconds": 1,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
         bundle = _build_invocation_download_bundle(invocation)
         return FileResponse(
             bundle,

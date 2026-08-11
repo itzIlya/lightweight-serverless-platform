@@ -9,6 +9,7 @@ class CoordinationRolloutTests(SimpleTestCase):
         V2_INVOCATION_PILOT_ENABLED=False,
         V2_INVOCATION_ROLLOUT_PERCENT=100,
         V2_INVOCATION_CANARY_FUNCTION_IDS="42",
+        V1_JOB_CREATION_ENABLED=True,
     )
     def test_kill_switch_keeps_all_new_jobs_on_v1(self):
         selected = coordination_version_for_job(
@@ -23,6 +24,7 @@ class CoordinationRolloutTests(SimpleTestCase):
         V2_INVOCATION_PILOT_ENABLED=True,
         V2_INVOCATION_ROLLOUT_PERCENT=0,
         V2_INVOCATION_CANARY_FUNCTION_IDS="42, invalid",
+        V1_JOB_CREATION_ENABLED=True,
     )
     def test_zero_percent_routes_only_explicit_canary_functions(self):
         canary = coordination_version_for_job(
@@ -43,6 +45,7 @@ class CoordinationRolloutTests(SimpleTestCase):
         V2_BUILD_PILOT_ENABLED=True,
         V2_BUILD_ROLLOUT_PERCENT=25,
         V2_BUILD_CANARY_FUNCTION_IDS="",
+        V1_JOB_CREATION_ENABLED=True,
     )
     def test_percentage_selection_is_stable_for_retries(self):
         first = coordination_version_for_job(JobType.BUILD, "build-request-1")
@@ -69,6 +72,7 @@ class CoordinationRolloutTests(SimpleTestCase):
         V2_CUTOVER_STAGE="builds",
         V2_BUILD_CANARY_FUNCTION_IDS="",
         V2_INVOCATION_CANARY_FUNCTION_IDS="",
+        V1_JOB_CREATION_ENABLED=True,
     )
     def test_build_stage_enables_builds_but_not_private_invocations(self):
         build = coordination_version_for_job(JobType.BUILD, "build-1")
@@ -86,6 +90,7 @@ class CoordinationRolloutTests(SimpleTestCase):
         V2_INVOCATION_ROLLOUT_PERCENT=100,
         V2_INVOCATION_CANARY_FUNCTION_IDS="",
         V2_CUTOVER_STAGE="token",
+        V1_JOB_CREATION_ENABLED=True,
     )
     def test_token_stage_includes_private_and_token_but_not_public(self):
         selected = {
@@ -106,6 +111,7 @@ class CoordinationRolloutTests(SimpleTestCase):
         V2_INVOCATION_ROLLOUT_PERCENT=0,
         V2_INVOCATION_CANARY_FUNCTION_IDS="42",
         V2_CUTOVER_STAGE="internal",
+        V1_JOB_CREATION_ENABLED=True,
     )
     def test_internal_stage_routes_only_canary_function(self):
         canary = coordination_version_for_job(

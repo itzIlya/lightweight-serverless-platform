@@ -19,6 +19,8 @@ class UserServiceAuthTests(APITestCase):
             data={
                 "username": "ilya",
                 "email": "ilya@example.com",
+                "first_name": "Ilya",
+                "last_name": "Prototype",
                 "password": "StrongerPass123!",
             },
             format="json",
@@ -27,6 +29,8 @@ class UserServiceAuthTests(APITestCase):
         self.assertEqual(response.status_code, 201)
         self.assertIn("access", response.data)
         self.assertIn("refresh", response.data)
+        self.assertEqual(response.data["user"]["first_name"], "Ilya")
+        self.assertEqual(response.data["user"]["last_name"], "Prototype")
         self.assertEqual(response.data["user"]["role"], AccountRole.USER)
         self.assertTrue(Account.objects.filter(user__username="ilya").exists())
 
@@ -67,6 +71,13 @@ class UserServiceAuthTests(APITestCase):
         self.assertEqual(refresh.status_code, 200)
         self.assertIn("access", refresh.data)
         self.assertIn("refresh", refresh.data)
+
+    def test_logout_returns_stateless_client_cleanup_contract(self):
+        response = self.client.post(reverse("userservice-logout"), format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["logged_out"])
+        self.assertIn("stateless", response.data["detail"])
 
     def test_me_uses_userservice_access_token(self):
         user = get_user_model().objects.create_user(
