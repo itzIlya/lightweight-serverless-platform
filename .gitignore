@@ -1,4 +1,3 @@
-@"
 # Python
 __pycache__/
 *.py[cod]
@@ -12,14 +11,20 @@ media/
 staticfiles/
 .env
 .env.*
+!.env.example
+!.env.control-plane.example
+!.env.worker.example
 
 # Local generated test files
 work/
 tmp/
+tmp-runtime-sandboxes/
+.test-runtime-sandboxes/
 .serverless/
 
 # Docker / OS / editor
 .docker/
+.tmp-docker-config/
 .vscode/
 .idea/
 .DS_Store
@@ -27,7 +32,7 @@ Thumbs.db
 
 # Logs
 *.log
-"@ | Set-Content -Encoding UTF8 .gitignore
 
 # Secrets
 secrets.txt
+local-ssh-keys/

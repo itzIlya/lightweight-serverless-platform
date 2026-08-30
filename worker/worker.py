@@ -130,52 +130,73 @@ def heartbeat_loop(
     while not stop_event.wait(interval_seconds):
         state = activity.snapshot() if activity is not None else {}
         worker_status = status_provider() if status_provider is not None else "online"
-        payload = dict(operational_payload or {})
-        payload["status"] = worker_status
-        metadata = dict(payload.get("metadata") or {})
-        backend_metadata = {}
-        if warm_inventory_provider is not None:
-            try:
-                warm_pool = warm_inventory_provider()
-                metadata["warm_pool"] = warm_pool
-                backend_metadata["warm_pool"] = warm_pool
-            except Exception:
-                logger.exception(
-                    "failed to read warm container inventory name=%s",
-                    worker_name,
-                )
-        if metadata:
-            payload["metadata"] = metadata
-        if operational_store is not None:
-            try:
-                operational_store.record_heartbeat(
-                    {
-                        **payload,
-                        "name": worker_name,
-                        "status": worker_status,
-                        "active_jobs": state.get("active_jobs", 0),
-                        "active_builds": state.get("active_builds", 0),
-                        "active_invocations": state.get("active_invocations", 0),
-                    }
-                )
-            except Exception:
-                logger.exception(
-                    "failed to record orchestrator heartbeat name=%s",
-                    worker_name,
-                )
+        publish_worker_heartbeat(
+            backend,
+            worker_name=worker_name,
+            worker_status=worker_status,
+            state=state,
+            operational_store=operational_store,
+            operational_payload=operational_payload,
+            warm_inventory_provider=warm_inventory_provider,
+        )
+
+
+def publish_worker_heartbeat(
+    backend: BackendClient,
+    *,
+    worker_name: str,
+    worker_status: str,
+    state: dict,
+    operational_store: WorkerOperationalStateStore | None = None,
+    operational_payload: dict | None = None,
+    warm_inventory_provider=None,
+) -> None:
+    payload = dict(operational_payload or {})
+    payload["status"] = worker_status
+    metadata = dict(payload.get("metadata") or {})
+    backend_metadata = {}
+    if warm_inventory_provider is not None:
         try:
-            backend.heartbeat_worker(
+            warm_pool = warm_inventory_provider()
+            metadata["warm_pool"] = warm_pool
+            backend_metadata["warm_pool"] = warm_pool
+        except Exception:
+            logger.exception(
+                "failed to read warm container inventory name=%s",
+                worker_name,
+            )
+    if metadata:
+        payload["metadata"] = metadata
+    if operational_store is not None:
+        try:
+            operational_store.record_heartbeat(
                 {
+                    **payload,
                     "name": worker_name,
                     "status": worker_status,
                     "active_jobs": state.get("active_jobs", 0),
                     "active_builds": state.get("active_builds", 0),
                     "active_invocations": state.get("active_invocations", 0),
-                    "metadata": backend_metadata,
                 }
             )
         except Exception:
-            logger.exception("failed to send worker heartbeat name=%s", worker_name)
+            logger.exception(
+                "failed to record orchestrator heartbeat name=%s",
+                worker_name,
+            )
+    try:
+        backend.heartbeat_worker(
+            {
+                "name": worker_name,
+                "status": worker_status,
+                "active_jobs": state.get("active_jobs", 0),
+                "active_builds": state.get("active_builds", 0),
+                "active_invocations": state.get("active_invocations", 0),
+                "metadata": backend_metadata,
+            }
+        )
+    except Exception:
+        logger.exception("failed to send worker heartbeat name=%s", worker_name)
 
 
 def warm_pool_heartbeat_metadata(executor: DockerExecutor) -> dict:
@@ -1192,9 +1213,23 @@ def main() -> None:
         invocation_executor.warm_enabled,
     )
 
+    drain_reported = False
     with ThreadPoolExecutor(max_workers=max_concurrency) as pool:
         while not shutdown_event.is_set() or activity.has_active_jobs():
             if shutdown_event.is_set():
+                if not drain_reported:
+                    publish_worker_heartbeat(
+                        backend,
+                        worker_name=worker_name,
+                        worker_status="draining",
+                        state=activity.snapshot(),
+                        operational_store=worker_state,
+                        operational_payload=operational_payload,
+                        warm_inventory_provider=lambda: warm_pool_heartbeat_metadata(
+                            invocation_executor
+                        ),
+                    )
+                    drain_reported = True
                 time.sleep(idle_sleep_seconds)
                 continue
             can_run_invocation = activity.can_start_invocation(

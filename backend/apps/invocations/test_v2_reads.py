@@ -91,7 +91,9 @@ class V2InvocationReadTests(APITestCase):
     def test_active_v2_status_overlays_stale_postgres_status(self, read_state):
         read_state.return_value = self.redis_state(status="dispatched")
 
-        response = self.client.get(reverse("invocation-detail", args=[self.invocation.id]))
+        response = self.client.get(
+            f"{reverse('invocation-detail', args=[self.invocation.id])}?response_mode=advanced"
+        )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["status"], InvocationStatus.RUNNING)
@@ -103,6 +105,24 @@ class V2InvocationReadTests(APITestCase):
         self.assertEqual(response.data["output_files"], [])
 
     @patch("apps.invocations.v2_reads._read_v2_job_state")
+    def test_default_detail_returns_simple_pending_response(self, read_state):
+        read_state.return_value = self.redis_state(status="running")
+
+        response = self.client.get(reverse("invocation-detail", args=[self.invocation.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["id"], self.invocation.id)
+        self.assertEqual(response.data["status"], InvocationStatus.RUNNING)
+        self.assertEqual(response.data["poll_after_seconds"], 1)
+        self.assertEqual(
+            response.data["links"]["self"],
+            f"/api/invocations/{self.invocation.id}/?response_mode=simple",
+        )
+        self.assertNotIn("stdout", response.data)
+        self.assertNotIn("stderr", response.data)
+        self.assertNotIn("can_download", response.data)
+
+    @patch("apps.invocations.v2_reads._read_v2_job_state")
     def test_terminal_v2_result_is_returned_after_artifact_commit(self, read_state):
         completion = self.create_committed_completion()
         read_state.return_value = self.redis_state(
@@ -111,7 +131,9 @@ class V2InvocationReadTests(APITestCase):
             artifact_commit_id=str(completion.artifact_commit_id),
         )
 
-        response = self.client.get(reverse("invocation-detail", args=[self.invocation.id]))
+        response = self.client.get(
+            f"{reverse('invocation-detail', args=[self.invocation.id])}?response_mode=advanced"
+        )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["status"], InvocationStatus.SUCCEEDED)
@@ -125,6 +147,37 @@ class V2InvocationReadTests(APITestCase):
         self.assertEqual(response.data["output_files"][0]["original_path"], "report.txt")
 
     @patch("apps.invocations.v2_reads._read_v2_job_state")
+    def test_default_terminal_v2_response_is_simple(self, read_state):
+        completion = self.create_committed_completion()
+        output = completion.output_files.get()
+        read_state.return_value = self.redis_state(
+            status="succeeded",
+            completion_id=completion.completion_id,
+            artifact_commit_id=str(completion.artifact_commit_id),
+        )
+
+        response = self.client.get(reverse("invocation-detail", args=[self.invocation.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data,
+            {
+                "result": {"ok": True},
+                "output_files": [
+                    {
+                        "path": "report.txt",
+                        "size_bytes": 5,
+                        "content_type": "text/plain",
+                        "download_url": f"/api/invocations/{self.invocation.id}/outputs/{output.id}/download/",
+                    }
+                ],
+            },
+        )
+        self.assertNotIn("stdout", response.data)
+        self.assertNotIn("stderr", response.data)
+        self.assertNotIn("exit_code", response.data)
+
+    @patch("apps.invocations.v2_reads._read_v2_job_state")
     def test_terminal_v2_state_hides_outputs_until_artifact_commit_matches(self, read_state):
         completion = self.create_staged_completion()
         self.create_output_file(completion, status=StagedCompletionStatus.STAGED)
@@ -135,7 +188,7 @@ class V2InvocationReadTests(APITestCase):
         )
 
         detail_response = self.client.get(
-            reverse("invocation-detail", args=[self.invocation.id])
+            f"{reverse('invocation-detail', args=[self.invocation.id])}?response_mode=advanced"
         )
         outputs_response = self.client.get(
             reverse("invocation-outputs", args=[self.invocation.id])
@@ -184,7 +237,9 @@ class V2InvocationReadTests(APITestCase):
         self.invocation.result = {"projected": True}
         self.invocation.save()
 
-        response = self.client.get(reverse("invocation-detail", args=[self.invocation.id]))
+        response = self.client.get(
+            f"{reverse('invocation-detail', args=[self.invocation.id])}?response_mode=advanced"
+        )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["status"], InvocationStatus.SUCCEEDED)

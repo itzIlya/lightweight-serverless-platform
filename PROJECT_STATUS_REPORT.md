@@ -527,6 +527,7 @@ Available endpoints:
 - `POST /api/functions/{id}/tokens/{token_id}/rotate/`
 - `GET|POST /api/functions/{id}/versions/`
 - `POST /api/functions/{id}/invoke/`
+- `POST /api/functions/{id}/invoke-sync/`
 - `GET /api/versions/`
 - `GET /api/versions/{id}/`
 - `POST /api/versions/{id}/build/`
@@ -555,6 +556,11 @@ Authentication notes:
   create or rotate; token hashes are never exposed through the API.
 - Invoke responses include an invocation `read_token`; callers can use
   `X-Invocation-Read-Token` to read that one invocation and its output files.
+- Invocation responses support `response_mode=simple|advanced`.
+  `simple` is the default and returns only pending poll handles or terminal
+  function result plus committed output download paths. `advanced` returns the
+  full dashboard/operator payload, including status metadata, stdout/stderr
+  previews, exit status, links, and platform fields.
 
 Protected internal worker endpoints:
 - `POST /api/internal/auth/userservice-jwks-cache/clear/`
@@ -747,6 +753,10 @@ The backend test suite now covers:
 - There is one scheduler in local Compose; workers can be scaled with Docker
   Compose. Basic scheduler policy tests and one real concurrent invocation
   workload exist, but multi-worker failure testing is still limited.
+- Runtime worker add/remove is supported for the first distributed prototype:
+  workers self-register, heartbeat into Redis/orchestrator state, publish
+  `draining` on shutdown, stop accepting new jobs, finish active jobs, then
+  publish `offline`. See `docs/worker_scaling_operations.md`.
 - A worker crash after accepting a job no longer loses the job immediately;
   stale-worker recovery requeues it from the processing queue with backoff.
 - Jobs recovered too many times are moved to `dead_lettered` instead of being
@@ -817,7 +827,7 @@ The backend test suite now covers:
    cached images, and supported runtime variants.
 8. Route jobs to suitable workers using those capabilities.
 9. Expand graceful shutdown testing to real multi-worker restart/drain
-   scenarios.
+   scenarios, including remote workers stopped over SSH.
 10. Test multiple workers and worker-failure scenarios.
 
 ### Priority 3: Security and Resource Isolation

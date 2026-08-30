@@ -66,7 +66,7 @@ class InvocationInputFileTests(APITestCase):
         )
 
         response = self.client.post(
-            reverse("function-invoke", args=[self.version.function_id]),
+            f"{reverse('function-invoke', args=[self.version.function_id])}?response_mode=advanced",
             data={
                 "event": '{"mode":"ocr"}',
                 "files": pdf,
@@ -155,7 +155,7 @@ class InvocationInputFileTests(APITestCase):
             content_type="application/pdf",
         )
         response = self.client.post(
-            reverse("function-invoke", args=[self.version.function_id]),
+            f"{reverse('function-invoke', args=[self.version.function_id])}?response_mode=advanced",
             data={
                 "event": '{"mode":"ocr"}',
                 "files": pdf,
@@ -335,7 +335,7 @@ class InvocationOutputFileTests(APITestCase):
         self.client.credentials()
 
         retrieve_response = self.client.get(
-            reverse("invocation-detail", args=[self.invocation.id]),
+            f"{reverse('invocation-detail', args=[self.invocation.id])}?response_mode=advanced",
             HTTP_X_INVOCATION_READ_TOKEN=self.read_token,
         )
         list_response = self.client.get(
@@ -424,7 +424,7 @@ class InvocationLogArtifactTests(APITestCase):
         self.assertNotIn("log_files", response.data)
 
         detail_response = self.client.get(
-            reverse("invocation-detail", args=[self.invocation.id]),
+            f"{reverse('invocation-detail', args=[self.invocation.id])}?response_mode=advanced",
         )
 
         self.assertEqual(detail_response.status_code, 200)

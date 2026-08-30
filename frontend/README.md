@@ -1,11 +1,20 @@
 # Serverless Platform Frontend
 
-This is the local prototype frontend for the platform.
+This is the React/Vite frontend for the platform. It is a guided product UI, not
+an API demo: creating/building a function and invoking it are each broken into
+short, focused steps.
 
-Run it from the project root:
+Run it with the local platform stack from the project root:
 
 ```powershell
-python -m http.server 5173 -d frontend
+docker compose up -d --build frontend
+```
+
+The Dockerfile uses Runflare for its Node image by default. To use Arvan instead:
+
+```powershell
+docker compose build --build-arg NODE_IMAGE=docker.arvancloud.ir/node:22-alpine frontend
+docker compose up -d frontend
 ```
 
 Then open:
@@ -28,20 +37,11 @@ landing page
 login/sign up
 my functions list
 add new function
-function editor
-enter function name
-paste handler.py code
-paste requirements.txt
-choose public/private/token access
-choose input MIME types and limits
-declare expected output filenames and limits
-press Build
-see an in-page queued notification
-see build status at the top of the editor
-refresh or auto-poll build status
-invoke with JSON event and optional files
-poll invocation status
-view result/stdout/stderr/exit code
+guided function builder: identity -> code -> contract -> build
+function hub: overview, build status, guided run, history, access tokens, API guide
+guided invocation: choose sync/async -> JSON/files -> result
+auto-poll build and invocation status
+view returned JSON and exit status
 download invocation ZIP
 create/update/rotate/revoke invocation tokens
 view invocation history, including token metadata when a function token was used

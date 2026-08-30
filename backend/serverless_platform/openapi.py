@@ -127,6 +127,18 @@ def _serverless_backend_schema(request) -> dict:
                 },
             },
             "/api/functions/{function_id}/source/": {
+                "get": {
+                    "tags": ["Builds"],
+                    "summary": "Read the current browser-editable source",
+                    "description": (
+                        "Returns the active version's handler.py and requirements.txt "
+                        "for the function editor. If no active version exists, the "
+                        "latest stored version is used. Large or non-UTF-8 editor "
+                        "files return 400; full source bundles remain stored separately."
+                    ),
+                    "parameters": [_path_int("function_id")],
+                    "responses": _json_response("200", "Editable source", "FunctionSourceRead"),
+                },
                 "post": {
                     "tags": ["Builds"],
                     "summary": "Upload replacement source and queue a build",
@@ -184,10 +196,13 @@ def _serverless_backend_schema(request) -> dict:
                     "description": (
                         "Private functions require owner/admin JWT. Token functions "
                         "accept X-Function-Token. Public functions accept no auth. "
-                        "The response includes a one-invocation read_token."
+                        "The response includes a one-invocation read_token. "
+                        "response_mode defaults to simple; use advanced for the full "
+                        "dashboard/status payload."
                     ),
                     "parameters": [
                         _path_int("function_id"),
+                        _response_mode_query(),
                         {
                             "name": "X-Function-Token",
                             "in": "header",
@@ -225,10 +240,11 @@ def _serverless_backend_schema(request) -> dict:
                         "terminal result. Only functions without declared output files "
                         "and requests without input files are eligible. If execution is "
                         "still running when the sync wait expires, the API returns 202 "
-                        "with polling links."
+                        "with polling links. response_mode defaults to simple."
                     ),
                     "parameters": [
                         _path_int("function_id"),
+                        _response_mode_query(),
                         {
                             "name": "X-Function-Token",
                             "in": "header",
@@ -329,8 +345,12 @@ def _serverless_backend_schema(request) -> dict:
                 "get": {
                     "tags": ["Invocations"],
                     "summary": "Read invocation status/result",
-                    "parameters": [_path_int("invocation_id"), _read_token_header()],
-                    "responses": _json_response("200", "Invocation", "Invocation"),
+                    "parameters": [
+                        _path_int("invocation_id"),
+                        _read_token_header(),
+                        _response_mode_query(),
+                    ],
+                    "responses": _json_response("200", "Invocation", "InvocationReadResponse"),
                 }
             },
             "/api/invocations/{invocation_id}/outputs/": {
@@ -471,6 +491,26 @@ def _schemas() -> dict:
                 "image_ref": {"type": "string"},
             },
         },
+        "FunctionSourceRead": {
+            "type": "object",
+            "properties": {
+                "version_id": {"type": "integer"},
+                "version": {"type": "string"},
+                "runtime": {"type": "string", "example": "python3.13"},
+                "handler": {"type": "string", "example": "handler.main"},
+                "config": {"type": "object", "example": {"memory_mb": 128}},
+                "code": {
+                    "type": "string",
+                    "description": "UTF-8 text from handler.py, capped for browser editing.",
+                    "example": "def main(event, context):\n    return {\"echo\": event}\n",
+                },
+                "requirements": {
+                    "type": "string",
+                    "description": "UTF-8 text from requirements.txt.",
+                    "example": "requests==2.32.3\n",
+                },
+            },
+        },
         "SourceReplacementResponse": {
             "type": "object",
             "properties": {
@@ -523,21 +563,86 @@ def _schemas() -> dict:
                 "event": {"type": "object", "default": {}},
                 "version_id": {"type": "integer"},
                 "version": {"type": "string"},
+                "response_mode": {
+                    "type": "string",
+                    "enum": ["simple", "advanced"],
+                    "default": "simple",
+                    "description": "Also accepted as ?response_mode=. Query parameter is preferred.",
+                },
             },
         },
         "InvokeResponse": {
-            "allOf": [
-                {"$ref": "#/components/schemas/Invocation"},
+            "oneOf": [
                 {
-                    "type": "object",
-                    "properties": {
-                        "read_token": {
-                            "type": "string",
-                            "description": "Shown once. Use as X-Invocation-Read-Token for this invocation.",
-                        }
-                    },
+                    "allOf": [
+                        {"$ref": "#/components/schemas/SimpleInvocationResponse"},
+                        {"$ref": "#/components/schemas/InvocationReadToken"},
+                    ]
+                },
+                {
+                    "allOf": [
+                        {"$ref": "#/components/schemas/Invocation"},
+                        {"$ref": "#/components/schemas/InvocationReadToken"},
+                    ]
                 },
             ]
+        },
+        "InvocationReadResponse": {
+            "oneOf": [
+                {"$ref": "#/components/schemas/SimpleInvocationResponse"},
+                {"$ref": "#/components/schemas/Invocation"},
+            ],
+        },
+        "InvocationReadToken": {
+            "type": "object",
+            "properties": {
+                "read_token": {
+                    "type": "string",
+                    "description": "Shown once. Use as X-Invocation-Read-Token for this invocation.",
+                }
+            },
+        },
+        "SimpleInvocationResponse": {
+            "type": "object",
+            "description": (
+                "Default response mode. Pending invocations return polling "
+                "information. Terminal successes return only the function result "
+                "and committed output file download paths. stdout/stderr are "
+                "available only in the invocation ZIP or advanced response mode."
+            ),
+            "properties": {
+                "id": {"type": "integer", "description": "Present while pending."},
+                "request_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Present while pending.",
+                },
+                "status": {
+                    "type": "string",
+                    "description": "Present while pending, or inside error for terminal failures.",
+                    "example": "running",
+                },
+                "poll_after_seconds": {"type": "integer", "example": 1},
+                "links": {"$ref": "#/components/schemas/Links"},
+                "result": {"type": "object"},
+                "output_files": {
+                    "type": "array",
+                    "items": {"$ref": "#/components/schemas/SimpleOutputFile"},
+                },
+                "error": {"type": "object"},
+            },
+        },
+        "SimpleOutputFile": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "example": "report.txt"},
+                "size_bytes": {"type": "integer", "example": 128},
+                "content_type": {"type": "string", "example": "text/plain"},
+                "download_url": {
+                    "type": "string",
+                    "example": "/api/invocations/123/outputs/456/download/",
+                },
+            },
         },
         "Invocation": {
             "type": "object",
@@ -745,6 +850,20 @@ def _query_int(name: str, *, default: int) -> dict:
         "in": "query",
         "required": False,
         "schema": {"type": "integer", "default": default},
+    }
+
+
+def _response_mode_query() -> dict:
+    return {
+        "name": "response_mode",
+        "in": "query",
+        "required": False,
+        "schema": {
+            "type": "string",
+            "enum": ["simple", "advanced"],
+            "default": "simple",
+        },
+        "description": "simple is the default caller response; advanced returns dashboard metadata.",
     }
 
 

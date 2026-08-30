@@ -41,6 +41,24 @@ def function_bundle() -> SimpleUploadedFile:
     )
 
 
+def function_bundle_with(
+    *,
+    handler: str = "def main(event, context):\n    return {'echo': event}\n",
+    requirements: str = "",
+    config: str = "{}",
+) -> SimpleUploadedFile:
+    data = io.BytesIO()
+    with zipfile.ZipFile(data, "w") as archive:
+        archive.writestr("handler.py", handler)
+        archive.writestr("requirements.txt", requirements)
+        archive.writestr("config.json", config)
+    return SimpleUploadedFile(
+        "function.zip",
+        data.getvalue(),
+        content_type="application/zip",
+    )
+
+
 def authenticate_with_jwt(client, user) -> None:
     access = RefreshToken.for_user(user).access_token
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
@@ -476,6 +494,49 @@ class FunctionSourceReplacementTests(APITestCase):
         self.assertEqual(response.data["links"]["source"], f"/api/functions/{response.data['id']}/source/")
         self.assertEqual(response.data["links"]["build_status"], f"/api/functions/{response.data['id']}/build-status/")
         self.assertEqual(response.data["links"]["invoke"], f"/api/functions/{response.data['id']}/invoke/")
+
+    def test_owner_can_read_editable_source_for_active_version(self):
+        self.active_version.source_bundle = function_bundle_with(
+            handler="def main(event, context):\n    return {'ok': True}\n",
+            requirements="numpy==2.2.0\n",
+        )
+        self.active_version.save(update_fields=["source_bundle"])
+
+        response = self.client.get(
+            reverse("function-replace-source", args=[self.function.id])
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.data["version_id"], self.active_version.id)
+        self.assertEqual(response.data["handler"], "handler.main")
+        self.assertEqual(response.data["runtime"], "python3.13")
+        self.assertIn("return {'ok': True}", response.data["code"])
+        self.assertEqual(response.data["requirements"], "numpy==2.2.0\n")
+        self.assertEqual(response.data["config"], {"old": True})
+
+    def test_other_user_cannot_read_editable_source(self):
+        authenticate_with_jwt(self.client, self.other)
+
+        response = self.client.get(
+            reverse("function-replace-source", args=[self.function.id])
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_source_read_rejects_browser_editor_files_that_are_too_large(self):
+        self.active_version.source_bundle = function_bundle_with(
+            handler="x" * 20,
+            requirements="",
+        )
+        self.active_version.save(update_fields=["source_bundle"])
+
+        with self.settings(FUNCTION_SOURCE_TEXT_MAX_BYTES=10):
+            response = self.client.get(
+                reverse("function-replace-source", args=[self.function.id])
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("too large", str(response.data["source"]))
 
     @patch("apps.functions.views.enqueue_build_attempt")
     def test_source_replacement_creates_candidate_without_switching_active(self, enqueue):

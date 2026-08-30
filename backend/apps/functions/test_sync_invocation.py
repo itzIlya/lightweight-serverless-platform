@@ -79,7 +79,7 @@ class SyncInvocationTests(APITestCase):
         )
 
         response = self.client.post(
-            self.url,
+            f"{self.url}?response_mode=advanced",
             data={"event": {"name": "Ilya"}},
             format="json",
         )
@@ -93,6 +93,45 @@ class SyncInvocationTests(APITestCase):
         self.assertEqual(invocation.invocation_auth_type, InvocationAuthType.OWNER_JWT)
         enqueue.assert_called_once_with(invocation)
         wait.assert_called_once_with(invocation)
+
+    @patch("apps.functions.views.wait_for_sync_invocation")
+    @patch("apps.functions.views.enqueue_invocation")
+    def test_sync_invoke_defaults_to_simple_response(self, enqueue, wait):
+        authenticate_with_jwt(self.client, self.owner)
+        wait.return_value = SyncInvocationWaitResult(
+            completed=True,
+            data={
+                "id": 1,
+                "status": "succeeded",
+                "is_terminal": True,
+                "result_available": True,
+                "result": {"ok": True},
+                "stdout": "hidden in simple mode\n",
+                "stderr": "hidden in simple mode\n",
+                "exit_code": 0,
+                "links": {"self": "/api/invocations/1/"},
+            },
+        )
+
+        response = self.client.post(
+            self.url,
+            data={"event": {"name": "Ilya"}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            response.data,
+            {
+                "result": {"ok": True},
+                "output_files": [],
+                "read_token": response.data["read_token"],
+            },
+        )
+        self.assertNotIn("stdout", response.data)
+        self.assertNotIn("stderr", response.data)
+        self.assertIn("read_token", response.data)
+        enqueue.assert_called_once()
 
     @patch("apps.functions.views.wait_for_sync_invocation")
     @patch("apps.functions.views.enqueue_invocation")

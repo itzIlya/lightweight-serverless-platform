@@ -91,6 +91,7 @@ class V2ProjectorTests(TestCase):
         V2_BUILD_PILOT_ENABLED=True,
         V2_BUILD_ROLLOUT_PERCENT=0,
         V2_BUILD_CANARY_FUNCTION_IDS="",
+        V1_JOB_CREATION_ENABLED=True,
     )
     @patch("redis.Redis.from_url")
     def test_partial_rollout_v1_build_keeps_v1_image_tag(self, redis_from_url):

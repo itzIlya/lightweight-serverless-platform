@@ -32,6 +32,11 @@ REQUIRED_BUNDLE_FILES = {
     "config.json",
 }
 
+EDITABLE_SOURCE_FILES = {
+    "handler.py": "code",
+    "requirements.txt": "requirements",
+}
+
 
 class BuildAdmissionError(ValueError):
     def __init__(self, message: str, *, retry_after_seconds: int | None = None):
@@ -77,8 +82,47 @@ def validate_function_bundle(uploaded_file) -> None:
             pass
 
 
+def read_editable_source_bundle(
+    version: FunctionVersion,
+    *,
+    max_file_bytes: int | None = None,
+) -> dict:
+    max_file_bytes = max_file_bytes or int(
+        getattr(settings, "FUNCTION_SOURCE_TEXT_MAX_BYTES", 256 * 1024)
+    )
+    source = {
+        "version_id": version.id,
+        "version": version.version,
+        "runtime": version.runtime,
+        "handler": version.handler,
+        "config": version.config or {},
+        "code": "",
+        "requirements": "",
+    }
+    if not version.source_bundle:
+        return source
+
+    try:
+        with version.source_bundle.open("rb") as bundle_file:
+            with zipfile.ZipFile(bundle_file) as archive:
+                names = set(archive.namelist())
+                for path, key in EDITABLE_SOURCE_FILES.items():
+                    if path not in names:
+                        continue
+                    info = archive.getinfo(path)
+                    if info.file_size > max_file_bytes:
+                        raise ValueError(f"{path} is too large to edit in the browser.")
+                    source[key] = archive.read(path).decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("Source files must be UTF-8 text.") from exc
+    except zipfile.BadZipFile as exc:
+        raise ValueError("Stored source bundle is not a valid zip archive.") from exc
+
+    return source
+
+
 def make_image_ref(version: FunctionVersion, registry: str | None = None) -> str:
-    registry = registry or settings.LOCAL_REGISTRY
+    registry = registry or settings.REGISTRY_IMAGE_REF_HOST
     slug = sanitize_tag_part(version.function.slug)
     version_part = sanitize_tag_part(version.version)
     return f"{registry}/functions/{slug}:v{version.id}-{version_part}"

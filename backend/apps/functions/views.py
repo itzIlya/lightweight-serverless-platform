@@ -14,6 +14,10 @@ from rest_framework.response import Response
 from apps.accounts.services import is_platform_admin
 from apps.invocations.models import Invocation
 from apps.invocations.models import InvocationAuthType
+from apps.invocations.response_modes import (
+    response_mode_from_request,
+    serialize_invocation_data,
+)
 from apps.invocations.serializers import InvocationSerializer
 from apps.invocations.services import (
     enqueue_invocation,
@@ -59,6 +63,7 @@ from .services import (
     get_locked_build_policy,
     get_build_policy,
     next_replacement_version_name,
+    read_editable_source_bundle,
     release_build_lease,
     schedule_function_images_for_deletion,
     select_active_version,
@@ -340,9 +345,21 @@ class FunctionViewSet(viewsets.ModelViewSet):
             }
         )
 
-    @action(detail=True, methods=["post"], url_path="source")
+    @action(detail=True, methods=["get", "post"], url_path="source")
     def replace_source(self, request, pk=None):
         function = self.get_object()
+        if request.method.lower() == "get":
+            version = select_active_version(function) or function.versions.order_by(
+                "-created_at",
+                "-id",
+            ).first()
+            if version is None:
+                raise ValidationError({"source": "This function has no source yet."})
+            try:
+                return Response(read_editable_source_bundle(version))
+            except ValueError as exc:
+                raise ValidationError({"source": str(exc)}) from exc
+
         active_version = select_active_version(function)
         serializer = FunctionSourceReplacementSerializer(
             data=request.data,
@@ -453,16 +470,21 @@ class FunctionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="invoke")
     def invoke(self, request, pk=None):
+        response_mode = response_mode_from_request(request, allow_body=True)
         invocation, read_token, _version = self._create_invocation_from_request(
             request,
             self.get_object(),
         )
-        output = dict(InvocationSerializer(invocation).data)
+        output = serialize_invocation_data(
+            InvocationSerializer(invocation).data,
+            mode=response_mode,
+        )
         output["read_token"] = read_token
         return Response(output, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=True, methods=["post"], url_path="invoke-sync")
     def invoke_sync(self, request, pk=None):
+        response_mode = response_mode_from_request(request, allow_body=True)
         invocation, read_token, _version = self._create_invocation_from_request(
             request,
             self.get_object(),
@@ -473,7 +495,7 @@ class FunctionViewSet(viewsets.ModelViewSet):
         except SyncInvocationResponseTooLarge as exc:
             raise SyncInvocationResponseTooLargeError(str(exc)) from exc
 
-        output = dict(wait_result.data)
+        output = serialize_invocation_data(wait_result.data, mode=response_mode)
         output["read_token"] = read_token
         if wait_result.completed:
             return Response(output, status=status.HTTP_200_OK)

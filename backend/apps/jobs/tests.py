@@ -4,7 +4,7 @@ import zipfile
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from datetime import timedelta
@@ -54,6 +54,7 @@ class DurableJobRecordTests(APITestCase):
         )
 
     @patch("redis.Redis.from_url")
+    @override_settings(V2_BUILD_PILOT_ENABLED=False, V1_JOB_CREATION_ENABLED=True)
     def test_build_enqueue_creates_durable_job_record(self, redis_from_url):
         redis_client = Mock()
         redis_from_url.return_value = redis_client
@@ -222,6 +223,7 @@ class DurableJobRecordTests(APITestCase):
         self.assertIsNotNone(worker.last_seen_at)
 
     @patch("redis.Redis.from_url")
+    @override_settings(V2_BUILD_PILOT_ENABLED=False, V1_JOB_CREATION_ENABLED=True)
     def test_scheduler_can_read_and_dispatch_queued_job(self, redis_from_url):
         redis_from_url.return_value = Mock()
         WorkerNode.objects.create(

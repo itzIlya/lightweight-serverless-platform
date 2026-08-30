@@ -309,6 +309,7 @@ services:
       dockerfile: worker/Dockerfile
     command: python worker/worker.py
     restart: unless-stopped
+    stop_grace_period: 6m
     env_file:
       - .env
     environment:
@@ -411,6 +412,18 @@ services:
         condition: service_healthy
       outbox-relay:
         condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    depends_on:
+      backend:
+        condition: service_healthy
+      userservice:
+        condition: service_healthy
 
   prometheus:
     image: prom/prometheus:v2.55.1

@@ -158,7 +158,9 @@ class StagedInvocationArtifactTests(APITestCase):
         self.assertEqual(staged.status_code, 201, staged.content)
         output = InvocationOutputFile.objects.get()
 
-        detail = self.client.get(reverse("invocation-detail", args=[self.invocation.id]))
+        detail = self.client.get(
+            f"{reverse('invocation-detail', args=[self.invocation.id])}?response_mode=advanced"
+        )
         outputs = self.client.get(reverse("invocation-outputs", args=[self.invocation.id]))
         download = self.client.get(
             reverse("invocation-download-output", args=[self.invocation.id, output.id])
@@ -180,7 +182,9 @@ class StagedInvocationArtifactTests(APITestCase):
         second = self.commit()
         completion = InvocationStagedCompletion.objects.get()
 
-        before = self.client.get(reverse("invocation-detail", args=[self.invocation.id]))
+        before = self.client.get(
+            f"{reverse('invocation-detail', args=[self.invocation.id])}?response_mode=advanced"
+        )
         self.assertEqual(first.status_code, 200)
         self.assertEqual(second.data["artifact_commit_id"], first.data["artifact_commit_id"])
         self.assertEqual(before.data["result"], {})
@@ -204,7 +208,9 @@ class StagedInvocationArtifactTests(APITestCase):
                 ),
             }
         )
-        after = self.client.get(reverse("invocation-detail", args=[self.invocation.id]))
+        after = self.client.get(
+            f"{reverse('invocation-detail', args=[self.invocation.id])}?response_mode=advanced"
+        )
         outputs = self.client.get(reverse("invocation-outputs", args=[self.invocation.id]))
         logs = self.client.get(f"/api/invocations/{self.invocation.id}/logs/")
 

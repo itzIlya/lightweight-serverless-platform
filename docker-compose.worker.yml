@@ -1,0 +1,22 @@
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    command: python worker/worker.py
+    restart: unless-stopped
+    stop_grace_period: 6m
+    env_file:
+      - .env.worker
+    environment:
+      PYTHONPATH: /app
+      JOB_QUEUE_NAME: function-jobs
+      SCHEDULER_QUEUE_NAME: scheduler-pending-jobs
+      SCHEDULER_INVOCATION_QUEUE_NAME: scheduler-pending-invocations
+      SCHEDULER_BUILD_QUEUE_NAME: scheduler-pending-builds
+      WORKER_QUEUE_PREFIX: worker
+      WORKER_IDLE_SLEEP_SECONDS: 0.2
+    ports:
+      - "${WORKER_METRICS_PORT:-9102}:9102"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

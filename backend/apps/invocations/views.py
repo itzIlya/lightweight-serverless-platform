@@ -28,6 +28,10 @@ from .serializers import (
     InvocationReportSerializer,
     InvocationSerializer,
 )
+from .response_modes import (
+    response_mode_from_request,
+    serialize_invocation_response,
+)
 from .services import (
     commit_staged_invocation_completion,
     log_preview,
@@ -38,7 +42,6 @@ from .services import (
 )
 from .v2_reads import (
     invocation_outputs_are_published,
-    serialize_invocation_for_read,
     visible_invocation_outputs,
     visible_invocation_logs,
 )
@@ -74,7 +77,12 @@ class InvocationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
     def retrieve(self, request, *args, **kwargs):
         invocation = self.get_object()
         _authorize_invocation_read(request, invocation)
-        return Response(serialize_invocation_for_read(invocation))
+        return Response(
+            serialize_invocation_response(
+                invocation,
+                mode=response_mode_from_request(request),
+            )
+        )
 
     @action(detail=True, methods=["get"], url_path="outputs")
     def outputs(self, request, pk=None):

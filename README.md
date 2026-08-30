@@ -3,6 +3,10 @@
 This repository is the first implementation pass for the proposal:
 `A Lightweight Serverless Execution Platform for Distributed Cloud Environments`.
 
+For a full handoff-style explanation of the architecture, current state,
+deprecated experiments, and recommended reading order, start with
+`PROJECT_GUIDE.md`.
+
 ## Current direction
 
 - Django control plane

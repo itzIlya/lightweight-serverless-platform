@@ -68,6 +68,7 @@ if OBJECT_STORAGE_ENABLED:
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "django.middleware.gzip.GZipMiddleware",
     "serverless_platform.cors.FrontendCorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -282,6 +283,7 @@ INVOCATION_RETENTION_DAYS = int(os.getenv("INVOCATION_RETENTION_DAYS", "7"))
 DEAD_LETTER_RETENTION_DAYS = int(os.getenv("DEAD_LETTER_RETENTION_DAYS", "60"))
 WORKER_SHARED_SECRET = os.getenv("WORKER_SHARED_SECRET", "change-me")
 LOCAL_REGISTRY = os.getenv("LOCAL_REGISTRY", "localhost:5000")
+REGISTRY_IMAGE_REF_HOST = os.getenv("REGISTRY_IMAGE_REF_HOST", LOCAL_REGISTRY)
 REGISTRY_INTERNAL_BASE_URL = os.getenv(
     "REGISTRY_INTERNAL_BASE_URL",
     "http://registry:5000",

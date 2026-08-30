@@ -76,7 +76,35 @@ Response includes:
 }
 ```
 
-### 2. Upload Source
+### 2. Read Editable Source
+
+```text
+GET /api/functions/{function_id}/source/
+Authorization: Bearer <jwt-access-token>
+```
+
+Use this when opening an existing function in the browser editor. The response
+contains the editable source files from the active version. If no active version
+exists yet, the backend falls back to the latest stored version.
+
+```json
+{
+  "version_id": 4,
+  "version": "v84-r2-a1-bad43c867463-d1",
+  "runtime": "python3.13",
+  "handler": "handler.main",
+  "config": {
+    "memory_mb": 128
+  },
+  "code": "def main(event, context):\n    return {\"echo\": event}\n",
+  "requirements": "requests==2.32.3\n"
+}
+```
+
+This endpoint is intentionally editor-focused. It returns `handler.py` and
+`requirements.txt`, not the full source bundle.
+
+### 3. Upload Source
 
 ```text
 POST /api/functions/{function_id}/source/
