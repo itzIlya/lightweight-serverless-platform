@@ -138,10 +138,10 @@ code, pre, .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", m
   padding: 96px 8vw 116px;
   overflow: hidden;
   border-bottom: 1px solid rgba(128, 87, 56, .18);
-  background: #fbe8d5;
+  background: #fbe8d5 url("/fleeting-circus-hero.png") 76% 52% / min(760px, 52vw) auto no-repeat;
 }
 .hero::after {
-  content: "";
+  content: none;
   position: absolute;
   inset: 0;
   background: linear-gradient(90deg, rgba(255, 247, 237, .94) 0%, rgba(255, 247, 237, .78) 40%, rgba(255, 247, 237, .14) 76%), linear-gradient(180deg, rgba(255, 250, 242, .12), rgba(255, 250, 242, .82) 100%);
@@ -177,10 +177,7 @@ code, pre, .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", m
 }
 .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 .hero-art {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-  z-index: 0;
+  display: none;
 }
 .hero-art img {
   width: 100%;
