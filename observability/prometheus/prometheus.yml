@@ -28,7 +28,7 @@ scrape_configs:
   - job_name: worker
     metrics_path: /metrics/
     static_configs:
-      - targets: ["10.42.1.56:9102", "10.42.1.149:9102"]
+      - targets: ["95.38.184.58:9102", "37.32.37.233:9102"]
 
   - job_name: redis
     static_configs:
