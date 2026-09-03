@@ -10,6 +10,9 @@ const STORAGE = {
 };
 const serviceUrl = (port) => {
   if (typeof window === "undefined") return `http://localhost:${port}`;
+  if (!window.location.port || ["80", "443"].includes(window.location.port)) {
+    return window.location.origin;
+  }
   return `${window.location.protocol}//${window.location.hostname}:${port}`;
 };
 const BACKEND = localStorage.getItem(STORAGE.backend) || serviceUrl(8000);

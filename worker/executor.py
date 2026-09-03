@@ -178,6 +178,10 @@ class DockerExecutor:
             )
             record_step("docker_volume_create_ms", volume_started)
 
+            image_started = time.monotonic()
+            self._ensure_image_available(image_ref)
+            record_step("docker_image_pull_ms", image_started)
+
             create_started = time.monotonic()
             container = self.docker_client.containers.create(
                 image_ref,
@@ -400,6 +404,10 @@ class DockerExecutor:
         record = self.warm_pool.acquire(key)
         cold_start = record is None
         if record is None:
+            image_started = time.monotonic()
+            self._ensure_image_available(image_ref)
+            record_step("docker_image_pull_ms", image_started)
+
             create_started = time.monotonic()
             record = self._create_warm_container(
                 key=key,
@@ -414,6 +422,7 @@ class DockerExecutor:
             record_step("warm_container_create_ms", create_started)
         else:
             timing["warm_container_reused"] = 1
+            timing["docker_image_pull_ms"] = 0
 
         reusable = False
         with tempfile.TemporaryDirectory(
@@ -617,6 +626,16 @@ class DockerExecutor:
             output_tmpfs_size_bytes=output_tmpfs_size_bytes,
             direct_output_upload_enabled=direct_output_upload,
         )
+
+    def _ensure_image_available(self, image_ref: str) -> None:
+        import docker
+
+        try:
+            self.docker_client.images.get(image_ref)
+            return
+        except docker.errors.ImageNotFound:
+            logger.info("pulling function image image_ref=%s", image_ref)
+            self.docker_client.images.pull(image_ref)
 
     def _create_warm_container(
         self,

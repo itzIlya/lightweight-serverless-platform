@@ -1,0 +1,228 @@
+[
+  {
+    "scenario": "single-tiny",
+    "count": 2,
+    "concurrency": 2,
+    "saturation_concurrency": 2,
+    "worker_invocation_concurrency": 1,
+    "cluster_invocation_capacity": 2,
+    "repeat": 1,
+    "wall_seconds": 2.672000000020489,
+    "throughput_per_second": 0.7485029940062364,
+    "successes": 2,
+    "failures": [],
+    "before": {
+      "queues": {
+        "scheduler-pending-invocations": 0,
+        "scheduler-pending-builds": 0,
+        "worker:worker-1:invocations": 0,
+        "worker:worker-2:invocations": 0,
+        "worker:worker-1:builds": 0,
+        "worker:worker-2:builds": 0,
+        "worker:worker-1:processing": 0,
+        "worker:worker-2:processing": 0
+      },
+      "workers": [
+        {
+          "name": "worker-1",
+          "status": "online",
+          "metadata": {
+            "warm_pool": {
+              "enabled": true,
+              "containers": []
+            },
+            "active_jobs": 0,
+            "active_builds": 0,
+            "legacy_queue_name": "worker:worker-1:jobs",
+            "active_invocations": 0,
+            "max_invocation_concurrency": 1
+          },
+          "last_seen_at": "2026-09-01T09:18:51.642475+00:00"
+        },
+        {
+          "name": "worker-2",
+          "status": "online",
+          "metadata": {
+            "legacy_queue_name": "worker:worker-2:jobs",
+            "max_invocation_concurrency": 1
+          },
+          "last_seen_at": "2026-09-01T09:18:45.309431+00:00"
+        }
+      ],
+      "active_invocations": 0
+    },
+    "after": {
+      "queues": {
+        "scheduler-pending-invocations": 0,
+        "scheduler-pending-builds": 0,
+        "worker:worker-1:invocations": 0,
+        "worker:worker-2:invocations": 0,
+        "worker:worker-1:builds": 0,
+        "worker:worker-2:builds": 0,
+        "worker:worker-1:processing": 0,
+        "worker:worker-2:processing": 0
+      },
+      "workers": [
+        {
+          "name": "worker-1",
+          "status": "online",
+          "metadata": {
+            "warm_pool": {
+              "enabled": true,
+              "containers": [
+                {
+                  "handler": "handler.main",
+                  "hit_count": 0,
+                  "image_ref": "10.42.1.22:5000/functions/bench-tiny-b6590c07:v37-v1-a1-9b4286a1c07b-d1",
+                  "memory_mb": 256,
+                  "use_count": 1,
+                  "busy_count": 0,
+                  "idle_count": 1,
+                  "function_version_id": "37",
+                  "output_tmpfs_size_bytes": 10485760
+                }
+              ]
+            },
+            "active_jobs": 0,
+            "active_builds": 0,
+            "legacy_queue_name": "worker:worker-1:jobs",
+            "active_invocations": 0,
+            "max_invocation_concurrency": 1
+          },
+          "last_seen_at": "2026-09-01T09:19:01.665968+00:00"
+        },
+        {
+          "name": "worker-2",
+          "status": "online",
+          "metadata": {
+            "warm_pool": {
+              "enabled": true,
+              "containers": [
+                {
+                  "handler": "handler.main",
+                  "hit_count": 0,
+                  "image_ref": "10.42.1.22:5000/functions/bench-tiny-b6590c07:v37-v1-a1-9b4286a1c07b-d1",
+                  "memory_mb": 256,
+                  "use_count": 1,
+                  "busy_count": 0,
+                  "idle_count": 1,
+                  "function_version_id": "37",
+                  "output_tmpfs_size_bytes": 10485760
+                }
+              ]
+            },
+            "active_jobs": 0,
+            "active_builds": 0,
+            "legacy_queue_name": "worker:worker-2:jobs",
+            "active_invocations": 0,
+            "max_invocation_concurrency": 1
+          },
+          "last_seen_at": "2026-09-01T09:19:05.370561+00:00"
+        }
+      ],
+      "active_invocations": 0
+    },
+    "invocations": [
+      {
+        "id": 2163,
+        "request_id": "a36b14ea-f763-4a26-97c2-dacee9162c74",
+        "kind": "tiny",
+        "status": "succeeded",
+        "worker_name": "worker-2",
+        "cold_start": true,
+        "duration_ms": 1027,
+        "accept_seconds": 0.1559999999590218,
+        "terminal_seconds": 2.655999999959022,
+        "poll_seconds": 2.5,
+        "output_list_seconds": 0.0,
+        "output_download_seconds": 0.0,
+        "result": {
+          "kind": "tiny",
+          "index": 100000,
+          "value": 100001,
+          "request_id": "a36b14ea-f763-4a26-97c2-dacee9162c74"
+        },
+        "worker_timing_ms": {
+          "backend_final_report_ms": 0,
+          "backend_running_report_ms": 0,
+          "docker_export_copy_ms": 0,
+          "docker_image_pull_ms": 146,
+          "docker_input_copy_ms": 4,
+          "executor_duration_ms": 1027,
+          "executor_wall_with_cleanup_ms": 1091,
+          "orchestrator_claim_ms": 11,
+          "orchestrator_completion_ms": 5,
+          "output_upload_ms": 0,
+          "output_validation_ms": 0,
+          "result_read_ms": 0,
+          "runner_environment_read_ms": 0,
+          "runner_event_load_ms": 0,
+          "runner_handler_execution_ms": 0,
+          "runner_handler_import_ms": 0,
+          "runner_module_imports_ms": 357,
+          "runner_result_serialize_ms": 0,
+          "runner_result_write_ms": 0,
+          "runner_setup_ms": 0,
+          "runner_total_ms": 358,
+          "sandbox_prepare_ms": 24,
+          "warm_container_create_ms": 325,
+          "warm_pool_release_ms": 0,
+          "warm_runner_exec_ms": 457,
+          "warm_sandbox_cleanup_after_ms": 63,
+          "warm_sandbox_cleanup_before_ms": 68,
+          "worker_process_total_ms": 1111
+        }
+      },
+      {
+        "id": 2164,
+        "request_id": "fc00f63c-7050-4537-98af-c64dfd86bf26",
+        "kind": "tiny",
+        "status": "succeeded",
+        "worker_name": "worker-1",
+        "cold_start": true,
+        "duration_ms": 855,
+        "accept_seconds": 0.2029999999795109,
+        "terminal_seconds": 1.5309999999590218,
+        "poll_seconds": 1.327999999979511,
+        "output_list_seconds": 0.0,
+        "output_download_seconds": 0.0,
+        "result": {
+          "kind": "tiny",
+          "index": 100001,
+          "value": 100002,
+          "request_id": "fc00f63c-7050-4537-98af-c64dfd86bf26"
+        },
+        "worker_timing_ms": {
+          "backend_final_report_ms": 0,
+          "backend_running_report_ms": 0,
+          "docker_export_copy_ms": 0,
+          "docker_image_pull_ms": 28,
+          "docker_input_copy_ms": 4,
+          "executor_duration_ms": 855,
+          "executor_wall_with_cleanup_ms": 917,
+          "orchestrator_claim_ms": 8,
+          "orchestrator_completion_ms": 6,
+          "output_upload_ms": 0,
+          "output_validation_ms": 0,
+          "result_read_ms": 0,
+          "runner_environment_read_ms": 0,
+          "runner_event_load_ms": 0,
+          "runner_handler_execution_ms": 0,
+          "runner_handler_import_ms": 0,
+          "runner_module_imports_ms": 334,
+          "runner_result_serialize_ms": 0,
+          "runner_result_write_ms": 0,
+          "runner_setup_ms": 0,
+          "runner_total_ms": 334,
+          "sandbox_prepare_ms": 22,
+          "warm_container_create_ms": 319,
+          "warm_pool_release_ms": 0,
+          "warm_runner_exec_ms": 418,
+          "warm_sandbox_cleanup_after_ms": 62,
+          "warm_sandbox_cleanup_before_ms": 61,
+          "worker_process_total_ms": 935
+        }
+      }
+    ]
+  }
+]

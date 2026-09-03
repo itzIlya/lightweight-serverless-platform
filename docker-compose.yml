@@ -1,6 +1,7 @@
 services:
   postgres:
-    image: postgres:16
+    image: docker.arvancloud.ir/postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-serverless}
       POSTGRES_USER: ${POSTGRES_USER:-serverless}
@@ -11,7 +12,8 @@ services:
       - postgres-data:/var/lib/postgresql/data
 
   userservice-postgres:
-    image: postgres:16
+    image: docker.arvancloud.ir/postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${USERSERVICE_POSTGRES_DB:-userservice}
       POSTGRES_USER: ${USERSERVICE_POSTGRES_USER:-userservice}
@@ -22,7 +24,8 @@ services:
       - userservice-postgres-data:/var/lib/postgresql/data
 
   redis:
-    image: redis:7
+    image: docker.arvancloud.ir/redis:7
+    restart: unless-stopped
     command:
       - redis-server
       - --appendonly
@@ -40,7 +43,8 @@ services:
       retries: 15
 
   registry:
-    image: registry:2
+    image: docker.arvancloud.ir/registry:2
+    restart: unless-stopped
     environment:
       REGISTRY_STORAGE_DELETE_ENABLED: "true"
     ports:
@@ -52,6 +56,7 @@ services:
     build:
       context: .
       dockerfile: userservice/Dockerfile
+    restart: unless-stopped
     command: gunicorn userservice.wsgi:application --bind 0.0.0.0:8100 --workers 2 --timeout 120 --reload
     environment:
       USERSERVICE_POSTGRES_DB: ${USERSERVICE_POSTGRES_DB:-userservice}
@@ -87,7 +92,8 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    command: gunicorn serverless_platform.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 300 --reload
+    restart: unless-stopped
+    command: gunicorn serverless_platform.wsgi:application --bind 0.0.0.0:8000 --worker-class gthread --workers ${BACKEND_GUNICORN_WORKERS:-4} --threads ${BACKEND_GUNICORN_THREADS:-4} --timeout 120 --reload
     env_file:
       - .env
     environment:
@@ -417,6 +423,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    restart: unless-stopped
     ports:
       - "5173:5173"
     depends_on:

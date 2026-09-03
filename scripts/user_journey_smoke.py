@@ -291,7 +291,7 @@ def run(base_url: str) -> dict:
         label="   invocation",
         fetch=lambda: json_request(
             "GET",
-            f"{base_url}/api/invocations/{invocation_id}/",
+            f"{base_url}/api/invocations/{invocation_id}/?response_mode=advanced",
             token=token,
         ),
         status_field="status",
