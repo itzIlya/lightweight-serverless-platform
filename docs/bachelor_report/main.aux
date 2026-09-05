@@ -1,0 +1,220 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\@writefile{toc}{\contentsline {chapter}{Preface}{1}{chapter*.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {1}Platform Overview}{2}{chapter.1}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {1.1}What the platform is}{2}{section.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {1.2}Current user-facing capabilities}{2}{section.1.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {1.3}Current deployment shape}{3}{section.1.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1.1}{\ignorespaces Current distributed prototype topology.}}{3}{figure.caption.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {2}Using the Platform}{4}{chapter.2}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {2.1}Mental model for users}{4}{section.2.1}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {2.1}{\ignorespaces Minimal Python handler.}}{4}{lstlisting.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.2}Source and dependency specification}{4}{section.2.2}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {2.2}{\ignorespaces Example requirements.txt.}}{4}{lstlisting.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.3}Access modes}{5}{section.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.4}Asynchronous invocation}{5}{section.2.4}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {2.3}{\ignorespaces Asynchronous invocation example.}}{5}{lstlisting.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.5}Synchronous invocation}{5}{section.2.5}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {2.4}{\ignorespaces Synchronous invocation example.}}{5}{lstlisting.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.6}Downloading invocation artifacts}{6}{section.2.6}\protected@file@percent }
+\gdef \LT@i {\LT@entry 
+    {1}{139.46779pt}\LT@entry 
+    {1}{321.56265pt}}
+\@writefile{toc}{\contentsline {chapter}{\numberline {3}Architecture}{7}{chapter.3}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {3.1}Service responsibilities}{7}{section.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3.2}Data stores}{7}{section.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2.1}PostgreSQL}{7}{subsection.3.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2.2}Redis}{8}{subsection.3.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2.3}Object storage}{8}{subsection.3.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3.3}Why a separate userservice exists}{8}{section.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {4}Job Model and Orchestration}{9}{chapter.4}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {4.1}Why orchestration became necessary}{9}{section.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4.2}Coordination versions}{9}{section.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4.3}V2 job state}{9}{section.4.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4.1}{\ignorespaces Simplified V2 job state machine.}}{10}{figure.caption.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4.4}Why Redis Streams}{10}{section.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4.5}Backoff and dead-letter behavior}{10}{section.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {5}Build Flow}{11}{chapter.5}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {5.1}Build overview}{11}{section.5.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5.1}{\ignorespaces Build job flow.}}{11}{figure.caption.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5.2}Source bundle}{11}{section.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5.3}Builder output}{11}{section.5.3}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {5.1}{\ignorespaces Simplified runner behavior.}}{12}{lstlisting.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5.4}Build image lifecycle}{12}{section.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5.5}Build cancellation and retry}{12}{section.5.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {6}Invocation Flow in Detail}{13}{chapter.6}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {6.1}Asynchronous invocation, step by step}{13}{section.6.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {6.1}{\ignorespaces Asynchronous invocation execution path. The backend owns artifact storage. The orchestrator owns Redis coordination. The worker runs the function and reports completion.}}{14}{figure.caption.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6.2}Invocation execution diagram}{14}{section.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6.3}Finalization and projection diagram}{14}{section.6.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {6.2}{\ignorespaces Finalization and projection path. The orchestrator does not write PostgreSQL directly; it emits Redis projection events consumed by the backend projector.}}{14}{figure.caption.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6.4}Input sandbox}{14}{section.6.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6.5}Output sandbox}{15}{section.6.5}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {6.1}{\ignorespaces Direct runner upload gate from worker/builder.py.}}{15}{lstlisting.6.1}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {6.2}{\ignorespaces Worker output path selection from worker/executor.py.}}{16}{lstlisting.6.2}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {6.3}{\ignorespaces Direct staged-output upload endpoint from backend/apps/invocations/views.py.}}{17}{lstlisting.6.3}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {6.4}{\ignorespaces Backend staged-artifact commit boundary from backend/apps/invocations/services.py.}}{17}{lstlisting.6.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6.6}Why staged artifacts exist}{18}{section.6.6}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {6.3}{\ignorespaces Staged artifact visibility rule.}}{18}{figure.caption.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6.7}Simple and advanced response modes}{18}{section.6.7}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {6.5}{\ignorespaces Simple terminal invocation response.}}{18}{lstlisting.6.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {7}The Worker and Function Containers}{19}{chapter.7}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {7.1}Worker responsibilities}{19}{section.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7.2}Worker heartbeat}{19}{section.7.2}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {7.1}{\ignorespaces Simplified worker heartbeat data.}}{19}{lstlisting.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7.3}Container create versus start}{20}{section.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7.4}Warm containers}{20}{section.7.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7.5}Warm container limitations}{20}{section.7.5}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {7.2}{\ignorespaces Warm-container retirement checks from worker/warm\_pool.py.}}{21}{lstlisting.7.2}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {7.3}{\ignorespaces Pressure-aware warm-pool victim selection from worker/warm\_pool.py.}}{21}{lstlisting.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {8}Scheduling Policy}{23}{chapter.8}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {8.1}What the orchestrator actually owns}{23}{section.8.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8.2}Job creation and ready set}{23}{section.8.2}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {8.1}{\ignorespaces V2 job creation ingestion from scheduler/production\_orchestrator.py.}}{23}{lstlisting.8.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8.3}Worker heartbeats as scheduling input}{24}{section.8.3}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {8.2}{\ignorespaces Worker heartbeat fields from scheduler/orchestrator\_workers.py.}}{24}{lstlisting.8.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8.4}Separate build and invocation streams}{24}{section.8.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8.5}Invocation placement policy}{25}{section.8.5}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {8.3}{\ignorespaces Warm-first invocation placement from scheduler/scheduler.py.}}{25}{lstlisting.8.3}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {8.4}{\ignorespaces Exact warm-container match from scheduler/scheduler.py.}}{26}{lstlisting.8.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8.6}Guarded sticky fallback}{26}{section.8.6}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {8.5}{\ignorespaces Guarded sticky checks from scheduler/scheduler.py.}}{26}{lstlisting.8.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8.7}Build placement policy}{27}{section.8.7}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {8.6}{\ignorespaces Build placement from scheduler/scheduler.py.}}{27}{lstlisting.8.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8.8}Atomic dispatch}{28}{section.8.8}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {8.7}{\ignorespaces Atomic dispatch script from scheduler/production\_orchestrator.py.}}{28}{lstlisting.8.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8.9}Claim and lease protocol}{28}{section.8.9}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {8.8}{\ignorespaces Worker-side V2 claim before execution from worker/worker.py.}}{28}{lstlisting.8.8}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {8.9}{\ignorespaces Orchestrator claim transition from scheduler/orchestrator\_state.py.}}{29}{lstlisting.8.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8.10}Completion, finalization, and ACK}{29}{section.8.10}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {8.10}{\ignorespaces Invocation completion acceptance from scheduler/production\_orchestrator.py.}}{29}{lstlisting.8.10}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {8.11}{\ignorespaces Finalization guard from scheduler/orchestrator\_state.py.}}{30}{lstlisting.8.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8.11}Recovery and dead letters}{30}{section.8.11}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {8.12}{\ignorespaces Recovery transition from scheduler/orchestrator\_state.py.}}{30}{lstlisting.8.12}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8.12}What can go wrong}{31}{section.8.12}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {9}Security and Access Control}{32}{chapter.9}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {9.1}Authentication}{32}{section.9.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {9.2}Authorization}{32}{section.9.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {9.3}Invocation tokens}{32}{section.9.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {9.4}Current hardening gaps}{32}{section.9.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {10}Artifacts, Logs, and Retention}{33}{chapter.10}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {10.1}Artifact categories}{33}{section.10.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {10.2}Log storage}{33}{section.10.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {10.3}Object storage}{33}{section.10.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {11}Reliability Design}{34}{chapter.11}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {11.1}Fencing tokens}{34}{section.11.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {11.2}Leases and recovery}{34}{section.11.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {11.3}Safe completion protocol}{34}{section.11.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {11.4}Graceful shutdown}{35}{section.11.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {12}Observability}{36}{chapter.12}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {12.1}Stack}{36}{section.12.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {12.2}Current observability limitation}{36}{section.12.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {12.3}Interpreting empty panels}{36}{section.12.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {13}Deployment}{37}{chapter.13}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {13.1}Local deployment}{37}{section.13.1}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {13.1}{\ignorespaces Local stack startup.}}{37}{lstlisting.13.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {13.2}Distributed prototype deployment}{37}{section.13.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {13.3}Private network}{37}{section.13.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {13.4}Registry behavior}{37}{section.13.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {14}Benchmarks and Performance}{38}{chapter.14}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {14.1}Benchmark terminology}{38}{section.14.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {14.2}Warm-container benchmark}{38}{section.14.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {14.3}Distributed worker concurrency benchmark}{38}{section.14.3}\protected@file@percent }
+\gdef \LT@ii {\LT@entry 
+    {1}{89.39066pt}\LT@entry 
+    {1}{90.00697pt}\LT@entry 
+    {1}{83.56148pt}\LT@entry 
+    {1}{62.52184pt}\LT@entry 
+    {1}{61.083pt}\LT@entry 
+    {1}{71.146pt}}
+\gdef \LT@iii {\LT@entry 
+    {1}{203.20169pt}\LT@entry 
+    {1}{56.31181pt}\LT@entry 
+    {1}{53.84325pt}\LT@entry 
+    {1}{53.84325pt}\LT@entry 
+    {1}{59.71823pt}}
+\@writefile{toc}{\contentsline {section}{\numberline {14.4}Pre-distributed profiling}{40}{section.14.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {14.5}Where time is currently spent}{40}{section.14.5}\protected@file@percent }
+\gdef \LT@iv {\LT@entry 
+    {1}{139.46779pt}\LT@entry 
+    {1}{162.23138pt}\LT@entry 
+    {1}{153.12456pt}}
+\@writefile{toc}{\contentsline {chapter}{\numberline {15}Things Tried, Deprecated, and Changed}{41}{chapter.15}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {15.1}Backend-owned coordination}{41}{section.15.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {15.2}Redis Lists}{41}{section.15.2}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {15.1}{\ignorespaces Why Redis Streams replaced the list-only path.}}{42}{lstlisting.15.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {15.3}Docker export/copy for outputs}{42}{section.15.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {15.4}Keeping containers alive with sleep}{42}{section.15.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {15.5}Sticky routing alone}{43}{section.15.5}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {15.2}{\ignorespaces Current invocation placement policy, simplified.}}{43}{lstlisting.15.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {15.6}Single-service authentication}{43}{section.15.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {15.7}Direct runner upload tradeoff}{43}{section.15.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {15.8}Warm containers before resident runners}{43}{section.15.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {16}Current Bottlenecks and Improvement Plan}{45}{chapter.16}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {16.1}Most important bottlenecks}{45}{section.16.1}\protected@file@percent }
+\gdef \LT@v {\LT@entry 
+    {1}{139.46779pt}\LT@entry 
+    {1}{157.68144pt}\LT@entry 
+    {1}{157.68144pt}}
+\@writefile{toc}{\contentsline {section}{\numberline {16.2}Highest-value improvements}{46}{section.16.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {16.3}Research direction}{47}{section.16.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {16.4}Dependency and wheel strategy}{47}{section.16.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {17}Reading the Repository}{48}{chapter.17}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {section}{\numberline {17.1}Recommended reading order}{48}{section.17.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {17.2}Backend code}{48}{section.17.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {17.3}Worker code}{49}{section.17.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {17.4}Scheduler and orchestrator code}{49}{section.17.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {17.5}Frontend code}{50}{section.17.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {18}Conclusion}{51}{chapter.18}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\gdef \LT@vi {\LT@entry 
+    {1}{171.33821pt}\LT@entry 
+    {1}{262.38564pt}}
+\@writefile{toc}{\contentsline {chapter}{\numberline {A}Selected API Reference}{52}{appendix.A}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{toc}{\contentsline {chapter}{\numberline {B}Example Function With Output File}{53}{appendix.B}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {B.1}{\ignorespaces Function that returns JSON and writes one declared output.}}{53}{lstlisting.B.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {C}Glossary}{54}{appendix.C}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\gdef \@abspage@last{58}

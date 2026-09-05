@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <rect width="1600" height="900" fill="#FFF7ED"/>
+  <text x="80" y="82" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="700" fill="#221714">Main Services</text>
+  <text x="82" y="124" font-family="Arial, Helvetica, sans-serif" font-size="21" fill="#6B5A50">The platform is split by responsibility: identity, API, coordination, execution, storage, and visibility.</text>
+
+  <g id="userservice">
+    <rect x="90" y="190" width="420" height="210" rx="28" fill="#EDFBF4" stroke="#2E9C6D" stroke-width="4"/>
+    <circle cx="140" cy="245" r="22" fill="#2E9C6D"/>
+    <text x="140" y="253" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#FFFFFF">1</text>
+    <text x="180" y="238" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#221714">Userservice</text>
+    <text x="180" y="274" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#6B5A50">Users, login, refresh, roles, JWT keys</text>
+    <text x="125" y="335" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#221714">Signs tokens and publishes public keys.</text>
+  </g>
+
+  <g id="backend">
+    <rect x="590" y="190" width="420" height="210" rx="28" fill="#FFF0E8" stroke="#EF5B42" stroke-width="4"/>
+    <circle cx="640" cy="245" r="22" fill="#EF5B42"/>
+    <text x="640" y="253" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#FFFFFF">2</text>
+    <text x="680" y="238" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#221714">Backend</text>
+    <text x="680" y="274" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#6B5A50">Functions, builds, invocations, artifacts</text>
+    <text x="625" y="335" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#221714">Owns frontend-facing platform APIs.</text>
+  </g>
+
+  <g id="orchestrator">
+    <rect x="1090" y="190" width="420" height="210" rx="28" fill="#FFF6DC" stroke="#F5B842" stroke-width="4"/>
+    <circle cx="1140" cy="245" r="22" fill="#F5B842"/>
+    <text x="1140" y="253" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#221714">3</text>
+    <text x="1180" y="238" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#221714">Orchestrator</text>
+    <text x="1180" y="274" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#6B5A50">Dispatch, claim, lease, recover, finalize</text>
+    <text x="1125" y="335" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#221714">Coordinates active V2 job state.</text>
+  </g>
+
+  <g id="workers">
+    <rect x="90" y="500" width="420" height="210" rx="28" fill="#EEF7FF" stroke="#2F8CEB" stroke-width="4"/>
+    <circle cx="140" cy="555" r="22" fill="#2F8CEB"/>
+    <text x="140" y="563" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#FFFFFF">4</text>
+    <text x="180" y="548" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#221714">Workers</text>
+    <text x="180" y="584" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#6B5A50">Build images and run function containers</text>
+    <text x="125" y="645" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#221714">Maintain warm pools and upload results.</text>
+  </g>
+
+  <g id="storage">
+    <rect x="590" y="500" width="420" height="210" rx="28" fill="#FFFFFF" stroke="#D6B292" stroke-width="4"/>
+    <circle cx="640" cy="555" r="22" fill="#D6B292"/>
+    <text x="640" y="563" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#221714">5</text>
+    <text x="680" y="548" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#221714">Storage</text>
+    <text x="680" y="584" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#6B5A50">PostgreSQL, Redis, S3, registry</text>
+    <text x="625" y="645" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#221714">Keeps metadata, events, files, and images.</text>
+  </g>
+
+  <g id="observability">
+    <rect x="1090" y="500" width="420" height="210" rx="28" fill="#FFFFFF" stroke="#D6B292" stroke-width="4"/>
+    <circle cx="1140" cy="555" r="22" fill="#D6B292"/>
+    <text x="1140" y="563" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#221714">6</text>
+    <text x="1180" y="548" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#221714">Observability</text>
+    <text x="1180" y="584" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#6B5A50">Grafana, Prometheus, Loki, exporters</text>
+    <text x="1125" y="645" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#221714">Shows queues, workers, errors, and health.</text>
+  </g>
+</svg>

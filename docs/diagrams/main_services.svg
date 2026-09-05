@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="840" viewBox="0 0 1400 840" role="img" aria-labelledby="title desc">
+  <title id="title">Main services in the platform</title>
+  <desc id="desc">Service map showing what each major service owns in the serverless platform.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fff7ed; }
+      .title { font: 800 34px Inter, Arial, sans-serif; fill: #221714; }
+      .subtitle { font: 400 17px Inter, Arial, sans-serif; fill: #6b5a50; }
+      .card { fill: #fffdf8; stroke: #e7cdb7; stroke-width: 2; }
+      .head { font: 800 22px Inter, Arial, sans-serif; fill: #221714; }
+      .tag { font: 700 11px Inter, Arial, sans-serif; fill: #ef5b42; letter-spacing: .9px; }
+      .body { font: 400 15px Inter, Arial, sans-serif; fill: #4d4038; }
+      .small { font: 600 13px Inter, Arial, sans-serif; fill: #6b5a50; }
+      .chip { fill: #fff0e8; stroke: #ef8d6f; stroke-width: 1.5; }
+      .chip2 { fill: #eef7ff; stroke: #72b7f2; stroke-width: 1.5; }
+      .chip3 { fill: #edfbf4; stroke: #71c49a; stroke-width: 1.5; }
+      .chip4 { fill: #fff6dc; stroke: #e5b83f; stroke-width: 1.5; }
+    </style>
+  </defs>
+  <rect class="bg" width="1400" height="840"/>
+  <text class="title" x="64" y="70">Main Services</text>
+  <text class="subtitle" x="64" y="102">Each service has a narrow responsibility so the platform can later scale and split cleanly.</text>
+
+  <g transform="translate(70 155)">
+    <rect class="card" width="380" height="255" rx="20"/>
+    <text class="tag" x="28" y="42">IDENTITY</text>
+    <text class="head" x="28" y="78">Userservice</text>
+    <text class="body" x="28" y="116">Owns users, roles, login, refresh, and JWT signing.</text>
+    <text class="body" x="28" y="144">Publishes verification keys so other services can validate tokens.</text>
+    <rect class="chip3" x="28" y="185" width="92" height="34" rx="17"/>
+    <text class="small" x="74" y="207" text-anchor="middle">JWT</text>
+    <rect class="chip3" x="132" y="185" width="108" height="34" rx="17"/>
+    <text class="small" x="186" y="207" text-anchor="middle">Accounts</text>
+    <rect class="chip3" x="252" y="185" width="92" height="34" rx="17"/>
+    <text class="small" x="298" y="207" text-anchor="middle">Roles</text>
+  </g>
+
+  <g transform="translate(510 155)">
+    <rect class="card" width="380" height="255" rx="20"/>
+    <text class="tag" x="28" y="42">USER API</text>
+    <text class="head" x="28" y="78">Backend</text>
+    <text class="body" x="28" y="116">Owns functions, versions, build requests, invocation records,</text>
+    <text class="body" x="28" y="144">artifact metadata, token management, and frontend-facing APIs.</text>
+    <rect class="chip" x="28" y="185" width="112" height="34" rx="17"/>
+    <text class="small" x="84" y="207" text-anchor="middle">Functions</text>
+    <rect class="chip" x="152" y="185" width="90" height="34" rx="17"/>
+    <text class="small" x="197" y="207" text-anchor="middle">Builds</text>
+    <rect class="chip" x="254" y="185" width="104" height="34" rx="17"/>
+    <text class="small" x="306" y="207" text-anchor="middle">Artifacts</text>
+  </g>
+
+  <g transform="translate(950 155)">
+    <rect class="card" width="380" height="255" rx="20"/>
+    <text class="tag" x="28" y="42">COORDINATION</text>
+    <text class="head" x="28" y="78">Orchestrator</text>
+    <text class="body" x="28" y="116">Owns active V2 job state: dispatch, claim, lease renewal,</text>
+    <text class="body" x="28" y="144">completion acceptance, finalization, recovery, and metrics.</text>
+    <rect class="chip" x="28" y="185" width="92" height="34" rx="17"/>
+    <text class="small" x="74" y="207" text-anchor="middle">Leases</text>
+    <rect class="chip" x="132" y="185" width="100" height="34" rx="17"/>
+    <text class="small" x="182" y="207" text-anchor="middle">Fencing</text>
+    <rect class="chip" x="244" y="185" width="96" height="34" rx="17"/>
+    <text class="small" x="292" y="207" text-anchor="middle">Recover</text>
+  </g>
+
+  <g transform="translate(70 465)">
+    <rect class="card" width="380" height="255" rx="20"/>
+    <text class="tag" x="28" y="42">EXECUTION</text>
+    <text class="head" x="28" y="78">Workers</text>
+    <text class="body" x="28" y="116">Consume assigned streams, claim jobs, run Docker builds,</text>
+    <text class="body" x="28" y="144">execute functions, maintain warm containers, upload artifacts.</text>
+    <rect class="chip2" x="28" y="185" width="96" height="34" rx="17"/>
+    <text class="small" x="76" y="207" text-anchor="middle">Docker</text>
+    <rect class="chip2" x="136" y="185" width="118" height="34" rx="17"/>
+    <text class="small" x="195" y="207" text-anchor="middle">Warm pool</text>
+    <rect class="chip2" x="266" y="185" width="86" height="34" rx="17"/>
+    <text class="small" x="309" y="207" text-anchor="middle">Runner</text>
+  </g>
+
+  <g transform="translate(510 465)">
+    <rect class="card" width="380" height="255" rx="20"/>
+    <text class="tag" x="28" y="42">DURABLE STATE</text>
+    <text class="head" x="28" y="78">Storage Services</text>
+    <text class="body" x="28" y="116">PostgreSQL stores durable metadata and history. Redis Streams</text>
+    <text class="body" x="28" y="144">carry active coordination state. S3 stores large artifacts.</text>
+    <rect class="chip4" x="28" y="185" width="118" height="34" rx="17"/>
+    <text class="small" x="87" y="207" text-anchor="middle">Postgres</text>
+    <rect class="chip4" x="158" y="185" width="88" height="34" rx="17"/>
+    <text class="small" x="202" y="207" text-anchor="middle">Redis</text>
+    <rect class="chip4" x="258" y="185" width="64" height="34" rx="17"/>
+    <text class="small" x="290" y="207" text-anchor="middle">S3</text>
+  </g>
+
+  <g transform="translate(950 465)">
+    <rect class="card" width="380" height="255" rx="20"/>
+    <text class="tag" x="28" y="42">VISIBILITY</text>
+    <text class="head" x="28" y="78">Observability Stack</text>
+    <text class="body" x="28" y="116">Prometheus scrapes metrics, Loki stores logs, Grafana shows</text>
+    <text class="body" x="28" y="144">dashboards for workers, queues, errors, and service health.</text>
+    <rect class="chip3" x="28" y="185" width="110" height="34" rx="17"/>
+    <text class="small" x="83" y="207" text-anchor="middle">Grafana</text>
+    <rect class="chip3" x="150" y="185" width="128" height="34" rx="17"/>
+    <text class="small" x="214" y="207" text-anchor="middle">Prometheus</text>
+    <rect class="chip3" x="290" y="185" width="72" height="34" rx="17"/>
+    <text class="small" x="326" y="207" text-anchor="middle">Loki</text>
+  </g>
+</svg>

@@ -77,6 +77,22 @@ def int_env(name, default, env=None):
         return int(default)
 
 
+def build_handler_context(env, request_id):
+    input_files_raw = env_get(env, "FUNCTION_INPUT_FILES_JSON", "[]") or "[]"
+    try:
+        input_files = json.loads(input_files_raw)
+    except json.JSONDecodeError:
+        input_files = []
+    if not isinstance(input_files, list):
+        input_files = []
+    return {
+        "request_id": request_id,
+        "input_dir": env_get(env, "FUNCTION_INPUT_FILES_DIR", "/sandbox/input/files"),
+        "output_dir": env_get(env, "FUNCTION_OUTPUT_DIR", "/sandbox/output"),
+        "input_files": input_files,
+    }
+
+
 def safe_output_name(value):
     name = str(value or "").strip().replace("\\", "/")
     path = PurePosixPath(name)
@@ -265,7 +281,7 @@ def run_loaded_handler(handler, payload, base_env):
     with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
         try:
             handler_started = time.perf_counter_ns()
-            result = handler(event, {"request_id": request_id})
+            result = handler(event, build_handler_context(env, request_id))
             timings["runner_handler_execution_ms"] = elapsed_ms(handler_started)
 
             serialize_started = time.perf_counter_ns()
@@ -411,7 +427,7 @@ def main():
     timings["runner_handler_import_ms"] = elapsed_ms(import_started)
 
     handler_started = time.perf_counter_ns()
-    result = handler(event, {"request_id": request_id})
+    result = handler(event, build_handler_context(os.environ, request_id))
     timings["runner_handler_execution_ms"] = elapsed_ms(handler_started)
 
     serialize_started = time.perf_counter_ns()

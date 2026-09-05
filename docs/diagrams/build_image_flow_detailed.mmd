@@ -1,0 +1,127 @@
+sequenceDiagram
+    autonumber
+    actor Owner as Function owner
+    participant UI as Frontend
+    participant Backend as Backend API
+    participant PG as PostgreSQL
+    participant S3 as Object storage
+    participant Outbox as Job outbox
+    participant Redis as Redis Streams
+    participant Orch as Orchestrator
+    participant Worker as Worker
+    participant Docker as Docker Engine
+    participant Registry as Image registry
+    participant Projector as PostgreSQL projector
+
+    rect rgb(255, 247, 237)
+        Owner->>UI: Edit function code, requirements, handler, contract
+        UI->>Backend: POST /api/functions/{id}/source/
+        Note over UI,Backend: Request carries code, requirements.txt, runtime, handler, config, input rules, output rules, access mode
+    end
+
+    rect rgb(255, 240, 232)
+        Backend->>Backend: Authenticate JWT and check function ownership
+        Backend->>Backend: Validate source bundle and function contract
+        Backend->>PG: Lock Function row
+        PG-->>Backend: Function locked
+        Backend->>PG: Check no active queued/building/cancelling build exists
+        Backend->>PG: Create candidate FunctionVersion rN
+        Backend->>S3: Store source bundle ZIP
+        Backend->>PG: Load BuildPolicy and enforce build submission limits
+        Backend->>PG: Create BuildAttempt(status=queued)
+        Backend->>PG: Sync FunctionVersion build status from attempt
+        Backend->>PG: Create Job(coordination_version=2, type=build)
+        Backend->>Outbox: Create job.created outbox event in same DB transaction
+        Backend-->>UI: 202 Accepted + build_attempt + build_status link
+        Note over Backend,PG: Active function image is not replaced yet. The old build stays callable until the new build succeeds.
+    end
+
+    rect rgb(255, 246, 220)
+        Outbox->>Redis: Publish job.created to orchestrator:events
+        Note over Outbox,Redis: Publication is idempotent by event id
+        Orch->>Redis: XREADGROUP job.created
+        Orch->>Redis: Create V2 job hash(status=queued)
+        Orch->>Redis: Add job id to orchestrator:v2:ready sorted set
+        Orch->>Redis: ACK creation event
+    end
+
+    rect rgb(255, 246, 220)
+        Orch->>Redis: Read ready jobs whose available_at <= now
+        Orch->>Redis: Read online worker heartbeats/capacity
+        Orch->>Orch: choose_build_worker()
+        Note over Orch: Builds avoid active builds and choose the least invocation pressure
+        Orch->>Redis: Atomic Lua dispatch
+        Note over Orch,Redis: queued -> dispatched, assigned_worker set, dispatch_attempt incremented, effective image tag created
+        Orch->>Redis: XADD worker:{name}:v2:builds
+        Orch->>Redis: Add dispatch lease to orchestrator:v2:job-leases
+        Orch->>Redis: Emit job.dispatched projection event
+    end
+
+    rect rgb(238, 247, 255)
+        Worker->>Redis: XREADGROUP worker:{name}:v2:builds
+        Worker->>Orch: POST /v2/jobs/{job_id}/claim
+        Orch->>Redis: Verify assigned worker, dispatch_attempt, state, lease
+        Orch->>Redis: dispatched -> running and renew lease
+        Orch-->>Worker: claimed=true + build payload
+        Note over Worker,Orch: Worker does not execute unless the orchestrator claim response is accepted.
+        Worker->>Backend: GET /api/internal/builds/{request_id}/state/
+        Backend-->>Worker: Cancel state / attempt state
+        Worker->>Backend: GET /api/internal/builds/{request_id}/source/
+        Backend->>S3: Read source bundle
+        Backend-->>Worker: function.zip
+    end
+
+    rect rgb(238, 247, 255)
+        Worker->>Worker: Create temporary build-source directory
+        Worker->>Worker: Create temporary Docker build context
+        Worker->>Worker: Extract source ZIP safely
+        Worker->>Worker: Reject unsafe ZIP paths
+        Worker->>Worker: Write .serverless/runner.py
+        Worker->>Worker: Write Dockerfile from runtime template
+        Worker->>Docker: docker build(path=build_context, tag=effective_image_ref, rm=true)
+        Docker->>Docker: Pull/use base python image
+        Docker->>Docker: Install requirements.txt
+        Docker->>Docker: Copy function source and runner
+        Docker-->>Worker: Build logs
+        Worker->>Docker: docker push effective_image_ref
+        Docker->>Registry: Push image layers and manifest
+        Registry-->>Docker: Push accepted
+        Docker-->>Worker: Push logs
+    end
+
+    alt Build succeeds
+        Worker->>Orch: POST /v2/jobs/{job_id}/complete(status=succeeded, artifact_commit_id=image_ref)
+        Orch->>Redis: Verify running state and dispatch_attempt
+        Orch->>Redis: Store completion payload and image ref
+        Orch->>Redis: running -> succeeded
+        Orch->>Redis: ACK worker stream delivery
+        Orch->>Redis: Remove job lease
+        Orch->>Redis: Emit job.succeeded projection event
+        Projector->>Redis: XREADGROUP job.succeeded
+        Projector->>PG: Lock Job and BuildAttempt
+        Projector->>PG: Mark BuildAttempt built
+        Projector->>PG: Copy image_ref to FunctionVersion
+        Projector->>PG: Promote Function.active_version to new version
+        Projector->>PG: Mark old image pending delete if replaced
+        Projector->>Redis: ACK projection event
+        UI->>Backend: GET /api/functions/{id}/build-status/
+        Backend->>PG: Read active/candidate version and latest attempt
+        Backend-->>UI: built + image_ref + can_invoke=true
+    else Build fails or is cancelled
+        Worker->>Orch: POST /v2/jobs/{job_id}/complete(status=failed, build_log=error)
+        Orch->>Redis: Verify attempt and store failure completion
+        Orch->>Redis: running -> failed or dead_lettered
+        Orch->>Redis: ACK worker delivery and emit projection
+        Projector->>PG: Mark BuildAttempt failed/cancelled
+        Projector->>PG: Keep previous active version unchanged
+        Projector->>Redis: ACK projection event
+        UI->>Backend: GET /api/functions/{id}/build-status/
+        Backend-->>UI: failed/cancelled + build log
+    end
+
+    opt Worker lease expires before completion
+        Orch->>Redis: recovery loop sees expired lease
+        Orch->>Redis: Requeue job or dead-letter after recovery limit
+        Orch->>Redis: Fence old dispatch_attempt
+        Note over Worker,Orch: A late completion from the old worker is rejected because the attempt no longer matches.
+    end

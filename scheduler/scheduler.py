@@ -35,6 +35,13 @@ def worker_active_builds(worker: dict) -> int:
     return safe_int(worker_metadata(worker).get("active_builds"))
 
 
+def worker_active_invocations(worker: dict) -> int:
+    metadata = worker_metadata(worker)
+    if "active_invocations" in metadata:
+        return safe_int(metadata.get("active_invocations"))
+    return max(worker_active_jobs(worker) - worker_active_builds(worker), 0)
+
+
 def worker_max_concurrency(worker: dict) -> int:
     return max(safe_int(worker.get("max_concurrency"), default=1), 1)
 
@@ -501,13 +508,25 @@ def choose_build_worker(
     candidates = [
         worker
         for worker in workers
-        if worker_active_jobs(worker) == 0
-        and worker_queued_invocations(worker) == 0
-        and worker_queued_builds(worker) == 0
+        if worker_active_builds(worker) == 0
     ]
     if not candidates:
         return None
-    return choose_round_robin_worker(candidates, "build", round_robin_state)
+
+    def build_score(worker: dict) -> tuple[int, int, int, int, int]:
+        active_invocations = worker_active_invocations(worker)
+        queued_invocations = worker_queued_invocations(worker)
+        return (
+            active_invocations + queued_invocations,
+            active_invocations,
+            queued_invocations,
+            worker_queued_builds(worker),
+            worker_active_jobs(worker),
+        )
+
+    best_score = min(build_score(worker) for worker in candidates)
+    best = [worker for worker in candidates if build_score(worker) == best_score]
+    return choose_round_robin_worker(best, "build", round_robin_state)
 
 
 def choose_round_robin_worker(

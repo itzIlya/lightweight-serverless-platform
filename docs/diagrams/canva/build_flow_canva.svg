@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <rect width="1600" height="900" fill="#FFF7ED"/>
+  <text x="80" y="82" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="700" fill="#221714">Build Flow</text>
+  <text x="82" y="124" font-family="Arial, Helvetica, sans-serif" font-size="21" fill="#6B5A50">A user uploads source once. The platform builds an image asynchronously and publishes it only after success.</text>
+
+  <g id="steps">
+    <rect x="80" y="270" width="190" height="105" rx="24" fill="#FFF0E8" stroke="#EF5B42" stroke-width="4"/>
+    <text x="175" y="305" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#EF5B42">01</text>
+    <text x="175" y="338" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#221714">Upload</text>
+    <text x="175" y="364" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#6B5A50">source ZIP</text>
+
+    <rect x="340" y="270" width="190" height="105" rx="24" fill="#FFFFFF" stroke="#D6B292" stroke-width="4"/>
+    <text x="435" y="305" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#EF5B42">02</text>
+    <text x="435" y="338" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#221714">Persist</text>
+    <text x="435" y="364" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#6B5A50">metadata + S3</text>
+
+    <rect x="600" y="270" width="190" height="105" rx="24" fill="#FFF6DC" stroke="#F5B842" stroke-width="4"/>
+    <text x="695" y="305" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#EF5B42">03</text>
+    <text x="695" y="338" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#221714">Queue</text>
+    <text x="695" y="364" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#6B5A50">Redis Stream</text>
+
+    <rect x="860" y="270" width="190" height="105" rx="24" fill="#FFF6DC" stroke="#F5B842" stroke-width="4"/>
+    <text x="955" y="305" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#EF5B42">04</text>
+    <text x="955" y="338" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#221714">Dispatch</text>
+    <text x="955" y="364" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#6B5A50">least pressure</text>
+
+    <rect x="1120" y="270" width="190" height="105" rx="24" fill="#EEF7FF" stroke="#2F8CEB" stroke-width="4"/>
+    <text x="1215" y="305" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#EF5B42">05</text>
+    <text x="1215" y="338" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#221714">Build</text>
+    <text x="1215" y="364" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#6B5A50">Docker image</text>
+
+    <rect x="1380" y="270" width="150" height="105" rx="24" fill="#EDFBF4" stroke="#2E9C6D" stroke-width="4"/>
+    <text x="1455" y="305" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#EF5B42">06</text>
+    <text x="1455" y="338" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#221714">Publish</text>
+    <text x="1455" y="364" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#6B5A50">built image</text>
+  </g>
+
+  <g id="arrows" stroke="#6B5A50" stroke-width="4" fill="#6B5A50">
+    <line x1="270" y1="322" x2="340" y2="322"/><polygon points="340,322 319,310 319,334"/>
+    <line x1="530" y1="322" x2="600" y2="322"/><polygon points="600,322 579,310 579,334"/>
+    <line x1="790" y1="322" x2="860" y2="322"/><polygon points="860,322 839,310 839,334"/>
+    <line x1="1050" y1="322" x2="1120" y2="322"/><polygon points="1120,322 1099,310 1099,334"/>
+    <line x1="1310" y1="322" x2="1380" y2="322"/><polygon points="1380,322 1359,310 1359,334"/>
+  </g>
+
+  <g id="details">
+    <rect x="230" y="520" width="1130" height="145" rx="30" fill="#FFFDF8" stroke="#E7CDB7" stroke-width="3"/>
+    <text x="270" y="565" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#221714">Safety rule</text>
+    <text x="270" y="605" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#6B5A50">A new image is not exposed until the build succeeds. Failed rebuilds do not break the current active function.</text>
+    <text x="270" y="640" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#6B5A50">The image tag includes attempt information so stale build reports cannot overwrite newer results.</text>
+  </g>
+</svg>

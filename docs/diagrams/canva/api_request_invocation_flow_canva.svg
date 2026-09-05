@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <rect width="1600" height="900" fill="#FFF7ED"/>
+  <text x="80" y="82" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="700" fill="#221714">API Request Invocation Flow</text>
+  <text x="82" y="124" font-family="Arial, Helvetica, sans-serif" font-size="21" fill="#6B5A50">The durable async path: validate request, schedule job, execute function, stage artifacts, publish result.</text>
+
+  <g id="top-flow">
+    <rect x="70" y="245" width="190" height="100" rx="24" fill="#EEF7FF" stroke="#2F8CEB" stroke-width="4"/>
+    <text x="165" y="285" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#221714">Caller</text>
+    <text x="165" y="315" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">event + files</text>
+
+    <rect x="335" y="245" width="190" height="100" rx="24" fill="#FFF0E8" stroke="#EF5B42" stroke-width="4"/>
+    <text x="430" y="285" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#221714">Backend</text>
+    <text x="430" y="315" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">validate + create</text>
+
+    <rect x="600" y="245" width="190" height="100" rx="24" fill="#FFF6DC" stroke="#F5B842" stroke-width="4"/>
+    <text x="695" y="285" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#221714">Redis</text>
+    <text x="695" y="315" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">job.created</text>
+
+    <rect x="865" y="245" width="190" height="100" rx="24" fill="#FFF6DC" stroke="#F5B842" stroke-width="4"/>
+    <text x="960" y="285" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#221714">Orchestrator</text>
+    <text x="960" y="315" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">dispatch + lease</text>
+
+    <rect x="1130" y="245" width="190" height="100" rx="24" fill="#EEF7FF" stroke="#2F8CEB" stroke-width="4"/>
+    <text x="1225" y="285" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#221714">Worker</text>
+    <text x="1225" y="315" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">claim + execute</text>
+
+    <rect x="1395" y="245" width="150" height="100" rx="24" fill="#EDFBF4" stroke="#2E9C6D" stroke-width="4"/>
+    <text x="1470" y="285" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#221714">Result</text>
+    <text x="1470" y="315" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">visible API</text>
+  </g>
+
+  <g id="flow-arrows" stroke="#6B5A50" stroke-width="4" fill="#6B5A50">
+    <line x1="260" y1="295" x2="335" y2="295"/><polygon points="335,295 314,283 314,307"/>
+    <line x1="525" y1="295" x2="600" y2="295"/><polygon points="600,295 579,283 579,307"/>
+    <line x1="790" y1="295" x2="865" y2="295"/><polygon points="865,295 844,283 844,307"/>
+    <line x1="1055" y1="295" x2="1130" y2="295"/><polygon points="1130,295 1109,283 1109,307"/>
+    <line x1="1320" y1="295" x2="1395" y2="295"/><polygon points="1395,295 1374,283 1374,307"/>
+  </g>
+
+  <g id="artifact-flow">
+    <rect x="335" y="490" width="255" height="105" rx="26" fill="#FFFFFF" stroke="#D6B292" stroke-width="4"/>
+    <text x="462" y="530" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#221714">Input artifacts</text>
+    <text x="462" y="560" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">validated and stored</text>
+
+    <rect x="675" y="490" width="255" height="105" rx="26" fill="#FFF0F0" stroke="#C44536" stroke-width="4"/>
+    <text x="802" y="530" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#221714">Staged artifacts</text>
+    <text x="802" y="560" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">hidden until committed</text>
+
+    <rect x="1015" y="490" width="255" height="105" rx="26" fill="#EDFBF4" stroke="#2E9C6D" stroke-width="4"/>
+    <text x="1142" y="530" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#221714">Committed result</text>
+    <text x="1142" y="560" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">result + stdout + ZIP</text>
+  </g>
+
+  <g id="artifact-arrows" stroke="#6B5A50" stroke-width="4" fill="#6B5A50">
+    <line x1="430" y1="345" x2="462" y2="490"/><polygon points="462,490 446,471 470,466"/>
+    <line x1="1225" y1="345" x2="802" y2="490"/><polygon points="802,490 817,471 825,494"/>
+    <line x1="930" y1="542" x2="1015" y2="542"/><polygon points="1015,542 994,530 994,554"/>
+    <line x1="1142" y1="490" x2="1450" y2="345"/><polygon points="1450,345 1426,348 1437,369"/>
+  </g>
+
+  <g id="notes">
+    <rect x="260" y="675" width="1080" height="120" rx="30" fill="#FFFDF8" stroke="#E7CDB7" stroke-width="3"/>
+    <text x="305" y="720" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#221714">Correctness point</text>
+    <text x="305" y="758" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#6B5A50">Physical output files may exist before the invocation is terminal, but users cannot see them while they are staged.</text>
+  </g>
+</svg>

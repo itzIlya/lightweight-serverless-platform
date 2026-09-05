@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <rect width="1600" height="900" fill="#FFF7ED"/>
+  <text x="80" y="82" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="700" fill="#221714">Platform Architecture</text>
+  <text x="82" y="124" font-family="Arial, Helvetica, sans-serif" font-size="21" fill="#6B5A50">Client APIs, control plane, orchestration, workers, storage, and observability.</text>
+
+  <g id="client-layer">
+    <rect x="80" y="210" width="210" height="98" rx="22" fill="#EEF7FF" stroke="#2F8CEB" stroke-width="3"/>
+    <text x="185" y="252" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#221714">Client</text>
+    <text x="185" y="282" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">Browser or API</text>
+  </g>
+
+  <g id="gateway-layer">
+    <rect x="390" y="210" width="210" height="98" rx="22" fill="#FFFFFF" stroke="#D6B292" stroke-width="3"/>
+    <text x="495" y="252" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#221714">Nginx</text>
+    <text x="495" y="282" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">HTTPS gateway</text>
+  </g>
+
+  <g id="api-layer">
+    <rect x="705" y="150" width="240" height="98" rx="22" fill="#EDFBF4" stroke="#2E9C6D" stroke-width="3"/>
+    <text x="825" y="192" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#221714">Userservice</text>
+    <text x="825" y="222" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">accounts + JWT</text>
+
+    <rect x="705" y="315" width="240" height="108" rx="22" fill="#FFF0E8" stroke="#EF5B42" stroke-width="3"/>
+    <text x="825" y="360" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#221714">Backend</text>
+    <text x="825" y="390" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">functions + artifacts</text>
+  </g>
+
+  <g id="orchestration-layer">
+    <rect x="1060" y="245" width="240" height="108" rx="22" fill="#FFF6DC" stroke="#F5B842" stroke-width="3"/>
+    <text x="1180" y="289" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#221714">Redis Streams</text>
+    <text x="1180" y="321" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">events + leases</text>
+
+    <rect x="1060" y="430" width="240" height="108" rx="22" fill="#FFF6DC" stroke="#F5B842" stroke-width="3"/>
+    <text x="1180" y="474" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#221714">Orchestrator</text>
+    <text x="1180" y="506" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">dispatch + recover</text>
+  </g>
+
+  <g id="worker-layer">
+    <rect x="1370" y="330" width="180" height="108" rx="22" fill="#EEF7FF" stroke="#2F8CEB" stroke-width="3"/>
+    <text x="1460" y="374" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#221714">Workers</text>
+    <text x="1460" y="406" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">Docker runtime</text>
+  </g>
+
+  <g id="storage-layer">
+    <rect x="705" y="590" width="240" height="92" rx="22" fill="#FFFFFF" stroke="#D6B292" stroke-width="3"/>
+    <text x="825" y="628" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#221714">PostgreSQL</text>
+    <text x="825" y="658" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">metadata + history</text>
+
+    <rect x="1030" y="620" width="240" height="92" rx="22" fill="#EDFBF4" stroke="#2E9C6D" stroke-width="3"/>
+    <text x="1150" y="658" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#221714">Object Storage</text>
+    <text x="1150" y="688" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">sources + outputs</text>
+
+    <rect x="1370" y="565" width="180" height="92" rx="22" fill="#FFFFFF" stroke="#D6B292" stroke-width="3"/>
+    <text x="1460" y="603" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#221714">Registry</text>
+    <text x="1460" y="633" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">images</text>
+  </g>
+
+  <g id="observability-layer">
+    <rect x="80" y="620" width="300" height="92" rx="22" fill="#FFFFFF" stroke="#D6B292" stroke-width="3"/>
+    <text x="230" y="658" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#221714">Observability</text>
+    <text x="230" y="688" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">Grafana + Prometheus + Loki</text>
+  </g>
+
+  <line x1="290" y1="259" x2="390" y2="259" stroke="#6B5A50" stroke-width="4"/>
+  <polygon points="390,259 370,247 370,271" fill="#6B5A50"/>
+  <line x1="600" y1="259" x2="705" y2="199" stroke="#6B5A50" stroke-width="4"/>
+  <polygon points="705,199 682,200 694,220" fill="#6B5A50"/>
+  <line x1="600" y1="259" x2="705" y2="369" stroke="#6B5A50" stroke-width="4"/>
+  <polygon points="705,369 681,361 698,345" fill="#6B5A50"/>
+  <line x1="945" y1="369" x2="1060" y2="299" stroke="#6B5A50" stroke-width="4"/>
+  <polygon points="1060,299 1036,302 1049,322" fill="#6B5A50"/>
+  <line x1="1300" y1="299" x2="1370" y2="384" stroke="#6B5A50" stroke-width="4"/>
+  <polygon points="1370,384 1347,375 1365,360" fill="#6B5A50"/>
+  <line x1="1460" y1="438" x2="1460" y2="565" stroke="#6B5A50" stroke-width="4"/>
+  <polygon points="1460,565 1448,545 1472,545" fill="#6B5A50"/>
+  <line x1="945" y1="390" x2="1060" y2="484" stroke="#6B5A50" stroke-width="4"/>
+  <polygon points="1060,484 1037,476 1052,458" fill="#6B5A50"/>
+  <line x1="945" y1="423" x2="825" y2="590" stroke="#6B5A50" stroke-width="4"/>
+  <polygon points="825,590 828,566 848,581" fill="#6B5A50"/>
+  <line x1="945" y1="423" x2="1075" y2="620" stroke="#6B5A50" stroke-width="4"/>
+  <polygon points="1075,620 1054,607 1074,594" fill="#6B5A50"/>
+</svg>

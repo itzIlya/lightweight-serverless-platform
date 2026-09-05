@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="900" viewBox="0 0 1500 900" role="img" aria-labelledby="title desc">
+  <title id="title">Current distributed deployment architecture</title>
+  <desc id="desc">Current deployment using one public control-plane server and two public worker servers, with Docker Compose services and object storage.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fff7ed; }
+      .title { font: 800 34px Inter, Arial, sans-serif; fill: #221714; }
+      .subtitle { font: 400 17px Inter, Arial, sans-serif; fill: #6b5a50; }
+      .server { fill: #fffdf8; stroke: #d6b292; stroke-width: 2.4; }
+      .service { fill: #ffffff; stroke: #e7cdb7; stroke-width: 1.8; }
+      .worker { fill: #eef7ff; stroke: #72b7f2; stroke-width: 2.2; }
+      .external { fill: #edfbf4; stroke: #71c49a; stroke-width: 2; }
+      .label { font: 800 21px Inter, Arial, sans-serif; fill: #221714; }
+      .ip { font: 600 13px Inter, Arial, sans-serif; fill: #ef5b42; }
+      .body { font: 500 14px Inter, Arial, sans-serif; fill: #4d4038; }
+      .small { font: 400 12px Inter, Arial, sans-serif; fill: #6b5a50; }
+      .arrow { stroke: #6b5a50; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .dash { stroke-dasharray: 8 7; }
+      .net { stroke: #2f8ceb; stroke-width: 2.4; fill: none; marker-end: url(#arrow-blue); }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#6b5a50"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2f8ceb"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1500" height="900"/>
+  <text class="title" x="60" y="70">Current Deployment Architecture</text>
+  <text class="subtitle" x="60" y="102">Prototype distributed mode: one control-plane VM, two worker VMs, public IP connectivity, and external object storage.</text>
+
+  <rect class="external" x="65" y="185" width="185" height="80" rx="16"/>
+  <text class="label" x="158" y="217" text-anchor="middle">Users</text>
+  <text class="small" x="158" y="242" text-anchor="middle">Browser / API clients</text>
+
+  <rect class="server" x="330" y="145" width="560" height="635" rx="24"/>
+  <text class="label" x="365" y="190">Control Plane VM</text>
+  <text class="ip" x="365" y="216">37.32.38.208 / fleetingcircus.ir</text>
+  <rect class="service" x="370" y="255" width="160" height="62" rx="12"/>
+  <text class="body" x="450" y="282" text-anchor="middle">Nginx</text>
+  <text class="small" x="450" y="302" text-anchor="middle">TLS + routing</text>
+  <rect class="service" x="570" y="255" width="160" height="62" rx="12"/>
+  <text class="body" x="650" y="282" text-anchor="middle">Frontend</text>
+  <text class="small" x="650" y="302" text-anchor="middle">React/Vite</text>
+  <rect class="service" x="370" y="360" width="160" height="62" rx="12"/>
+  <text class="body" x="450" y="387" text-anchor="middle">Userservice</text>
+  <text class="small" x="450" y="407" text-anchor="middle">auth + JWT</text>
+  <rect class="service" x="570" y="360" width="160" height="62" rx="12"/>
+  <text class="body" x="650" y="387" text-anchor="middle">Backend</text>
+  <text class="small" x="650" y="407" text-anchor="middle">platform API</text>
+  <rect class="service" x="370" y="465" width="160" height="62" rx="12"/>
+  <text class="body" x="450" y="492" text-anchor="middle">PostgreSQL</text>
+  <text class="small" x="450" y="512" text-anchor="middle">metadata</text>
+  <rect class="service" x="570" y="465" width="160" height="62" rx="12"/>
+  <text class="body" x="650" y="492" text-anchor="middle">Redis</text>
+  <text class="small" x="650" y="512" text-anchor="middle">Streams + leases</text>
+  <rect class="service" x="370" y="570" width="160" height="62" rx="12"/>
+  <text class="body" x="450" y="597" text-anchor="middle">Registry</text>
+  <text class="small" x="450" y="617" text-anchor="middle">image storage</text>
+  <rect class="service" x="570" y="570" width="160" height="62" rx="12"/>
+  <text class="body" x="650" y="597" text-anchor="middle">Orchestrator</text>
+  <text class="small" x="650" y="617" text-anchor="middle">V2 control state</text>
+  <rect class="service" x="370" y="675" width="360" height="62" rx="12"/>
+  <text class="body" x="550" y="702" text-anchor="middle">Observability stack</text>
+  <text class="small" x="550" y="722" text-anchor="middle">Grafana, Prometheus, Loki, exporters</text>
+
+  <rect class="worker" x="1000" y="210" width="360" height="210" rx="24"/>
+  <text class="label" x="1032" y="255">Worker VM 1</text>
+  <text class="ip" x="1032" y="281">95.38.184.58</text>
+  <rect class="service" x="1040" y="320" width="120" height="54" rx="11"/>
+  <text class="body" x="1100" y="352" text-anchor="middle">Worker</text>
+  <rect class="service" x="1195" y="320" width="120" height="54" rx="11"/>
+  <text class="body" x="1255" y="352" text-anchor="middle">Docker</text>
+
+  <rect class="worker" x="1000" y="505" width="360" height="210" rx="24"/>
+  <text class="label" x="1032" y="550">Worker VM 2</text>
+  <text class="ip" x="1032" y="576">37.32.37.233</text>
+  <rect class="service" x="1040" y="615" width="120" height="54" rx="11"/>
+  <text class="body" x="1100" y="647" text-anchor="middle">Worker</text>
+  <rect class="service" x="1195" y="615" width="120" height="54" rx="11"/>
+  <text class="body" x="1255" y="647" text-anchor="middle">Docker</text>
+
+  <rect class="external" x="1000" y="770" width="360" height="72" rx="18"/>
+  <text class="label" x="1180" y="800" text-anchor="middle">Parspack Object Storage</text>
+  <text class="small" x="1180" y="824" text-anchor="middle">source bundles, inputs, outputs, invocation ZIPs, logs</text>
+
+  <path class="arrow" d="M250 225 C285 225 300 286 370 286"/>
+  <path class="arrow" d="M530 286 L570 286"/>
+  <path class="arrow" d="M650 317 L650 360"/>
+  <path class="arrow" d="M530 391 L570 391"/>
+  <path class="arrow" d="M650 422 L650 465"/>
+  <path class="arrow" d="M570 496 L530 496"/>
+  <path class="arrow" d="M650 527 L650 570"/>
+  <path class="arrow" d="M570 601 L530 601"/>
+  <path class="net" d="M730 601 C835 545 900 360 1000 347"/>
+  <path class="net" d="M730 601 C835 645 900 635 1000 642"/>
+  <path class="net dash" d="M1160 347 C1020 440 870 455 730 496"/>
+  <path class="net dash" d="M1160 642 C1010 585 880 530 730 496"/>
+  <path class="arrow dash" d="M650 632 C800 750 900 806 1000 806"/>
+  <path class="arrow dash" d="M570 391 C900 420 980 765 1000 806"/>
+
+  <text class="small" x="840" y="348">orchestrator API + streams</text>
+  <text class="small" x="838" y="625">backend/internal API</text>
+  <text class="small" x="807" y="777">artifact uploads/downloads</text>
+</svg>

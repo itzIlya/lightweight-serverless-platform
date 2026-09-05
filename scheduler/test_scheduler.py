@@ -582,12 +582,12 @@ class SchedulerTests(unittest.TestCase):
 
         self.assertIsNone(worker)
 
-    def test_choose_build_worker_requires_idle_worker(self):
+    def test_choose_build_worker_avoids_active_builds(self):
         worker = choose_build_worker(
             [
                 {
                     "name": "worker-a",
-                    "metadata": {"active_jobs": 1, "active_builds": 0},
+                    "metadata": {"active_jobs": 1, "active_builds": 1},
                     "queued_invocations": 0,
                     "queued_builds": 0,
                 },
@@ -603,26 +603,61 @@ class SchedulerTests(unittest.TestCase):
 
         self.assertEqual(worker["name"], "worker-b")
 
-    def test_choose_build_worker_returns_none_without_idle_worker(self):
+    def test_choose_build_worker_prefers_lowest_invocation_pressure(self):
         worker = choose_build_worker(
             [
                 {
                     "name": "worker-a",
-                    "metadata": {"active_jobs": 1, "active_builds": 0},
-                    "queued_invocations": 0,
+                    "metadata": {"active_jobs": 2, "active_builds": 0, "active_invocations": 2},
+                    "queued_invocations": 1,
                     "queued_builds": 0,
                 },
                 {
                     "name": "worker-b",
-                    "metadata": {"active_jobs": 0, "active_builds": 0},
+                    "metadata": {"active_jobs": 1, "active_builds": 0, "active_invocations": 1},
                     "queued_invocations": 1,
+                    "queued_builds": 0,
+                },
+                {
+                    "name": "worker-c",
+                    "metadata": {"active_jobs": 0, "active_builds": 0, "active_invocations": 0},
+                    "queued_invocations": 4,
                     "queued_builds": 0,
                 },
             ],
             round_robin_state={},
         )
 
-        self.assertIsNone(worker)
+        self.assertEqual(worker["name"], "worker-b")
+
+    def test_choose_build_worker_uses_queue_and_round_robin_for_ties(self):
+        state = {}
+        workers = [
+            {
+                "name": "worker-a",
+                "metadata": {"active_jobs": 0, "active_builds": 0},
+                "queued_invocations": 0,
+                "queued_builds": 1,
+            },
+            {
+                "name": "worker-b",
+                "metadata": {"active_jobs": 0, "active_builds": 0},
+                "queued_invocations": 0,
+                "queued_builds": 0,
+            },
+            {
+                "name": "worker-c",
+                "metadata": {"active_jobs": 0, "active_builds": 0},
+                "queued_invocations": 0,
+                "queued_builds": 0,
+            },
+        ]
+
+        first = choose_build_worker(workers, round_robin_state=state)
+        second = choose_build_worker(workers, round_robin_state=state)
+
+        self.assertEqual(first["name"], "worker-b")
+        self.assertEqual(second["name"], "worker-c")
 
     def test_delivery_message_round_trips_job_id_and_attempt(self):
         message = make_delivery_message("job-1", 3)

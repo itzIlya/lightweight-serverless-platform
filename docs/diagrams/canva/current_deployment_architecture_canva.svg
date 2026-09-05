@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <rect width="1600" height="900" fill="#FFF7ED"/>
+  <text x="80" y="82" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="700" fill="#221714">Current Deployment</text>
+  <text x="82" y="124" font-family="Arial, Helvetica, sans-serif" font-size="21" fill="#6B5A50">One control-plane server and two worker servers. Workers connect to the control-plane services.</text>
+
+  <g id="internet">
+    <rect x="70" y="250" width="210" height="120" rx="30" fill="#EEF7FF" stroke="#2F8CEB" stroke-width="4"/>
+    <text x="175" y="300" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#221714">Internet</text>
+    <text x="175" y="334" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#6B5A50">users + API clients</text>
+  </g>
+
+  <g id="control-plane-vm">
+    <rect x="390" y="175" width="520" height="560" rx="34" fill="#FFFDF8" stroke="#D6B292" stroke-width="4"/>
+    <text x="430" y="232" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#221714">Control Plane VM</text>
+    <text x="430" y="266" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#EF5B42">37.32.38.208 / fleetingcircus.ir</text>
+    <rect x="430" y="315" width="190" height="72" rx="18" fill="#FFFFFF" stroke="#D6B292" stroke-width="3"/>
+    <text x="525" y="359" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#221714">Nginx</text>
+    <rect x="680" y="315" width="190" height="72" rx="18" fill="#FFFFFF" stroke="#D6B292" stroke-width="3"/>
+    <text x="775" y="359" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#221714">Frontend</text>
+    <rect x="430" y="425" width="190" height="72" rx="18" fill="#EDFBF4" stroke="#2E9C6D" stroke-width="3"/>
+    <text x="525" y="469" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#221714">Userservice</text>
+    <rect x="680" y="425" width="190" height="72" rx="18" fill="#FFF0E8" stroke="#EF5B42" stroke-width="3"/>
+    <text x="775" y="469" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#221714">Backend</text>
+    <rect x="430" y="535" width="190" height="72" rx="18" fill="#FFF6DC" stroke="#F5B842" stroke-width="3"/>
+    <text x="525" y="579" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#221714">Redis</text>
+    <rect x="680" y="535" width="190" height="72" rx="18" fill="#FFF6DC" stroke="#F5B842" stroke-width="3"/>
+    <text x="775" y="579" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#221714">Orchestrator</text>
+    <rect x="430" y="645" width="190" height="54" rx="16" fill="#FFFFFF" stroke="#D6B292" stroke-width="3"/>
+    <text x="525" y="679" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="700" fill="#221714">PostgreSQL</text>
+    <rect x="680" y="645" width="190" height="54" rx="16" fill="#FFFFFF" stroke="#D6B292" stroke-width="3"/>
+    <text x="775" y="679" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="700" fill="#221714">Registry</text>
+  </g>
+
+  <g id="worker-1">
+    <rect x="1035" y="215" width="380" height="180" rx="32" fill="#EEF7FF" stroke="#2F8CEB" stroke-width="4"/>
+    <text x="1075" y="270" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#221714">Worker VM 1</text>
+    <text x="1075" y="304" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#EF5B42">95.38.184.58</text>
+    <text x="1075" y="350" font-family="Arial, Helvetica, sans-serif" font-size="19" fill="#6B5A50">worker service + Docker Engine</text>
+  </g>
+
+  <g id="worker-2">
+    <rect x="1035" y="495" width="380" height="180" rx="32" fill="#EEF7FF" stroke="#2F8CEB" stroke-width="4"/>
+    <text x="1075" y="550" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#221714">Worker VM 2</text>
+    <text x="1075" y="584" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#EF5B42">37.32.37.233</text>
+    <text x="1075" y="630" font-family="Arial, Helvetica, sans-serif" font-size="19" fill="#6B5A50">worker service + Docker Engine</text>
+  </g>
+
+  <g id="object-storage">
+    <rect x="1040" y="735" width="370" height="85" rx="26" fill="#EDFBF4" stroke="#2E9C6D" stroke-width="4"/>
+    <text x="1225" y="770" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#221714">Parspack Object Storage</text>
+    <text x="1225" y="800" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#6B5A50">sources, inputs, outputs, ZIPs, logs</text>
+  </g>
+
+  <line x1="280" y1="310" x2="390" y2="351" stroke="#6B5A50" stroke-width="4"/>
+  <polygon points="390,351 366,354 375,331" fill="#6B5A50"/>
+  <line x1="870" y1="571" x2="1035" y2="305" stroke="#6B5A50" stroke-width="4"/>
+  <polygon points="1035,305 1014,319 1010,295" fill="#6B5A50"/>
+  <line x1="870" y1="571" x2="1035" y2="585" stroke="#6B5A50" stroke-width="4"/>
+  <polygon points="1035,585 1014,573 1012,597" fill="#6B5A50"/>
+  <line x1="870" y1="461" x2="1040" y2="777" stroke="#6B5A50" stroke-width="4"/>
+  <polygon points="1040,777 1019,763 1040,752" fill="#6B5A50"/>
+  <line x1="1225" y1="395" x2="1225" y2="495" stroke="#6B5A50" stroke-width="4" stroke-dasharray="12 10"/>
+  <text x="955" y="430" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#6B5A50">streams, APIs, registry pulls</text>
+</svg>

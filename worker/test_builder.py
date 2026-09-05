@@ -21,6 +21,24 @@ class BuilderTests(unittest.TestCase):
         self.assertIn("runner_result_write_ms", RUNNER_SOURCE)
         self.assertIn("__FUNCTION_TIMING__=", RUNNER_SOURCE)
 
+    def test_runner_context_exposes_input_and_output_paths(self):
+        namespace = {}
+        exec(RUNNER_SOURCE, namespace)
+
+        context = namespace["build_handler_context"](
+            {
+                "FUNCTION_INPUT_FILES_DIR": "/sandbox/input/files",
+                "FUNCTION_OUTPUT_DIR": "/sandbox/output",
+                "FUNCTION_INPUT_FILES_JSON": '[{"id": 1, "local_name": "sample.txt"}]',
+            },
+            "request-1",
+        )
+
+        self.assertEqual(context["request_id"], "request-1")
+        self.assertEqual(context["input_dir"], "/sandbox/input/files")
+        self.assertEqual(context["output_dir"], "/sandbox/output")
+        self.assertEqual(context["input_files"][0]["local_name"], "sample.txt")
+
     def test_runtime_selects_python_slim_image(self):
         self.assertEqual(
             base_image_for_runtime("python3.13"),

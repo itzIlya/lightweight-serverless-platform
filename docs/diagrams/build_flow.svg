@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="760" viewBox="0 0 1500 760" role="img" aria-labelledby="title desc">
+  <title id="title">Build flow</title>
+  <desc id="desc">Build job flow from source upload through Redis event, orchestrator dispatch, worker build, image push, and final status projection.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fff7ed; }
+      .title { font: 800 34px Inter, Arial, sans-serif; fill: #221714; }
+      .subtitle { font: 400 17px Inter, Arial, sans-serif; fill: #6b5a50; }
+      .phase { fill: #fffdf8; stroke: #e7cdb7; stroke-width: 2; }
+      .step { fill: #ffffff; stroke: #dcb99e; stroke-width: 2; }
+      .step2 { fill: #eef7ff; stroke: #72b7f2; stroke-width: 2; }
+      .step3 { fill: #fff0e8; stroke: #ef8d6f; stroke-width: 2; }
+      .store { fill: #edfbf4; stroke: #71c49a; stroke-width: 2; }
+      .registry { fill: #fff6dc; stroke: #e5b83f; stroke-width: 2; }
+      .label { font: 800 17px Inter, Arial, sans-serif; fill: #221714; }
+      .small { font: 400 13px Inter, Arial, sans-serif; fill: #6b5a50; }
+      .num { font: 800 13px Inter, Arial, sans-serif; fill: #ef5b42; }
+      .arrow { stroke: #6b5a50; stroke-width: 2.1; fill: none; marker-end: url(#arrow); }
+      .dash { stroke-dasharray: 7 7; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#6b5a50"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1500" height="760"/>
+  <text class="title" x="60" y="70">Build Flow</text>
+  <text class="subtitle" x="60" y="102">A source upload creates a durable function version and an asynchronous V2 build job.</text>
+
+  <rect class="phase" x="55" y="150" width="310" height="480" rx="22"/>
+  <text class="label" x="85" y="190">1. User and backend</text>
+  <rect class="step3" x="90" y="240" width="230" height="74" rx="14"/>
+  <text class="label" x="205" y="270" text-anchor="middle">Upload source</text>
+  <text class="small" x="205" y="292" text-anchor="middle">code + requirements + contract</text>
+  <rect class="step3" x="90" y="365" width="230" height="74" rx="14"/>
+  <text class="label" x="205" y="395" text-anchor="middle">Backend stores version</text>
+  <text class="small" x="205" y="417" text-anchor="middle">metadata in PostgreSQL</text>
+  <rect class="store" x="90" y="490" width="230" height="74" rx="14"/>
+  <text class="label" x="205" y="520" text-anchor="middle">Source ZIP to S3</text>
+  <text class="small" x="205" y="542" text-anchor="middle">kept as immutable input</text>
+
+  <rect class="phase" x="420" y="150" width="315" height="480" rx="22"/>
+  <text class="label" x="450" y="190">2. Coordination</text>
+  <rect class="step" x="465" y="240" width="230" height="74" rx="14"/>
+  <text class="label" x="580" y="270" text-anchor="middle">Job created event</text>
+  <text class="small" x="580" y="292" text-anchor="middle">transactional outbox</text>
+  <rect class="step" x="465" y="365" width="230" height="74" rx="14"/>
+  <text class="label" x="580" y="395" text-anchor="middle">Redis Stream</text>
+  <text class="small" x="580" y="417" text-anchor="middle">orchestrator:events</text>
+  <rect class="step" x="465" y="490" width="230" height="74" rx="14"/>
+  <text class="label" x="580" y="520" text-anchor="middle">Orchestrator dispatch</text>
+  <text class="small" x="580" y="542" text-anchor="middle">least invocation pressure</text>
+
+  <rect class="phase" x="790" y="150" width="315" height="480" rx="22"/>
+  <text class="label" x="820" y="190">3. Worker execution</text>
+  <rect class="step2" x="835" y="240" width="230" height="74" rx="14"/>
+  <text class="label" x="950" y="270" text-anchor="middle">Worker build stream</text>
+  <text class="small" x="950" y="292" text-anchor="middle">worker:name:builds</text>
+  <rect class="step2" x="835" y="365" width="230" height="74" rx="14"/>
+  <text class="label" x="950" y="395" text-anchor="middle">Claim + lease</text>
+  <text class="small" x="950" y="417" text-anchor="middle">attempt-fenced permission</text>
+  <rect class="step2" x="835" y="490" width="230" height="74" rx="14"/>
+  <text class="label" x="950" y="520" text-anchor="middle">Docker build</text>
+  <text class="small" x="950" y="542" text-anchor="middle">install dependencies, tag image</text>
+
+  <rect class="phase" x="1160" y="150" width="285" height="480" rx="22"/>
+  <text class="label" x="1190" y="190">4. Publish result</text>
+  <rect class="registry" x="1190" y="240" width="220" height="74" rx="14"/>
+  <text class="label" x="1300" y="270" text-anchor="middle">Push image</text>
+  <text class="small" x="1300" y="292" text-anchor="middle">local registry</text>
+  <rect class="step" x="1190" y="365" width="220" height="74" rx="14"/>
+  <text class="label" x="1300" y="395" text-anchor="middle">Complete job</text>
+  <text class="small" x="1300" y="417" text-anchor="middle">orchestrator terminal state</text>
+  <rect class="step3" x="1190" y="490" width="220" height="74" rx="14"/>
+  <text class="label" x="1300" y="520" text-anchor="middle">Expose build</text>
+  <text class="small" x="1300" y="542" text-anchor="middle">backend status becomes built</text>
+
+  <path class="arrow" d="M205 314 L205 365"/>
+  <path class="arrow" d="M205 439 L205 490"/>
+  <path class="arrow" d="M320 402 C365 402 405 277 465 277"/>
+  <path class="arrow" d="M580 314 L580 365"/>
+  <path class="arrow" d="M580 439 L580 490"/>
+  <path class="arrow" d="M695 527 C755 527 775 277 835 277"/>
+  <path class="arrow" d="M950 314 L950 365"/>
+  <path class="arrow" d="M950 439 L950 490"/>
+  <path class="arrow" d="M1065 527 C1118 527 1140 277 1190 277"/>
+  <path class="arrow" d="M1300 314 L1300 365"/>
+  <path class="arrow" d="M1300 439 L1300 490"/>
+  <path class="arrow dash" d="M1190 402 C1025 680 720 690 320 527"/>
+
+  <text class="small" x="704" y="705" text-anchor="middle">Failures stay on the build attempt. A failed rebuild does not replace the currently active image.</text>
+</svg>

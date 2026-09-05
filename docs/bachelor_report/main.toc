@@ -1,0 +1,111 @@
+\contentsline {chapter}{Preface}{1}{chapter*.2}%
+\contentsline {chapter}{\numberline {1}Platform Overview}{2}{chapter.1}%
+\contentsline {section}{\numberline {1.1}What the platform is}{2}{section.1.1}%
+\contentsline {section}{\numberline {1.2}Current user-facing capabilities}{2}{section.1.2}%
+\contentsline {section}{\numberline {1.3}Current deployment shape}{3}{section.1.3}%
+\contentsline {chapter}{\numberline {2}Using the Platform}{4}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Mental model for users}{4}{section.2.1}%
+\contentsline {section}{\numberline {2.2}Source and dependency specification}{4}{section.2.2}%
+\contentsline {section}{\numberline {2.3}Access modes}{5}{section.2.3}%
+\contentsline {section}{\numberline {2.4}Asynchronous invocation}{5}{section.2.4}%
+\contentsline {section}{\numberline {2.5}Synchronous invocation}{5}{section.2.5}%
+\contentsline {section}{\numberline {2.6}Downloading invocation artifacts}{6}{section.2.6}%
+\contentsline {chapter}{\numberline {3}Architecture}{7}{chapter.3}%
+\contentsline {section}{\numberline {3.1}Service responsibilities}{7}{section.3.1}%
+\contentsline {section}{\numberline {3.2}Data stores}{7}{section.3.2}%
+\contentsline {subsection}{\numberline {3.2.1}PostgreSQL}{7}{subsection.3.2.1}%
+\contentsline {subsection}{\numberline {3.2.2}Redis}{8}{subsection.3.2.2}%
+\contentsline {subsection}{\numberline {3.2.3}Object storage}{8}{subsection.3.2.3}%
+\contentsline {section}{\numberline {3.3}Why a separate userservice exists}{8}{section.3.3}%
+\contentsline {chapter}{\numberline {4}Job Model and Orchestration}{9}{chapter.4}%
+\contentsline {section}{\numberline {4.1}Why orchestration became necessary}{9}{section.4.1}%
+\contentsline {section}{\numberline {4.2}Coordination versions}{9}{section.4.2}%
+\contentsline {section}{\numberline {4.3}V2 job state}{9}{section.4.3}%
+\contentsline {section}{\numberline {4.4}Why Redis Streams}{10}{section.4.4}%
+\contentsline {section}{\numberline {4.5}Backoff and dead-letter behavior}{10}{section.4.5}%
+\contentsline {chapter}{\numberline {5}Build Flow}{11}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Build overview}{11}{section.5.1}%
+\contentsline {section}{\numberline {5.2}Source bundle}{11}{section.5.2}%
+\contentsline {section}{\numberline {5.3}Builder output}{11}{section.5.3}%
+\contentsline {section}{\numberline {5.4}Build image lifecycle}{12}{section.5.4}%
+\contentsline {section}{\numberline {5.5}Build cancellation and retry}{12}{section.5.5}%
+\contentsline {chapter}{\numberline {6}Invocation Flow in Detail}{13}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Asynchronous invocation, step by step}{13}{section.6.1}%
+\contentsline {section}{\numberline {6.2}Invocation execution diagram}{14}{section.6.2}%
+\contentsline {section}{\numberline {6.3}Finalization and projection diagram}{14}{section.6.3}%
+\contentsline {section}{\numberline {6.4}Input sandbox}{14}{section.6.4}%
+\contentsline {section}{\numberline {6.5}Output sandbox}{15}{section.6.5}%
+\contentsline {section}{\numberline {6.6}Why staged artifacts exist}{18}{section.6.6}%
+\contentsline {section}{\numberline {6.7}Simple and advanced response modes}{18}{section.6.7}%
+\contentsline {chapter}{\numberline {7}The Worker and Function Containers}{19}{chapter.7}%
+\contentsline {section}{\numberline {7.1}Worker responsibilities}{19}{section.7.1}%
+\contentsline {section}{\numberline {7.2}Worker heartbeat}{19}{section.7.2}%
+\contentsline {section}{\numberline {7.3}Container create versus start}{20}{section.7.3}%
+\contentsline {section}{\numberline {7.4}Warm containers}{20}{section.7.4}%
+\contentsline {section}{\numberline {7.5}Warm container limitations}{20}{section.7.5}%
+\contentsline {chapter}{\numberline {8}Scheduling Policy}{23}{chapter.8}%
+\contentsline {section}{\numberline {8.1}What the orchestrator actually owns}{23}{section.8.1}%
+\contentsline {section}{\numberline {8.2}Job creation and ready set}{23}{section.8.2}%
+\contentsline {section}{\numberline {8.3}Worker heartbeats as scheduling input}{24}{section.8.3}%
+\contentsline {section}{\numberline {8.4}Separate build and invocation streams}{24}{section.8.4}%
+\contentsline {section}{\numberline {8.5}Invocation placement policy}{25}{section.8.5}%
+\contentsline {section}{\numberline {8.6}Guarded sticky fallback}{26}{section.8.6}%
+\contentsline {section}{\numberline {8.7}Build placement policy}{27}{section.8.7}%
+\contentsline {section}{\numberline {8.8}Atomic dispatch}{28}{section.8.8}%
+\contentsline {section}{\numberline {8.9}Claim and lease protocol}{28}{section.8.9}%
+\contentsline {section}{\numberline {8.10}Completion, finalization, and ACK}{29}{section.8.10}%
+\contentsline {section}{\numberline {8.11}Recovery and dead letters}{30}{section.8.11}%
+\contentsline {section}{\numberline {8.12}What can go wrong}{31}{section.8.12}%
+\contentsline {chapter}{\numberline {9}Security and Access Control}{32}{chapter.9}%
+\contentsline {section}{\numberline {9.1}Authentication}{32}{section.9.1}%
+\contentsline {section}{\numberline {9.2}Authorization}{32}{section.9.2}%
+\contentsline {section}{\numberline {9.3}Invocation tokens}{32}{section.9.3}%
+\contentsline {section}{\numberline {9.4}Current hardening gaps}{32}{section.9.4}%
+\contentsline {chapter}{\numberline {10}Artifacts, Logs, and Retention}{33}{chapter.10}%
+\contentsline {section}{\numberline {10.1}Artifact categories}{33}{section.10.1}%
+\contentsline {section}{\numberline {10.2}Log storage}{33}{section.10.2}%
+\contentsline {section}{\numberline {10.3}Object storage}{33}{section.10.3}%
+\contentsline {chapter}{\numberline {11}Reliability Design}{34}{chapter.11}%
+\contentsline {section}{\numberline {11.1}Fencing tokens}{34}{section.11.1}%
+\contentsline {section}{\numberline {11.2}Leases and recovery}{34}{section.11.2}%
+\contentsline {section}{\numberline {11.3}Safe completion protocol}{34}{section.11.3}%
+\contentsline {section}{\numberline {11.4}Graceful shutdown}{35}{section.11.4}%
+\contentsline {chapter}{\numberline {12}Observability}{36}{chapter.12}%
+\contentsline {section}{\numberline {12.1}Stack}{36}{section.12.1}%
+\contentsline {section}{\numberline {12.2}Current observability limitation}{36}{section.12.2}%
+\contentsline {section}{\numberline {12.3}Interpreting empty panels}{36}{section.12.3}%
+\contentsline {chapter}{\numberline {13}Deployment}{37}{chapter.13}%
+\contentsline {section}{\numberline {13.1}Local deployment}{37}{section.13.1}%
+\contentsline {section}{\numberline {13.2}Distributed prototype deployment}{37}{section.13.2}%
+\contentsline {section}{\numberline {13.3}Private network}{37}{section.13.3}%
+\contentsline {section}{\numberline {13.4}Registry behavior}{37}{section.13.4}%
+\contentsline {chapter}{\numberline {14}Benchmarks and Performance}{38}{chapter.14}%
+\contentsline {section}{\numberline {14.1}Benchmark terminology}{38}{section.14.1}%
+\contentsline {section}{\numberline {14.2}Warm-container benchmark}{38}{section.14.2}%
+\contentsline {section}{\numberline {14.3}Distributed worker concurrency benchmark}{38}{section.14.3}%
+\contentsline {section}{\numberline {14.4}Pre-distributed profiling}{40}{section.14.4}%
+\contentsline {section}{\numberline {14.5}Where time is currently spent}{40}{section.14.5}%
+\contentsline {chapter}{\numberline {15}Things Tried, Deprecated, and Changed}{41}{chapter.15}%
+\contentsline {section}{\numberline {15.1}Backend-owned coordination}{41}{section.15.1}%
+\contentsline {section}{\numberline {15.2}Redis Lists}{41}{section.15.2}%
+\contentsline {section}{\numberline {15.3}Docker export/copy for outputs}{42}{section.15.3}%
+\contentsline {section}{\numberline {15.4}Keeping containers alive with sleep}{42}{section.15.4}%
+\contentsline {section}{\numberline {15.5}Sticky routing alone}{43}{section.15.5}%
+\contentsline {section}{\numberline {15.6}Single-service authentication}{43}{section.15.6}%
+\contentsline {section}{\numberline {15.7}Direct runner upload tradeoff}{43}{section.15.7}%
+\contentsline {section}{\numberline {15.8}Warm containers before resident runners}{43}{section.15.8}%
+\contentsline {chapter}{\numberline {16}Current Bottlenecks and Improvement Plan}{45}{chapter.16}%
+\contentsline {section}{\numberline {16.1}Most important bottlenecks}{45}{section.16.1}%
+\contentsline {section}{\numberline {16.2}Highest-value improvements}{46}{section.16.2}%
+\contentsline {section}{\numberline {16.3}Research direction}{47}{section.16.3}%
+\contentsline {section}{\numberline {16.4}Dependency and wheel strategy}{47}{section.16.4}%
+\contentsline {chapter}{\numberline {17}Reading the Repository}{48}{chapter.17}%
+\contentsline {section}{\numberline {17.1}Recommended reading order}{48}{section.17.1}%
+\contentsline {section}{\numberline {17.2}Backend code}{48}{section.17.2}%
+\contentsline {section}{\numberline {17.3}Worker code}{49}{section.17.3}%
+\contentsline {section}{\numberline {17.4}Scheduler and orchestrator code}{49}{section.17.4}%
+\contentsline {section}{\numberline {17.5}Frontend code}{50}{section.17.5}%
+\contentsline {chapter}{\numberline {18}Conclusion}{51}{chapter.18}%
+\contentsline {chapter}{\numberline {A}Selected API Reference}{52}{appendix.A}%
+\contentsline {chapter}{\numberline {B}Example Function With Output File}{53}{appendix.B}%
+\contentsline {chapter}{\numberline {C}Glossary}{54}{appendix.C}%

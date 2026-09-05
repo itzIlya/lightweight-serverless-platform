@@ -536,7 +536,7 @@ the existing active image stays active.
   \draw[arrow] (orch) -- (wq);
   \draw[arrow] (wq) -- (worker);
   \draw[arrow] (worker) -- node[right]{push image} (registry);
-  \draw[arrow] (worker) -- node[above]{completion} (orch);
+  \draw[arrow] (worker) --  (orch);
   \draw[arrow] (orch) -- node[right]{event} (pg);
 \end{tikzpicture}}
 \caption{Build job flow.}
@@ -642,26 +642,27 @@ files, durable polling, and artifact download.
 
 \begin{figure}[h]
 \centering
+\resizebox{0.96\textwidth}{!}{%
 \begin{tikzpicture}[
-  stage/.style={svc, text width=2.3cm, minimum height=1.2cm, align=center},
-  storestage/.style={store, text width=2.3cm, minimum height=1.2cm, align=center}
+  stage/.style={svc, font=\scriptsize, text width=1.65cm, minimum width=1.95cm, minimum height=0.9cm, align=center},
+  storestage/.style={store, font=\scriptsize, text width=1.85cm, minimum width=2.0cm, minimum height=1.0cm, align=center}
 ]
-  \node[stage] (client) at (0,0) {1\\Client request};
-  \node[stage] (backend) at (3,0) {2\\Backend validates};
-  \node[storestage] (storage) at (3,-2.1) {Object storage\\inputs, logs, outputs};
-  \node[storestage] (redis) at (6,0) {3\\Redis job state};
-  \node[stage] (orch) at (9,0) {4\\Orchestrator places job};
-  \node[stage] (worker) at (9,-2.1) {5\\Worker claims job};
-  \node[stage] (container) at (6,-2.1) {6\\Function container runs};
+  \node[stage] (client) at (0,0) {1\\Client\\request};
+  \node[stage] (backend) at (2.65,0) {2\\Backend\\validates};
+  \node[storestage] (storage) at (2.65,-2.25) {Artifact\\storage};
+  \node[storestage] (redis) at (5.3,0) {3\\Redis\\job state};
+  \node[stage] (orch) at (7.95,0) {4\\Orchestrator\\places job};
+  \node[stage] (worker) at (10.6,0) {5\\Worker\\claims job};
+  \node[stage] (container) at (13.25,0) {6\\Function\\container};
 
   \draw[arrow] (client) -- (backend);
   \draw[arrow] (backend) -- (redis);
   \draw[arrow] (redis) -- (orch);
   \draw[arrow] (orch) -- (worker);
   \draw[arrow] (worker) -- (container);
-  \draw[arrow] (container) -- (worker);
-  \draw[arrow] (backend) -- (storage);
-\end{tikzpicture}
+  \draw[dashedarrow] (backend.south) -- (storage.north);
+  \draw[dashedarrow] (container.south) .. controls +(0,-1.35) and +(1.1,0) .. node[below,font=\tiny]{staged artifacts} (storage.east);
+\end{tikzpicture}}
 \caption{Asynchronous invocation execution path. The backend owns artifact storage. The orchestrator owns Redis coordination. The worker runs the function and reports completion.}
 \end{figure}
 
@@ -676,26 +677,33 @@ metadata, attempts, leases, completion IDs, terminal status, and manifests.
 \centering
 \resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
-  stage/.style={svc, text width=2.15cm, minimum height=1.15cm, align=center},
-  storestage/.style={store, text width=2.2cm, minimum height=1.15cm, align=center}
+  stage/.style={svc, font=\scriptsize, text width=1.85cm, minimum width=2.1cm, minimum height=0.9cm, align=center},
+  storestage/.style={store, font=\scriptsize, text width=1.85cm, minimum width=2.1cm, minimum height=1.0cm, align=center},
+  eventstage/.style={queue, font=\scriptsize, text width=1.85cm, minimum width=2.1cm, minimum height=0.9cm, align=center},
+  labelnote/.style={font=\scriptsize\bfseries, align=left}
 ]
-  \node[stage] (worker) at (0,0) {1\\Worker completion};
-  \node[stage] (orch1) at (2.9,0) {2\\Orchestrator accepts};
-  \node[storestage] (redis1) at (5.8,0) {3\\Redis finalizing event};
-  \node[stage] (finalizer) at (8.7,0) {4\\Finalizer};
-  \node[stage] (backend) at (11.6,0) {5\\Backend verifies};
-  \node[storestage] (storage) at (14.5,0) {Object storage\\published artifacts};
+  \node[labelnote] at (-0.15,0.95) {A. Commit staged artifacts};
+  \node[stage] (worker) at (0,0) {1\\Worker\\completion};
+  \node[stage] (orch1) at (3.15,0) {2\\Orchestrator\\accepts};
+  \node[eventstage] (redis1) at (6.3,0) {3\\Finalizing\\event};
+  \node[stage] (finalizer) at (9.45,0) {4\\Finalizer};
+  \node[stage] (backend) at (12.6,0) {5\\Backend\\commit};
+  \node[storestage] (storage) at (15.75,0) {Published\\artifacts};
 
-  \node[storestage] (redis2) at (4.2,-2.1) {6\\Redis terminal event};
-  \node[stage] (projector) at (7.4,-2.1) {7\\Backend projector};
-  \node[storestage] (pg) at (10.6,-2.1) {8\\PostgreSQL history};
+  \node[labelnote] at (-0.15,-2.0) {B. Publish terminal state after commit};
+  \node[stage] (finalizer2) at (0,-3.05) {6\\Finalizer\\confirms};
+  \node[stage] (orch2) at (3.95,-3.05) {7\\Orchestrator\\terminal};
+  \node[eventstage] (redis2) at (7.9,-3.05) {8\\Projection\\event};
+  \node[stage] (projector) at (11.85,-3.05) {9\\Backend\\projector};
+  \node[storestage] (pg) at (15.8,-3.05) {PostgreSQL\\history};
 
   \draw[arrow] (worker) -- (orch1);
   \draw[arrow] (orch1) -- (redis1);
   \draw[arrow] (redis1) -- (finalizer);
   \draw[arrow] (finalizer) -- (backend);
   \draw[arrow] (backend) -- (storage);
-  \draw[arrow] (orch1) -- (redis2);
+  \draw[arrow] (finalizer2) -- (orch2);
+  \draw[arrow] (orch2) -- (redis2);
   \draw[arrow] (redis2) -- (projector);
   \draw[arrow] (projector) -- (pg);
 \end{tikzpicture}}
@@ -1287,24 +1295,41 @@ dispatches to the same sticky worker.
 
 \section{Build placement policy}
 
-Build placement is intentionally stricter than invocation placement. The build
-selector only chooses workers with zero active jobs, zero queued invocations,
-and zero queued builds. This protects the user-visible invocation path from
-dependency installation and Docker build pressure. It can reduce build
-throughput, but it gives the prototype a clearer latency priority.
+Build placement protects the invocation path without requiring the whole worker
+to be idle. The selector first excludes workers that are already running a
+build. Among the remaining workers it chooses the worker with the lowest
+invocation pressure, where pressure is the sum of active invocations and queued
+invocations. If multiple workers have the same pressure, the scheduler breaks
+the tie by active invocation count, queued invocation count, queued build count,
+and total active jobs. Exact ties are handled with round-robin selection. This
+keeps build work away from workers that are already building, while still
+allowing builds to make progress when the platform is serving light invocation
+traffic.
 
 \begin{lstlisting}[language=Python,caption={Build placement from scheduler/scheduler.py.}]
 def choose_build_worker(workers, *, round_robin_state):
     candidates = [
         worker
         for worker in workers
-        if worker_active_jobs(worker) == 0
-        and worker_queued_invocations(worker) == 0
-        and worker_queued_builds(worker) == 0
+        if worker_active_builds(worker) == 0
     ]
     if not candidates:
         return None
-    return choose_round_robin_worker(candidates, "build", round_robin_state)
+
+    def build_score(worker):
+        active_invocations = worker_active_invocations(worker)
+        queued_invocations = worker_queued_invocations(worker)
+        return (
+            active_invocations + queued_invocations,
+            active_invocations,
+            queued_invocations,
+            worker_queued_builds(worker),
+            worker_active_jobs(worker),
+        )
+
+    best_score = min(build_score(worker) for worker in candidates)
+    best = [worker for worker in candidates if build_score(worker) == best_score]
+    return choose_round_robin_worker(best, "build", round_robin_state)
 \end{lstlisting}
 
 \section{Atomic dispatch}
@@ -1695,27 +1720,19 @@ concurrency tests isolate how much parallel work each worker should run.
 
 \section{Warm-container benchmark}
 
-Warm containers improved repeated invocations significantly. In the Stage 1
-API-level sequential benchmark, the cold worker ran six no-op invocations with
-a client wall time of about 17.6 seconds and median invocation duration of
-about 1.62 seconds. The warm-enabled worker reduced client wall time to about
-12.0 seconds and median invocation duration to about 0.925 seconds.
+Warm-container tuning was first explored on the local development machine.
+Those runs were useful as engineering feedback, but they are not used as thesis
+measurements because the laptop environment was noisy: Docker Desktop, the
+browser, editors, local builds, background services, and the benchmark client
+were all sharing the same machine. The local results helped identify which
+paths were worth improving, but their numeric values should not be treated as
+scientific measurements of the platform.
 
-The bigger improvement came later from resident warm containers:
-
-\begin{longtable}{lrrrrr}
-\toprule
-\textbf{Pattern} & \textbf{Old wall} & \textbf{New wall} & \textbf{Old median} & \textbf{New median} & \textbf{Speedup} \\
-\midrule
-No-op & 12.5 s & 3.8 s & 3918 ms & 88 ms & 44.52x \\
-Sleep 3s & 22.1 s & 16.5 s & 7266 ms & 4997 ms & 1.45x \\
-No-op with output & 11.9 s & 9.1 s & 3774 ms & 1457 ms & 2.59x \\
-\bottomrule
-\end{longtable}
-
-The interpretation is important. Warm containers help most when platform
-overhead dominates user code. If the user function sleeps for three seconds,
-there is less non-user work to remove proportionally.
+The qualitative result still mattered. Warm containers helped most when
+platform overhead dominated user code, especially for small JSON-only
+functions. Functions that perform longer work benefit less proportionally,
+because more of their total time is real user execution. This observation led
+to the resident warm-runner design used in the later distributed benchmark.
 
 \section{Distributed worker concurrency benchmark}
 
@@ -1760,7 +1777,7 @@ The result is not linear scaling. Worker concurrency 2 underused the cluster.
 Moving to 4 improved throughput clearly. Moving to 8 helped the largest
 mixed-320 workload, but the smaller workloads were already close to saturation.
 Moving to 12 or 16 did not produce a clean win. At that point the workers were
-asking the local Docker daemons, disks, Python runtimes, artifact paths, and
+asking the worker Docker daemons, disks, Python runtimes, artifact paths, and
 cleanup code to do too much at once. More in-flight work increased pressure
 without reducing wall time.
 
@@ -1798,54 +1815,21 @@ cleanup, and warm-pool release. Output work is mostly zero because many mixed
 workload calls do not declare output files, but the p95 values still show that
 artifact-producing calls pay a visible extra cost.
 
-\section{Invocation latency profiling before warm-container tuning}
+\section{Pre-distributed profiling}
 
 Before the resident warm runner existed, the project profiled the invocation
-path with worker-side timestamps. This was important because user-visible
-latency alone did not explain whether time was spent queueing, creating
-containers, importing Python modules, moving files, uploading artifacts, or
-reporting state.
+path with worker-side timestamps on the local development machine. The goal was
+not to produce thesis-grade performance numbers. The goal was to understand the
+shape of the critical path: whether user-visible latency was coming from
+queueing, Docker container lifecycle work, Python startup and imports, file
+movement, artifact upload, status reporting, or cleanup.
 
-\begin{longtable}{p{0.34\textwidth}rrrr}
-\toprule
-\textbf{Scenario} & \textbf{Wall} & \textbf{Queue} & \textbf{Worker} & \textbf{Overhead} \\
-\midrule
-No-op sequential & 15.03 s & 376 ms & 1863 ms & 1863 ms \\
-One-second sequential & 23.81 s & 390 ms & 2531 ms & 1531 ms \\
-Three-second concurrent burst & 23.47 s & 8589 ms & 6502 ms & 3502 ms \\
-\bottomrule
-\end{longtable}
-
-The concurrent burst showed two problems at once. First, queue-to-start time
-became high because the workers could not begin every invocation immediately.
-Second, work that did start also became slower because concurrent Docker
-operations contended with each other. A three-second user function had a median
-worker executor duration of about 6.5 seconds, meaning roughly 3.5 seconds
-were platform overhead.
-
-\begin{longtable}{p{0.55\textwidth}r}
-\toprule
-\textbf{Worker phase in concurrent three-second burst} & \textbf{Median} \\
-\midrule
-Sandbox preparation & 419 ms \\
-Docker volume create & 75 ms \\
-Docker container create & 581 ms \\
-Docker input copy & 169 ms \\
-Docker container start & 564 ms \\
-Docker wait, including user sleep & 4390 ms \\
-Docker logs read & 138 ms \\
-Docker export/copy & 137 ms \\
-Docker cleanup & 202 ms \\
-Backend running report & 445 ms \\
-Backend final report & 172 ms \\
-Executor duration & 6502 ms \\
-Worker process total & 7300 ms \\
-\bottomrule
-\end{longtable}
-
-This profiling directly motivated three later changes: moving active V2
-coordination out of backend report endpoints, adding warm containers, and
-skipping output export when no declared outputs exist.
+Those local profiling runs showed two qualitative problems. First, queue-to-start
+time rose when the worker could not begin every invocation immediately. Second,
+work that did begin also became slower when concurrent Docker operations
+contended with each other. This profiling directly motivated three later
+changes: moving active V2 coordination out of backend report endpoints, adding
+warm containers, and skipping output export when no declared outputs exist.
 
 \section{Where time is currently spent}
 
