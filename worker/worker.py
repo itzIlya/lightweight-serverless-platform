@@ -25,6 +25,35 @@ TERMINAL_JOB_STATUSES = {"succeeded", "failed", "cancelled"}
 V2_WORKER_GROUP = "v2-workers"
 
 
+def create_redis_client(redis_url: str):
+    import redis
+
+    retry_kwargs = {}
+    try:
+        from redis.backoff import ExponentialBackoff
+        from redis.retry import Retry
+
+        retry_kwargs = {
+            "retry": Retry(ExponentialBackoff(base=0.05, cap=1), 3),
+            "retry_on_error": [redis.ConnectionError, redis.TimeoutError],
+        }
+    except Exception:
+        logger.debug("redis retry helpers unavailable; using default retry behavior")
+
+    try:
+        return redis.Redis.from_url(
+            redis_url,
+            decode_responses=True,
+            health_check_interval=30,
+            socket_keepalive=True,
+            socket_connect_timeout=5,
+            socket_timeout=5,
+            **retry_kwargs,
+        )
+    except TypeError:
+        return redis.Redis.from_url(redis_url, decode_responses=True)
+
+
 class WorkerActivity:
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -1101,7 +1130,7 @@ def main() -> None:
     idle_sleep_seconds = float(os.getenv("WORKER_IDLE_SLEEP_SECONDS", "0.2"))
     metrics_port = int(os.getenv("WORKER_METRICS_PORT", "9102"))
 
-    client = redis.Redis.from_url(redis_url, decode_responses=True)
+    client = create_redis_client(redis_url)
     backend = BackendClient(backend_base_url, worker_token)
     orchestrator = OrchestratorClient(orchestrator_base_url, worker_token)
     invocation_executor = DockerExecutor(backend_client=backend)
@@ -1126,6 +1155,21 @@ def main() -> None:
         client,
         lease_ttl_ms=max(int(worker_stale_after_seconds * 1000), 1000),
     )
+
+    def recover_redis_connection(context: str) -> None:
+        logger.exception(
+            "redis connection failed while %s; reconnecting worker=%s",
+            context,
+            worker_name,
+        )
+        try:
+            client.connection_pool.disconnect()
+        except Exception:
+            logger.exception(
+                "failed to disconnect redis connection pool worker=%s",
+                worker_name,
+            )
+        time.sleep(min(max(idle_sleep_seconds, 0.1), 1.0))
 
     def worker_status() -> str:
         return "draining" if shutdown_event.is_set() else "online"
@@ -1232,45 +1276,49 @@ def main() -> None:
                     drain_reported = True
                 time.sleep(idle_sleep_seconds)
                 continue
-            can_run_invocation = activity.can_start_invocation(
-                max_concurrency=max_concurrency,
-                max_invocation_concurrency=max_invocation_concurrency,
-            )
-            can_run_build = activity.can_start_build(
-                max_concurrency=max_concurrency,
-                max_build_concurrency=max_build_concurrency,
-            )
             v2_delivery = None
             delivery_message = None
             source_queue_name = None
-            if can_run_invocation:
-                v2_delivery = read_v2_stream_delivery(
-                    client,
-                    v2_invocation_stream,
-                    worker_name,
+            try:
+                can_run_invocation = activity.can_start_invocation(
+                    max_concurrency=max_concurrency,
+                    max_invocation_concurrency=max_invocation_concurrency,
                 )
-                if v2_delivery is None:
-                    delivery_message = move_job_to_processing_nowait(
-                        client,
-                        invocation_queue_name,
-                        processing_queue_name,
-                    )
-                    if delivery_message is not None:
-                        source_queue_name = invocation_queue_name
-            if v2_delivery is None and delivery_message is None and can_run_build:
-                v2_delivery = read_v2_stream_delivery(
-                    client,
-                    v2_build_stream,
-                    worker_name,
+                can_run_build = activity.can_start_build(
+                    max_concurrency=max_concurrency,
+                    max_build_concurrency=max_build_concurrency,
                 )
-                if v2_delivery is None:
-                    delivery_message = move_job_to_processing_nowait(
+                if can_run_invocation:
+                    v2_delivery = read_v2_stream_delivery(
                         client,
-                        build_queue_name,
-                        processing_queue_name,
+                        v2_invocation_stream,
+                        worker_name,
                     )
-                    if delivery_message is not None:
-                        source_queue_name = build_queue_name
+                    if v2_delivery is None:
+                        delivery_message = move_job_to_processing_nowait(
+                            client,
+                            invocation_queue_name,
+                            processing_queue_name,
+                        )
+                        if delivery_message is not None:
+                            source_queue_name = invocation_queue_name
+                if v2_delivery is None and delivery_message is None and can_run_build:
+                    v2_delivery = read_v2_stream_delivery(
+                        client,
+                        v2_build_stream,
+                        worker_name,
+                    )
+                    if v2_delivery is None:
+                        delivery_message = move_job_to_processing_nowait(
+                            client,
+                            build_queue_name,
+                            processing_queue_name,
+                        )
+                        if delivery_message is not None:
+                            source_queue_name = build_queue_name
+            except redis.RedisError:
+                recover_redis_connection("reading worker queues")
+                continue
 
             if v2_delivery is not None:
                 stream_id, delivery = v2_delivery
@@ -1291,13 +1339,16 @@ def main() -> None:
                     continue
                 claim_ms = int((time.monotonic() - claim_started) * 1000)
                 if not claim.get("claimed"):
-                    client.xack(
-                        v2_invocation_stream
-                        if delivery.get("job_type") == "invocation"
-                        else v2_build_stream,
-                        V2_WORKER_GROUP,
-                        stream_id,
-                    )
+                    try:
+                        client.xack(
+                            v2_invocation_stream
+                            if delivery.get("job_type") == "invocation"
+                            else v2_build_stream,
+                            V2_WORKER_GROUP,
+                            stream_id,
+                        )
+                    except redis.RedisError:
+                        recover_redis_connection("acking rejected V2 delivery")
                     continue
                 job = dict(claim.get("payload") or {})
                 job["_v2_worker_started_ns"] = v2_worker_started_ns
